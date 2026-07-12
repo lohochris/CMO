@@ -4,72 +4,124 @@ import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { LogIn } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
+import { supabase } from '../../utils/supabaseClient';
+import { Member } from '../../types';
 
 export const Login = () => {
   const [loginId, setLoginId] = useState('');
-  const { members, setCurrentUser, setCurrentPage, setError, setSuccess, selectedFamily, setSelectedFamily } = useApp();
+  const [loading, setLoading] = useState(false);
+  const { members, setMembers, setCurrentUser, setCurrentPage, setError, setSuccess, selectedFamily, setSelectedFamily } = useApp();
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setError('');
-    const member = members.find(m => m.id === loginId.toUpperCase());
-
-    if (!member) {
-      setError('Invalid Member ID');
+    setSuccess('');
+    
+    const inputMemberId = loginId.toUpperCase().trim();
+    if (!inputMemberId) {
+      setError('Please enter a Member ID');
       return;
     }
 
-    if (member.status === 'Pending Validation') {
-      setError('Your account is pending validation. Please contact the Financial Secretary.');
-      return;
-    }
+    setLoading(true);
+    try {
+      // 1. Check if the Member ID exists in the active members list
+      let member = members.find(m => m.id === inputMemberId);
 
-    setCurrentUser(member);
+      // 2. If not found in members state, check master_roster in Supabase
+      if (!member) {
+        const { data: rosterUser, error: rosterErr } = await supabase
+          .from('master_roster')
+          .select('*')
+          .eq('official_member_id', inputMemberId)
+          .single();
 
-    // If user came via family selection, ensure they belong to that family
-    if (selectedFamily) {
-      if (member.family !== selectedFamily) {
-        setError('You do not belong to the selected family. Please contact the admin for assistance.');
-        setSelectedFamily && setSelectedFamily(null);
-        setCurrentPage('dashboard');
-        setLoginId('');
-        setTimeout(() => setError(''), 6000);
+        if (rosterErr || !rosterUser) {
+          setError('Invalid Member ID');
+          setLoading(false);
+          return;
+        }
+
+        // Dynamically pre-load and register the master roster member into the members database
+        const newMember: Member = {
+          id: rosterUser.official_member_id,
+          name: rosterUser.full_name,
+          status: 'Active (Cleared)', // Pre-loaded master roster members are approved and active by default
+          balance: 0,
+          role: 'member',
+          family: 'Wisdom', // Default family assignment
+          phone: rosterUser.phone_number,
+          email: rosterUser.email,
+          profilePic: null
+        };
+
+        // Sync registration to Supabase members table
+        await setMembers([...members, newMember]);
+        member = newMember;
+      }
+
+      // 3. Validate status
+      if (member.status === 'Pending Validation') {
+        setError('Your account is pending validation. Please contact the Financial Secretary.');
+        setLoading(false);
         return;
       }
-      // member belongs to selected family — route appropriately
-      if (member.role === 'family_chairman') {
+
+      // 4. Set active user session
+      setCurrentUser(member);
+
+      // 5. Family selected check
+      if (selectedFamily) {
+        if (member.family !== selectedFamily) {
+          setError('You do not belong to the selected family. Please contact the admin for assistance.');
+          setSelectedFamily && setSelectedFamily(null);
+          setCurrentPage('dashboard');
+          setLoginId('');
+          setLoading(false);
+          setTimeout(() => setError(''), 6000);
+          return;
+        }
+
+        if (member.role === 'family_chairman') {
+          const page = `family${member.family}Chairman` as const;
+          setCurrentPage(page);
+        } else if (member.role === 'family_secretary') {
+          const page = `family${member.family}Secretary` as const;
+          setCurrentPage(page);
+        } else {
+          setCurrentPage('dashboard');
+        }
+        setSelectedFamily && setSelectedFamily(null);
+        setSuccess(`Welcome, ${member.name}!`);
+        setLoginId('');
+        setTimeout(() => setSuccess(''), 3000);
+        setLoading(false);
+        return;
+      }
+
+      // 6. Default page routing
+      if (member.role === 'welfare') setCurrentPage('welfare');
+      else if (member.role === 'treasurer') setCurrentPage('treasurer');
+      else if (member.role === 'gen_sec') setCurrentPage('secretary');
+      else if (member.role === 'pro') setCurrentPage('pro');
+      else if (member.role === 'family_chairman' && member.family) {
         const page = `family${member.family}Chairman` as const;
         setCurrentPage(page);
-      } else if (member.role === 'family_secretary') {
+      } else if (member.role === 'family_secretary' && member.family) {
         const page = `family${member.family}Secretary` as const;
         setCurrentPage(page);
       } else {
         setCurrentPage('dashboard');
       }
-      setSelectedFamily && setSelectedFamily(null);
+
       setSuccess(`Welcome, ${member.name}!`);
       setLoginId('');
       setTimeout(() => setSuccess(''), 3000);
-      return;
+    } catch (err: any) {
+      console.error('Login authentication error:', err);
+      setError('An error occurred during login. Please try again.');
+    } finally {
+      setLoading(false);
     }
-
-    // No family pre-selection — default routing
-    if (member.role === 'welfare') setCurrentPage('welfare');
-    else if (member.role === 'treasurer') setCurrentPage('treasurer');
-    else if (member.role === 'gen_sec') setCurrentPage('secretary');
-    else if (member.role === 'pro') setCurrentPage('pro');
-    else if (member.role === 'family_chairman' && member.family) {
-      const page = `family${member.family}Chairman` as const;
-      setCurrentPage(page);
-    } else if (member.role === 'family_secretary' && member.family) {
-      const page = `family${member.family}Secretary` as const;
-      setCurrentPage(page);
-    } else {
-      setCurrentPage('dashboard');
-    }
-
-    setSuccess(`Welcome, ${member.name}!`);
-    setLoginId('');
-    setTimeout(() => setSuccess(''), 3000);
   };
 
   return (
@@ -93,17 +145,19 @@ export const Login = () => {
               placeholder="Enter your Member ID"
               className="bg-[#001a16] border-[#ffd700] text-white"
               onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+              disabled={loading}
             />
           </div>
           <Button
             onClick={handleLogin}
             className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700]"
+            disabled={loading}
           >
-            Login
+            {loading ? 'Logging in...' : 'Login'}
           </Button>
           <p className="text-sm text-gray-400 text-center">
             Don't have an ID?{' '}
-            <button onClick={() => setCurrentPage('register')} className="text-[#ffd700] hover:underline">
+            <button onClick={() => setCurrentPage('register')} className="text-[#ffd700] hover:underline" disabled={loading}>
               Register here
             </button>
           </p>

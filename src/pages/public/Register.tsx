@@ -5,38 +5,75 @@ import { Input } from '../../app/components/ui/input';
 import { UserPlus } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { Member, Family } from '../../types';
+import { supabase } from '../../utils/supabaseClient';
 
 const familyOptions: Family[] = ['Wisdom', 'Honour', 'Integrity', 'Talent'];
 
 export const Register = () => {
   const [registerName, setRegisterName] = useState('');
   const [registerPhone, setRegisterPhone] = useState('');
+  const [registerEmail, setRegisterEmail] = useState('');
   const [registerFamily, setRegisterFamily] = useState<Family>('Wisdom');
+  const [loading, setLoading] = useState(false);
   const { members, setMembers, setCurrentPage, setError, setSuccess } = useApp();
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     setError('');
-    if (!registerName.trim() || !registerPhone.trim()) {
+    setSuccess('');
+    
+    if (!registerName.trim() || !registerPhone.trim() || !registerEmail.trim()) {
       setError('Please fill all fields');
       return;
     }
 
-    const newMember: Member = {
-      id: '',
-      name: registerName,
-      status: 'Pending Validation',
-      balance: 0,
-      role: 'member',
-      family: registerFamily,
-      phone: registerPhone,
-      profilePic: null
-    };
+    setLoading(true);
+    try {
+      // Query the master roster table for phone number or email matches
+      const { data: rosterMatch, error: rosterError } = await supabase
+        .from('master_roster')
+        .select('*')
+        .or(`phone_number.eq.${registerPhone},email.eq.${registerEmail}`)
+        .maybeSingle();
 
-    setMembers([...members, newMember]);
-    setSuccess('Registration submitted! Awaiting validation from Financial Secretary.');
-    setRegisterName('');
-    setRegisterPhone('');
-    setTimeout(() => setSuccess(''), 5000);
+      if (rosterError || !rosterMatch) {
+        setError('Verification failed: Your phone number or email is not listed on the official Holy Cross CMO Master Roster. Please contact the Financial Secretary.');
+        setLoading(false);
+        return;
+      }
+
+      // Check if this member has already registered in the system members table
+      const alreadyRegistered = members.some(m => m.id === rosterMatch.official_member_id);
+      if (alreadyRegistered) {
+        setError('This member has already been registered in the system.');
+        setLoading(false);
+        return;
+      }
+
+      const newMember: Member = {
+        id: rosterMatch.official_member_id,
+        name: rosterMatch.full_name,
+        status: 'Pending Validation',
+        balance: 0,
+        role: 'member',
+        family: registerFamily,
+        phone: rosterMatch.phone_number,
+        email: rosterMatch.email,
+        profilePic: null
+      };
+
+      await setMembers([...members, newMember]);
+      setSuccess(`Registration submitted! Welcoming you as ${rosterMatch.full_name}. Awaiting validation from Financial Secretary.`);
+      
+      setRegisterName('');
+      setRegisterPhone('');
+      setRegisterEmail('');
+      setTimeout(() => setSuccess(''), 5000);
+    } catch (err: any) {
+      console.error('Registration validation check failed:', err);
+      setError('An error occurred during registration. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -54,6 +91,7 @@ export const Register = () => {
               onChange={(e) => setRegisterName(e.target.value)}
               placeholder="Enter full name"
               className="bg-[#001a16] border-[#ffd700] text-white"
+              disabled={loading}
             />
           </div>
           <div>
@@ -63,6 +101,18 @@ export const Register = () => {
               onChange={(e) => setRegisterPhone(e.target.value)}
               placeholder="08012345678"
               className="bg-[#001a16] border-[#ffd700] text-white"
+              disabled={loading}
+            />
+          </div>
+          <div>
+            <label className="text-gray-300 text-sm block mb-2">Email Address</label>
+            <Input
+              type="email"
+              value={registerEmail}
+              onChange={(e) => setRegisterEmail(e.target.value)}
+              placeholder="member@hcc-cmo.org"
+              className="bg-[#001a16] border-[#ffd700] text-white"
+              disabled={loading}
             />
           </div>
           <div>
@@ -74,6 +124,7 @@ export const Register = () => {
               value={registerFamily}
               onChange={(e) => setRegisterFamily(e.target.value as Family)}
               className="w-full bg-[#001a16] border border-[#ffd700] text-white p-2 rounded"
+              disabled={loading}
             >
               {familyOptions.map((family) => (
                 <option key={family} value={family}>{family}</option>
@@ -83,12 +134,13 @@ export const Register = () => {
           <Button
             onClick={handleRegister}
             className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700]"
+            disabled={loading}
           >
-            Submit Registration
+            {loading ? 'Verifying...' : 'Submit Registration'}
           </Button>
           <p className="text-sm text-gray-400 text-center">
             Already registered?{' '}
-            <button onClick={() => setCurrentPage('login')} className="text-[#ffd700] hover:underline">
+            <button onClick={() => setCurrentPage('login')} className="text-[#ffd700] hover:underline" disabled={loading}>
               Login here
             </button>
           </p>

@@ -1,6 +1,6 @@
 export type MemberStatus = 'Active (Cleared)' | 'Pending Validation';
 export type Family = 'Wisdom' | 'Honour' | 'Integrity' | 'Talent';
-export type MemberRole = 'member' | 'fin_sec' | 'welfare' | 'treasurer' | 'gen_sec' | 'pro' | 'family_chairman' | 'family_secretary';
+export type MemberRole = 'member' | 'fin_sec' | 'welfare' | 'treasurer' | 'gen_sec' | 'pro' | 'family_chairman' | 'family_secretary' | 'chairman' | 'cmo_chairman';
 export type MaritalStatus = 'Married' | 'Divorced' | 'Widowed';
 export type WeddingStatus = 'Wedded' | 'Not Wedded';
 export type TicketStatus = 'Awaiting Financial Audit' | 'Awaiting Disbursement' | 'Settled & Cleared' | 'Declined';
@@ -46,6 +46,8 @@ export interface Member {
   numberOfChildren?: number;
   wifeName?: string;
   wifePhone?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Transaction {

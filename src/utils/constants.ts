@@ -1,4 +1,3 @@
-export const MASTER_KEY = 'CMO2026';
 
 export const WELFARE_CATEGORIES = [
   'Medical Assistance',

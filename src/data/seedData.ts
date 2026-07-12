@@ -1,14 +1,15 @@
 import { Member, Announcement } from '../types';
 
 export const seedMembers: Member[] = [
-  { id: 'HCC-CMOW-26-0001', name: 'Alao, Joseph', status: 'Active (Cleared)', balance: 15000, role: 'member', family: 'Wisdom', profilePic: null },
-  { id: 'HCC-CMOH-26-0001', name: 'Ola, Peter', status: 'Active (Cleared)', balance: 0, role: 'family_chairman', family: 'Honour', profilePic: null },
-  { id: 'HCC-CMOT-26-0001', name: 'Uche, Chinedu', status: 'Active (Cleared)', balance: 0, role: 'family_secretary', family: 'Talent', profilePic: null },
-  { id: 'FIN-SEC-2026', name: 'Dondo, Christopher', status: 'Active (Cleared)', balance: 0, role: 'fin_sec', profilePic: null },
-  { id: 'WELFARE-2026', name: 'Okafor, Emmanuel', status: 'Active (Cleared)', balance: 0, role: 'welfare', profilePic: null },
-  { id: 'TREASURER-2026', name: 'Ibrahim, Musa', status: 'Active (Cleared)', balance: 0, role: 'treasurer', profilePic: null },
-  { id: 'SECRETARY-2026', name: 'Eze, Chukwuma', status: 'Active (Cleared)', balance: 0, role: 'gen_sec', profilePic: null },
-  { id: 'PRO-2026', name: 'Adebayo, Samuel', status: 'Active (Cleared)', balance: 0, role: 'pro', profilePic: null }
+  { id: 'HCC-CMOW-26-0001', name: 'Alao, Joseph', status: 'Active (Cleared)', balance: 15000, role: 'member', family: 'Wisdom', profilePic: null, createdAt: '2025-12-01T00:00:00.000Z' },
+  { id: 'HCC-CMOH-26-0001', name: 'Ola, Peter', status: 'Active (Cleared)', balance: 0, role: 'family_chairman', family: 'Honour', profilePic: null, createdAt: '2025-12-01T00:00:00.000Z' },
+  { id: 'HCC-CMOT-26-0001', name: 'Uche, Chinedu', status: 'Active (Cleared)', balance: 0, role: 'family_secretary', family: 'Talent', profilePic: null, createdAt: '2025-12-01T00:00:00.000Z' },
+  { id: 'FIN-SEC-2026', name: 'Dondo, Christopher', status: 'Active (Cleared)', balance: 0, role: 'fin_sec', profilePic: null, createdAt: '2025-12-01T00:00:00.000Z' },
+  { id: 'WELFARE-2026', name: 'Okafor, Emmanuel', status: 'Active (Cleared)', balance: 0, role: 'welfare', profilePic: null, createdAt: '2025-12-01T00:00:00.000Z' },
+  { id: 'TREASURER-2026', name: 'Ibrahim, Musa', status: 'Active (Cleared)', balance: 0, role: 'treasurer', profilePic: null, createdAt: '2025-12-01T00:00:00.000Z' },
+  { id: 'SECRETARY-2026', name: 'Eze, Chukwuma', status: 'Active (Cleared)', balance: 0, role: 'gen_sec', profilePic: null, createdAt: '2025-12-01T00:00:00.000Z' },
+  { id: 'PRO-2026', name: 'Adebayo, Samuel', status: 'Active (Cleared)', balance: 0, role: 'pro', profilePic: null, createdAt: '2025-12-01T00:00:00.000Z' },
+  { id: 'CMO-CHAIRMAN-2026', name: 'STANLEY UKAH', status: 'Active (Cleared)', balance: 0, role: 'cmo_chairman', profilePic: null, createdAt: '2025-12-01T00:00:00.000Z' }
 ];
 
 export const seedAnnouncements: Announcement[] = [

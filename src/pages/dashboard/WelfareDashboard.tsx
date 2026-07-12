@@ -64,8 +64,28 @@ export const WelfareDashboard = () => {
     }
 
     const amount = parseFloat(welfareAmount);
-    if (isNaN(amount)) {
-      setError('Invalid amount');
+    if (isNaN(amount) || amount <= 0) {
+      setError('Invalid amount. Please specify a positive value.');
+      return;
+    }
+
+    // 1. Cap Check: Maximum standard welfare disbursement is ₦50,000
+    if (amount > 50000) {
+      setError(`Constitutional Policy Violation: Welfare request of ₦${amount.toLocaleString()} exceeds the maximum disbursement cap of ₦50,000.`);
+      return;
+    }
+
+    // 2. Member Balance Check: Dues must be cleared (balance must be >= 0)
+    if (member.balance < 0) {
+      setError(`Constitutional Policy Violation: Member ${member.name} has outstanding dues (balance: ₦${member.balance.toLocaleString()}). Assistance cannot be requested until balances are cleared.`);
+      return;
+    }
+
+    // 3. Member Tenure Check: Must have been active for at least 180 days (6 months)
+    const memberCreatedAt = member.createdAt ? new Date(member.createdAt).getTime() : Date.now();
+    const tenureDays = (Date.now() - memberCreatedAt) / (1000 * 60 * 60 * 24);
+    if (tenureDays < 180) {
+      setError(`Constitutional Policy Violation: Member ${member.name} has only been active for ${Math.round(tenureDays)} days. 6 months of active membership (180 days) is required.`);
       return;
     }
 
@@ -298,4 +318,3 @@ export const WelfareDashboard = () => {
     </div>
   );
 };
- 
