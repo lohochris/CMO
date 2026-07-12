@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { WeddingStatus } from '../../types';
+import type { WeddingStatus, Family } from '../../types';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
@@ -8,6 +8,7 @@ import { useApp } from '../../contexts/AppContext';
 import { formatCurrency, formatDateTime } from '../../utils/helpers';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
+import { supabase } from '../../utils/supabaseClient';
 
 export const MemberDashboard = () => {
   const { currentUser, members, transactions, setMembers, setCurrentUser, setSuccess, setError, setCurrentPage } = useApp();
@@ -24,6 +25,7 @@ export const MemberDashboard = () => {
   const [editNumberOfChildren, setEditNumberOfChildren] = useState(currentUser?.numberOfChildren || 0);
   const [editWifeName, setEditWifeName] = useState(currentUser?.wifeName || '');
   const [editWifePhone, setEditWifePhone] = useState(currentUser?.wifePhone || '');
+  const [formCmoFamily, setFormCmoFamily] = useState<Family>(currentUser?.family || 'Wisdom');
 
   const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
     if (!currentUser) return;
@@ -54,6 +56,7 @@ export const MemberDashboard = () => {
       setEditNumberOfChildren(currentUser.numberOfChildren || 0);
       setEditWifeName(currentUser.wifeName || '');
       setEditWifePhone(currentUser.wifePhone || '');
+      setFormCmoFamily(currentUser.family || 'Wisdom');
       setIsSettingsOpen(true);
     }
   };
@@ -63,7 +66,9 @@ export const MemberDashboard = () => {
     setError('');
   };
 
-  const handleProfileUpdate = () => {
+  const [settingsLoading, setSettingsLoading] = useState(false);
+
+  const handleProfileUpdate = async () => {
     setError('');
     if (!editName.trim()) {
       setError('Name cannot be empty');
@@ -86,9 +91,71 @@ export const MemberDashboard = () => {
 
     if (!currentUser) return;
 
-    const updatedMembers = members.map(m =>
-      m.id === currentUser.id ? {
-        ...m,
+    setSettingsLoading(true);
+    try {
+      const updatePayload = {
+        full_name: editName,
+        phone_number: editPhone,
+        phone: editPhone, // Alignment safeguard mapping
+        email: editEmail,
+        address: editResidentialAddress,
+        home_town_address: editHomeTownAddress,
+        residential_address: editResidentialAddress,
+        marriage_status: editWeddingStatus,
+        marital_status: editMaritalStatus,
+        number_of_children: Number(editNumberOfChildren) || 0,
+        communicant: editCommunicant,
+        wifes_name: editWifeName,
+        wifes_phone: editWifePhone,
+        church_position: editPostHeld,
+        post_held: editPostHeld,
+        cmo_family: formCmoFamily
+      };
+
+      // A. Update the Active Profiles Table ('members')
+      const { error: membersErr } = await supabase
+        .from('members')
+        .update(updatePayload)
+        .eq('official_member_id', currentUser.id);
+
+      if (membersErr) {
+        throw new Error(`Failed to update members table: ${membersErr.message}`);
+      }
+
+      // B. Update the Source of Record Table ('master_roster')
+      const { error: rosterErr } = await supabase
+        .from('master_roster')
+        .update(updatePayload)
+        .eq('official_member_id', currentUser.id);
+
+      if (rosterErr) {
+        throw new Error(`Failed to update master_roster table: ${rosterErr.message}`);
+      }
+
+      const updatedMembers = members.map(m =>
+        m.id === currentUser.id ? {
+          ...m,
+          name: editName,
+          phone: editPhone,
+          email: editEmail,
+          homeTownAddress: editHomeTownAddress,
+          residentialAddress: editResidentialAddress,
+          maritalStatus: editWeddingStatus === 'Wedded' ? (editMaritalStatus as any) : undefined,
+          weddingStatus: editWeddingStatus as any,
+          communicant: editCommunicant,
+          postHeld: editPostHeld,
+          numberOfChildren: editNumberOfChildren,
+          wifeName: editWifeName,
+          wifePhone: editWifePhone,
+          family: formCmoFamily
+        } : m
+      );
+
+      // setMembers updates AppContext state and triggers asynchronous sync for other profile metadata fields
+      await setMembers(updatedMembers);
+
+      setCurrentUser({
+        ...currentUser,
         name: editName,
         phone: editPhone,
         email: editEmail,
@@ -100,28 +167,19 @@ export const MemberDashboard = () => {
         postHeld: editPostHeld,
         numberOfChildren: editNumberOfChildren,
         wifeName: editWifeName,
-        wifePhone: editWifePhone
-      } : m
-    );
-    setMembers(updatedMembers);
-    setCurrentUser({
-      ...currentUser,
-      name: editName,
-      phone: editPhone,
-      email: editEmail,
-      homeTownAddress: editHomeTownAddress,
-      residentialAddress: editResidentialAddress,
-      maritalStatus: editWeddingStatus === 'Wedded' ? (editMaritalStatus as any) : undefined,
-      weddingStatus: editWeddingStatus as any,
-      communicant: editCommunicant,
-      postHeld: editPostHeld,
-      numberOfChildren: editNumberOfChildren,
-      wifeName: editWifeName,
-      wifePhone: editWifePhone
-    });
-    setSuccess('✓ Profile updated successfully!');
-    setIsSettingsOpen(false);
-    setTimeout(() => setSuccess(''), 3000);
+        wifePhone: editWifePhone,
+        family: formCmoFamily
+      });
+
+      setSuccess('✓ Profile updated successfully across active profile and master roster!');
+      setIsSettingsOpen(false);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('Profile update failed:', err);
+      setError(err.message || 'An error occurred while updating profile.');
+    } finally {
+      setSettingsLoading(false);
+    }
   };
 
   if (!currentUser) return null;
@@ -289,6 +347,25 @@ export const MemberDashboard = () => {
                     />
                   </div>
                 </div>
+
+                <div className="mt-4">
+                  <label htmlFor="edit-family" className="text-gray-300 text-sm block mb-2">
+                    CMO Family Division *
+                  </label>
+                  <select
+                    id="edit-family"
+                    title="Select Family"
+                    value={formCmoFamily}
+                    onChange={(e) => setFormCmoFamily(e.target.value as Family)}
+                    className="w-full bg-[#001a16] border border-[#ffd700] text-white p-2 rounded"
+                    disabled={settingsLoading}
+                  >
+                    <option value="Wisdom">Wisdom Family</option>
+                    <option value="Honour">Honour Family</option>
+                    <option value="Integrity">Integrity Family</option>
+                    <option value="Talent">Talent Family</option>
+                  </select>
+                </div>
               </div>
 
               {/* Address Information */}
@@ -449,13 +526,15 @@ export const MemberDashboard = () => {
                 <Button
                   onClick={handleProfileUpdate}
                   className="flex-1 bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700]"
+                  disabled={settingsLoading}
                 >
-                  Save Changes
+                  {settingsLoading ? 'Saving...' : 'Save Changes'}
                 </Button>
                 <Button
                   onClick={handleSettingsClose}
                   variant="outline"
                   className="flex-1 border-[#ffd700] text-[#ffd700] hover:bg-[#ffd700] hover:text-[#001a16]"
+                  disabled={settingsLoading}
                 >
                   Cancel
                 </Button>

@@ -28,8 +28,10 @@ import {
   FamilyTalentSecretaryDashboard,
 } from '../pages/dashboard/FamilyDashboard';
 
+import { CmoAngelChat } from './components/ui/CmoAngelChat';
+
 function AppContent() {
-  const { currentPage, currentUser, announcements } = useApp();
+  const { currentPage, currentUser, announcements, setError, setCurrentPage, loading } = useApp();
 
   const activeAnnouncements = announcements.filter((ann) => {
     const expiresAt = ann.expiresAt ? new Date(ann.expiresAt).getTime() : new Date(ann.timestamp).getTime() + 2 * 24 * 60 * 60 * 1000;
@@ -61,6 +63,51 @@ function AppContent() {
   };
 
   const renderPage = () => {
+    // Family specific dashboards routing guards
+    const isFamilyPage = currentPage.startsWith('family') && 
+      currentPage !== 'familyHub' && 
+      currentPage !== 'familyChairman' && 
+      currentPage !== 'familySecretary';
+
+    if (isFamilyPage) {
+      if (loading) {
+        return (
+          <div className="flex h-64 items-center justify-center">
+            <div className="text-[#ffd700] text-lg font-semibold animate-pulse">
+              Verifying security clearance...
+            </div>
+          </div>
+        );
+      }
+
+      if (!currentUser) {
+        setTimeout(() => setCurrentPage('login'), 10);
+        return <Login />;
+      }
+
+      const isGlobalAdmin = currentUser?.role === 'fin_sec' || 
+                            currentUser?.role === 'chairman' || 
+                            currentUser?.role === 'cmo_chairman';
+
+      if (!isGlobalAdmin) {
+        let targetFamily = '';
+        if (currentPage.includes('Wisdom')) targetFamily = 'Wisdom';
+        else if (currentPage.includes('Honour')) targetFamily = 'Honour';
+        else if (currentPage.includes('Integrity')) targetFamily = 'Integrity';
+        else if (currentPage.includes('Talent')) targetFamily = 'Talent';
+
+        const userFamily = currentUser?.family || '';
+
+        if (userFamily !== targetFamily) {
+          setError(`Access Denied. You are a registered member of the ${userFamily ? userFamily + ' Family' : 'no assigned family'} and do not have operational clearance to enter this family portal.`);
+          setTimeout(() => setError(''), 6000);
+          setTimeout(() => {
+            setCurrentPage('dashboard');
+          }, 10);
+          return <MemberDashboard />;
+        }
+      }
+    }
     // Public pages
     if (currentPage === 'home') return <Home />;
     if (currentPage === 'about') return <About />;
@@ -113,6 +160,7 @@ function AppContent() {
       <main className="min-h-[calc(100vh-200px)]">
         {renderPage()}
       </main>
+      <CmoAngelChat />
       <Footer />
     </div>
   );

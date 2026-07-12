@@ -1,14 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../../app/components/ui/card';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
 import { Users, CheckCircle, AlertCircle, TrendingUp, DollarSign, Camera, Megaphone, FileText, Upload } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
-import { MASTER_KEY } from '../../utils/constants';
 import { generateMemberId, generateExpenseId } from '../../utils/idGenerators';
 import { formatCurrency, formatDate, getCombinedTransactions, calculateTotal } from '../../utils/helpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
+import { supabase } from '../../utils/supabaseClient';
 
 export const FinSecDashboard = () => {
   const {
@@ -21,8 +21,38 @@ export const FinSecDashboard = () => {
     setError, setSuccess
   } = useApp();
 
+  const [rosterCount, setRosterCount] = useState(0);
+  const [dbMembersList, setDbMembersList] = useState<any[]>([]);
+  const [rosterList, setRosterList] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchLiveCounts = async () => {
+      try {
+        // Fetch all rows from master_roster
+        const { data: rosterData, error: rosterErr } = await supabase
+          .from('master_roster')
+          .select('*');
+
+        if (rosterErr) throw rosterErr;
+        setRosterList(rosterData || []);
+        setRosterCount(rosterData?.length || 0);
+
+        // Fetch all active profiles currently synced in the members table
+        const { data: currentMembers, error: membersErr } = await supabase
+          .from('members')
+          .select('*');
+
+        if (membersErr) throw membersErr;
+        setDbMembersList(currentMembers || []);
+      } catch (err: any) {
+        console.error('Error fetching live counts:', err);
+      }
+    };
+
+    fetchLiveCounts();
+  }, [members]);
+
   // Form States
-  const [masterKey, setMasterKey] = useState('');
   const [manualMemberId, setManualMemberId] = useState('');
   const [manualSearchQuery, setManualSearchQuery] = useState('');
   const [manualSearchIndex, setManualSearchIndex] = useState(-1);
@@ -45,17 +75,17 @@ export const FinSecDashboard = () => {
   const totalExpenses = calculateTotal(expenses);
   const combinedTransactions = getCombinedTransactions(transactions, expenses);
   const manualSearchResults = manualSearchQuery.trim()
-    ? members
+    ? rosterList
         .filter(m =>
-          `${m.name} ${m.id}`.toLowerCase().includes(manualSearchQuery.toLowerCase())
+          `${m.full_name} ${m.official_member_id}`.toLowerCase().includes(manualSearchQuery.toLowerCase())
         )
         .slice(0, 10)
     : [];
-  const selectedManualMember = members.find(m => m.id === manualMemberId);
+  const selectedManualMember = rosterList.find(m => m.official_member_id === manualMemberId);
   const showManualSearchResults = Boolean(
     manualSearchQuery.trim() &&
     manualSearchResults.length > 0 &&
-    (!selectedManualMember || manualSearchQuery !== `${selectedManualMember.name} (${selectedManualMember.id})`)
+    (!selectedManualMember || manualSearchQuery !== `${selectedManualMember.full_name} (${selectedManualMember.official_member_id})`)
   );
 
   const selectManualMember = (memberId: string, displayText: string) => {
@@ -71,7 +101,7 @@ export const FinSecDashboard = () => {
     const memberId = generateMemberId(members, pendingMember.family);
     const updatedMembers = members.map(m =>
       m === pendingMember
-        ? { ...m, id: memberId, status: 'Active (Cleared)' as const }
+        ? { ...m, id: memberId, status: 'Active (Cleared)' as const, createdAt: new Date().toISOString() }
         : m
     );
 
@@ -81,6 +111,39 @@ export const FinSecDashboard = () => {
   };
 
   const approveTicket = (ticketId: string) => {
+    setError('');
+    const ticket = welfareTickets.find(t => t.ticketId === ticketId);
+    if (!ticket) {
+      setError('Welfare ticket not found.');
+      return;
+    }
+
+    const member = members.find(m => m.id === ticket.memberId);
+    if (!member) {
+      setError('Associated member not found.');
+      return;
+    }
+
+    // 1. Cap Check: Max ₦50,000 disbursement
+    if (ticket.requestedAmount > 50000) {
+      setError(`Constitutional Policy Violation: Disbursement request of ₦${ticket.requestedAmount.toLocaleString()} exceeds the maximum cap of ₦50,000.`);
+      return;
+    }
+
+    // 2. Member Balance Check: Dues must be cleared (balance must be >= 0)
+    if (member.balance < 0) {
+      setError(`Constitutional Policy Violation: Member ${member.name} has outstanding dues (balance: ₦${member.balance.toLocaleString()}). Welfare tickets cannot be approved until balances are cleared.`);
+      return;
+    }
+
+    // 3. Member Tenure Check: Must have been active for at least 6 months (180 days)
+    const memberCreatedAt = member.createdAt ? new Date(member.createdAt).getTime() : Date.now();
+    const tenureDays = (Date.now() - memberCreatedAt) / (1000 * 60 * 60 * 24);
+    if (tenureDays < 180) {
+      setError(`Constitutional Policy Violation: Member ${member.name} has only been active for ${Math.round(tenureDays)} days. 6 months (180 days) of active tenure is required for welfare eligibility.`);
+      return;
+    }
+
     const updatedTickets = welfareTickets.map(t =>
       t.ticketId === ticketId
         ? { ...t, status: 'Awaiting Disbursement' as const, approvedAt: new Date().toISOString() }
@@ -111,26 +174,30 @@ export const FinSecDashboard = () => {
     setTimeout(() => setSuccess(''), 4000);
   };
 
-  const handleManualTransaction = () => {
+  const handleManualTransaction = async () => {
     setError('');
-    if (masterKey !== MASTER_KEY) {
-      setError('Invalid Master Key');
+
+    // Security Verification: Require active authenticated Supabase session
+    const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+    if (sessionErr || !session) {
+      setError('Authorization Failed: You must be signed in to an active session to record manual transactions.');
       return;
     }
+
     if (!manualMemberId || !manualAmount || !manualPurpose) {
       setError('Please fill all transaction fields');
       return;
     }
 
-    const member = members.find(m => m.id === manualMemberId);
+    const member = members.find(m => m.id === manualMemberId) || rosterList.find(m => m.official_member_id === manualMemberId);
     if (!member) {
       setError('Member ID not found');
       return;
     }
 
     const amount = parseFloat(manualAmount);
-    if (isNaN(amount)) {
-      setError('Invalid amount');
+    if (isNaN(amount) || amount <= 0) {
+      setError('Invalid transaction amount. Amount must be positive.');
       return;
     }
 
@@ -149,7 +216,8 @@ export const FinSecDashboard = () => {
     };
     setTransactions([...transactions, transaction]);
 
-    setSuccess(`Transaction recorded: ${formatCurrency(amount)} for ${member.name}`);
+    const memberName = (member as any).name || (member as any).full_name || 'Member';
+    setSuccess(`Transaction recorded: ${formatCurrency(amount)} for ${memberName}`);
     setManualMemberId('');
     setManualAmount('');
     setManualPurpose('');
@@ -164,8 +232,8 @@ export const FinSecDashboard = () => {
     }
 
     const amount = parseFloat(incomeAmount);
-    if (isNaN(amount)) {
-      setError('Invalid income amount');
+    if (isNaN(amount) || amount <= 0) {
+      setError('Invalid income amount. Amount must be positive.');
       return;
     }
 
@@ -192,8 +260,8 @@ export const FinSecDashboard = () => {
     }
 
     const amount = parseFloat(expenseAmount);
-    if (isNaN(amount)) {
-      setError('Invalid expense amount');
+    if (isNaN(amount) || amount <= 0) {
+      setError('Invalid expense amount. Amount must be positive.');
       return;
     }
 
@@ -213,7 +281,28 @@ export const FinSecDashboard = () => {
     setTimeout(() => setSuccess(''), 3000);
   };
 
+  // Quote-aware CSV row parser
+  const parseCsvRow = (line: string): string[] => {
+    const result: string[] = [];
+    let cell = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(cell.trim());
+        cell = '';
+      } else {
+        cell += char;
+      }
+    }
+    result.push(cell.trim());
+    return result;
+  };
+
   const handleCsvUpload = () => {
+    setError('');
     if (!csvFile) {
       setError('Please select a CSV file');
       return;
@@ -230,12 +319,35 @@ export const FinSecDashboard = () => {
         let newTransactions: any[] = [];
         let processedCount = 0;
 
+        // Deduplication set to enforce transactional idempotency
+        const existingTxnHashes = new Set(
+          transactions.map(t => `${t.memberId}-${t.amount}-${t.purpose}`)
+        );
+
         dataLines.forEach(line => {
-          const [memberId, amountStr, purpose] = line.split(',').map(s => s.trim());
+          const row = parseCsvRow(line);
+          if (row.length < 2) return;
+
+          const memberId = row[0];
+          const amountStr = row[1];
+          const purpose = row[2] || 'Bulk Upload';
+
           if (!memberId || !amountStr) return;
 
           const amount = parseFloat(amountStr);
-          if (isNaN(amount)) return;
+          // Sanity checks: reject malformed parse values and amount <= 0
+          if (isNaN(amount) || amount <= 0) {
+            console.warn(`Skipping invalid CSV record: Member ${memberId}, Amount ${amountStr}`);
+            return;
+          }
+
+          // Idempotency: skip duplicates
+          const hash = `${memberId}-${amount}-${purpose}`;
+          if (existingTxnHashes.has(hash)) {
+            console.warn(`Skipping duplicate transaction from CSV: ${hash}`);
+            return;
+          }
+          existingTxnHashes.add(hash);
 
           const memberIndex = updatedMembers.findIndex(m => m.id === memberId);
           if (memberIndex === -1) return;
@@ -249,7 +361,7 @@ export const FinSecDashboard = () => {
           newTransactions.push({
             memberId,
             amount,
-            purpose: purpose || 'Bulk Upload',
+            purpose,
             timestamp: new Date().toISOString()
           });
 
@@ -258,7 +370,7 @@ export const FinSecDashboard = () => {
 
         setMembers(updatedMembers);
         setTransactions([...transactions, ...newTransactions]);
-        setSuccess(`CSV processed: ${processedCount} transactions recorded!`);
+        setSuccess(`CSV processed: ${processedCount} new transactions recorded!`);
         setCsvFile(null);
         setTimeout(() => setSuccess(''), 5000);
       } catch (err) {
@@ -330,12 +442,12 @@ export const FinSecDashboard = () => {
         <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 hover:scale-105 transition-all cursor-pointer">
           <Users className="w-8 h-8 text-[#ffd700] mb-2" />
           <p className="text-gray-400 text-sm">Total Members</p>
-          <p className="text-2xl font-bold text-white">{members.length}</p>
+          <p className="text-2xl font-bold text-white">{rosterCount}</p>
         </Card>
         <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 hover:scale-105 transition-all cursor-pointer">
           <CheckCircle className="w-8 h-8 text-green-500 mb-2" />
           <p className="text-gray-400 text-sm">Active Members</p>
-          <p className="text-2xl font-bold text-white">{activeMembers.length}</p>
+          <p className="text-2xl font-bold text-white">{dbMembersList.filter(m => m.status === 'Active (Cleared)').length}</p>
         </Card>
         <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 hover:scale-105 transition-all cursor-pointer">
           <AlertCircle className="w-8 h-8 text-yellow-500 mb-2" />
@@ -470,16 +582,6 @@ export const FinSecDashboard = () => {
             <h3 className="text-xl font-bold text-[#ffd700] mb-4">Manual Transaction Entry</h3>
             <div className="space-y-4">
               <div>
-                <label className="text-gray-300 text-sm block mb-2">Executive Master Key</label>
-                <Input
-                  type="password"
-                  value={masterKey}
-                  onChange={(e) => setMasterKey(e.target.value)}
-                  placeholder="Enter master key"
-                  className="bg-[#001a16] border-[#ffd700] text-white"
-                />
-              </div>
-              <div>
                 <label className="text-gray-300 text-sm block mb-2">Search Member Name or ID</label>
                 <Input
                   value={manualSearchQuery}
@@ -505,7 +607,7 @@ export const FinSecDashboard = () => {
                       e.preventDefault();
                       const selected = manualSearchResults[manualSearchIndex >= 0 ? manualSearchIndex : 0];
                       if (selected) {
-                        selectManualMember(selected.id, `${selected.name} (${selected.id})`);
+                        selectManualMember(selected.official_member_id, `${selected.full_name} (${selected.official_member_id})`);
                       }
                     }
                     if (e.key === 'Escape') {
@@ -522,10 +624,10 @@ export const FinSecDashboard = () => {
                       <button
                         key={member.id}
                         type="button"
-                        onClick={() => selectManualMember(member.id, `${member.name} (${member.id})`)}
+                        onClick={() => selectManualMember(member.official_member_id, `${member.full_name} (${member.official_member_id})`)}
                         className={`w-full text-left px-3 py-2 text-sm ${manualSearchIndex === index ? 'bg-[#ffd700]/30 text-white' : 'text-white hover:bg-[#ffd700]/20'}`}
                       >
-                        {member.name} — {member.id}
+                        {member.full_name} — {member.official_member_id}
                       </button>
                     ))}
                   </div>
@@ -538,11 +640,10 @@ export const FinSecDashboard = () => {
                   onChange={(e) => setManualMemberId(e.target.value.toUpperCase())}
                   placeholder="HCC-CMO-26-XXXX"
                   className="bg-[#001a16] border-[#ffd700] text-white"
-                  disabled={masterKey !== MASTER_KEY}
                 />
                 {selectedManualMember && (
                   <p className="mt-2 text-sm text-gray-300">
-                    Selected: <span className="text-[#ffd700]">{selectedManualMember.name}</span>
+                     Selected: <span className="text-[#ffd700]">{selectedManualMember.full_name}</span>
                   </p>
                 )}
               </div>
@@ -554,7 +655,6 @@ export const FinSecDashboard = () => {
                   onChange={(e) => setManualAmount(e.target.value)}
                   placeholder="0.00"
                   className="bg-[#001a16] border-[#ffd700] text-white"
-                  disabled={masterKey !== MASTER_KEY}
                 />
               </div>
               <div>
@@ -564,14 +664,12 @@ export const FinSecDashboard = () => {
                   onChange={(e) => setManualPurpose(e.target.value)}
                   placeholder="e.g., Welfare Dues, Development Fund"
                   className="bg-[#001a16] border-[#ffd700] text-white"
-                  disabled={masterKey !== MASTER_KEY}
                 />
               </div>
               <button
                 type="button"
                 onClick={handleManualTransaction}
                 className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] cursor-pointer rounded px-4 py-2"
-                disabled={masterKey !== MASTER_KEY}
               >
                 <DollarSign className="w-4 h-4 mr-2 inline" />
                 Record Transaction
@@ -680,7 +778,7 @@ export const FinSecDashboard = () => {
                 <code className="text-xs text-[#ffd700] block bg-[#002520] p-2 rounded">
                   MemberID, Amount, Purpose<br/>
                   HCC-CMO-26-0001, 5000, Welfare Dues<br/>
-                  HCC-CMO-26-0002, 3000, Development Fund
+                  HCC-CMO-26-0002, 3000, "Development Fund, special collection"
                 </code>
               </div>
               <Input

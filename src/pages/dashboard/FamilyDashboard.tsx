@@ -8,7 +8,6 @@ import { Users, Trophy, ShieldCheck, Wallet, Heart, Receipt, Megaphone, Trending
 import { useApp } from '../../contexts/AppContext';
 import { Family, FamilyWelfareTicket, FamilyTransaction, FamilyExpense, FamilyAnnouncement } from '../../types';
 import { calculateTotal, formatCurrency, formatDate, getCombinedTransactions, formatDateTime } from '../../utils/helpers';
-import { MASTER_KEY } from '../../utils/constants';
 import { generateTicketId, generateExpenseId, generateAnnouncementId } from '../../utils/idGenerators';
 
 const familyList: Family[] = ['Wisdom', 'Honour', 'Integrity', 'Talent'];
@@ -128,7 +127,6 @@ const FamilyDashboardBase = ({ mode, family: dashboardFamily }: { mode: 'chairma
   const [familyExpenseAmount, setFamilyExpenseAmount] = useState('');
   const [familyExpensePurpose, setFamilyExpensePurpose] = useState('');
   const [familyExpenseDate, setFamilyExpenseDate] = useState(new Date().toISOString().split('T')[0]);
-  const [manualMasterKey, setManualMasterKey] = useState('');
   const [manualSearchQuery, setManualSearchQuery] = useState('');
   const [manualSearchIndex, setManualSearchIndex] = useState(-1);
   const [manualMemberId, setManualMemberId] = useState('');
@@ -151,7 +149,7 @@ const FamilyDashboardBase = ({ mode, family: dashboardFamily }: { mode: 'chairma
     }
 
     const amount = parseFloat(ticketAmount);
-    if (isNaN(amount)) {
+    if (isNaN(amount) || amount <= 0) {
       setError('Invalid amount');
       return;
     }
@@ -207,7 +205,7 @@ const FamilyDashboardBase = ({ mode, family: dashboardFamily }: { mode: 'chairma
     }
 
     const amount = parseFloat(newIncomeAmount);
-    if (isNaN(amount)) {
+    if (isNaN(amount) || amount <= 0) {
       setError('Invalid amount');
       return;
     }
@@ -236,7 +234,7 @@ const FamilyDashboardBase = ({ mode, family: dashboardFamily }: { mode: 'chairma
     }
 
     const amount = parseFloat(familyExpenseAmount);
-    if (isNaN(amount)) {
+    if (isNaN(amount) || amount <= 0) {
       setError('Invalid amount');
       return;
     }
@@ -278,10 +276,17 @@ const FamilyDashboardBase = ({ mode, family: dashboardFamily }: { mode: 'chairma
 
   const handleManualTransaction = () => {
     setError('');
-    if (manualMasterKey !== MASTER_KEY) {
-      setError('Invalid Master Key');
+
+    // Programmatic Policy Check: Validate role permission matrices to verify identity
+    const isAuthorized = currentUser && 
+      (currentUser.role === 'family_chairman' || currentUser.role === 'family_secretary') &&
+      currentUser.family === family;
+
+    if (!isAuthorized) {
+      setError('Authorization Failed: You must be an authorized family leader to register manual transactions.');
       return;
     }
+
     if (!manualMemberId || !manualAmount || !manualPurpose) {
       setError('Please fill all manual transaction fields');
       return;
@@ -294,8 +299,8 @@ const FamilyDashboardBase = ({ mode, family: dashboardFamily }: { mode: 'chairma
     }
 
     const amount = parseFloat(manualAmount);
-    if (isNaN(amount)) {
-      setError('Invalid amount');
+    if (isNaN(amount) || amount <= 0) {
+      setError('Invalid amount. Amount must be positive.');
       return;
     }
 
@@ -381,7 +386,7 @@ const FamilyDashboardBase = ({ mode, family: dashboardFamily }: { mode: 'chairma
         {/* Role tiles for quick actions */}
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           {mode === 'chairman' ? (
-            <> 
+            <>
               <div className="bg-[#001a16] border border-[#ffd700] p-3 rounded text-center">
                 <p className="text-sm text-gray-400">Admin</p>
                 <p className="text-white font-semibold">Manage Members</p>
@@ -549,16 +554,6 @@ const FamilyDashboardBase = ({ mode, family: dashboardFamily }: { mode: 'chairma
               <h3 className="text-xl font-bold text-[#ffd700] mb-4">Manual Transaction Entry</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="text-gray-300 text-sm block mb-2">Executive Master Key</label>
-                  <Input
-                    type="password"
-                    value={manualMasterKey}
-                    onChange={(e) => setManualMasterKey(e.target.value)}
-                    placeholder="Enter master key"
-                    className="bg-[#001a16] border-[#ffd700] text-white"
-                  />
-                </div>
-                <div>
                   <label className="text-gray-300 text-sm block mb-2">Search family member</label>
                   <Input
                     value={manualSearchQuery}
@@ -616,7 +611,6 @@ const FamilyDashboardBase = ({ mode, family: dashboardFamily }: { mode: 'chairma
                     onChange={(e) => setManualMemberId(e.target.value.toUpperCase())}
                     placeholder="HCC-CMO-26-XXXX"
                     className="bg-[#001a16] border-[#ffd700] text-white"
-                    disabled={manualMasterKey !== MASTER_KEY}
                   />
                   {selectedManualMember && (
                     <p className="mt-2 text-sm text-gray-300">
@@ -632,7 +626,6 @@ const FamilyDashboardBase = ({ mode, family: dashboardFamily }: { mode: 'chairma
                     onChange={(e) => setManualAmount(e.target.value)}
                     placeholder="0.00"
                     className="bg-[#001a16] border-[#ffd700] text-white"
-                    disabled={manualMasterKey !== MASTER_KEY}
                   />
                 </div>
                 <div>
@@ -642,13 +635,11 @@ const FamilyDashboardBase = ({ mode, family: dashboardFamily }: { mode: 'chairma
                     onChange={(e) => setManualPurpose(e.target.value)}
                     placeholder="e.g., Welfare Dues, Development Fund"
                     className="bg-[#001a16] border-[#ffd700] text-white"
-                    disabled={manualMasterKey !== MASTER_KEY}
                   />
                 </div>
                 <Button
                   onClick={handleManualTransaction}
                   className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700]"
-                  disabled={manualMasterKey !== MASTER_KEY}
                 >
                   <DollarSign className="w-4 h-4 mr-2 inline" />
                   Record Manual Entry
