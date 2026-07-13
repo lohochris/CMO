@@ -1,5 +1,5 @@
 import { Member, Transaction, WelfareTicket, Expense, Announcement } from '../types';
-import { supabase } from './supabaseClient';
+import { supabase } from '../lib/supabaseClient';
 import { GoogleGenAI } from '@google/genai';
 
 const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY || '';

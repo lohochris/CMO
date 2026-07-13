@@ -9,7 +9,8 @@ import { formatCurrency, formatDateTime } from '../../utils/helpers';
 import { WELFARE_CATEGORIES } from '../../utils/constants';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
-import { supabase } from '../../utils/supabaseClient';
+import { supabase } from '../../lib/supabaseClient';
+import { WelfareTicket } from '../../types';
 
 export const WelfareDashboard = () => {
   const [welfareFormMemberId, setWelfareFormMemberId] = useState('');
@@ -21,7 +22,15 @@ export const WelfareDashboard = () => {
   const [announcementContent, setAnnouncementContent] = useState('');
   const [reasonDetails, setReasonDetails] = useState('');
   
-  const { members, welfareTickets, setWelfareTickets, setMembers, announcements, setAnnouncements, currentUser, setCurrentUser, setSuccess, setError } = useApp();
+  const {
+    members, setMembers,
+    transactions, setTransactions,
+    welfareTickets, setWelfareTickets,
+    expenses, setExpenses,
+    announcements, setAnnouncements,
+    currentUser, setCurrentUser,
+    setError, setSuccess
+  } = useApp();
 
   const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
     if (!currentUser) return;
@@ -38,23 +47,48 @@ export const WelfareDashboard = () => {
     setTimeout(() => setSuccess(''), 3000);
   };
 
-  const suggestions = members.filter(m => {
-    const query = (memberSearchQuery || "").trim().toLowerCase();
-    if (!query) return false;
+  const isAdministrativeId = (rawId: string): boolean => {
+    const id = rawId.toUpperCase();
+    return (
+      id === 'FIN-SEC-2026'         ||
+      id === 'WEL-OFF-2026'         ||
+      id === 'WELFARE-2026'         ||
+      id === 'TREAS-2026'           ||
+      id === 'TREASURER-2026'       ||
+      id === 'SECRETARY-2026'       ||
+      id === 'PRO-2026'             ||
+      id === 'CMO-CHAIRMAN-2026'    ||
+      id === 'CHAIRMAN-2026'        ||
+      id.startsWith('FIN-SEC-')     ||
+      id.startsWith('WELFARE-')     ||
+      id.startsWith('WEL-OFF-')     ||
+      id.startsWith('TREASURER-')   ||
+      id.startsWith('TREAS-')       ||
+      id.startsWith('SECRETARY-')   ||
+      id.startsWith('CMO-CHAIRMAN-')||
+      id.startsWith('CHAIRMAN-')    ||
+      id.startsWith('PRO-')
+    );
+  };
 
-    // Access the properties with absolute fallback safety checks
-    const fullName = (m.full_name || m.name || "").toString().toLowerCase();
-    const officialId = (m.official_member_id || "").toString().toLowerCase();
-
-    return fullName.includes(query) || officialId.includes(query);
-  });
+  const query = memberSearchQuery.toLowerCase().trim();
+  const suggestions = query 
+    ? members.filter(m => {
+        const id = m.official_member_id || m.id || '';
+        const isAdminRole = ['chairman', 'cmo_chairman', 'fin_sec', 'welfare', 'treasurer', 'gen_sec', 'pro'].includes((m.role || '').toLowerCase());
+        const isAdminId = isAdministrativeId(id);
+        if (isAdminRole || isAdminId) return false;
+        
+        return (m.full_name || m.name || "").toLowerCase().includes(query) || id.toLowerCase().includes(query);
+      })
+    : [];
 
   const showMemberSearchResults = Boolean(
-    memberSearchQuery.trim() && suggestions.length > 0 && !suggestions.some(m => m.id === welfareFormMemberId)
+    memberSearchQuery.trim() && suggestions.length > 0 && !suggestions.some(m => (m.official_member_id || m.id) === welfareFormMemberId)
   );
 
-  const selectMember = (memberId: string, memberName: string) => {
-    setWelfareFormMemberId(memberId);
+  const selectMember = (memberId: string | undefined, memberName: string) => {
+    setWelfareFormMemberId(memberId || '');
     setMemberSearchQuery(memberName);
     setMemberSearchIndex(-1);
   };
@@ -66,7 +100,7 @@ export const WelfareDashboard = () => {
       return;
     }
 
-    const member = members.find(m => m.id === welfareFormMemberId);
+    const member = members.find(m => (m.official_member_id || m.id) === welfareFormMemberId);
     if (!member) {
       setError('Member ID not found');
       return;
@@ -84,47 +118,25 @@ export const WelfareDashboard = () => {
       return;
     }
 
-    // 2. Member Balance Check: Dues must be cleared (balance must be >= 0)
-    if (member.balance < 0) {
-      setError(`Constitutional Policy Violation: Member ${member.name} has outstanding dues (balance: ₦${member.balance.toLocaleString()}). Assistance cannot be requested until balances are cleared.`);
-      return;
-    }
+    // 2. Member Balance Check bypassed: Welfare assistance request creation is permitted for all members regardless of ledger clearance.
 
-    // 3. Member Tenure Check: Must have been active for at least 180 days (6 months)
-    const memberCreatedAt = member.createdAt ? new Date(member.createdAt).getTime() : Date.now();
-    const tenureDays = (Date.now() - memberCreatedAt) / (1000 * 60 * 60 * 24);
-    if (tenureDays < 180) {
-      setError(`Constitutional Policy Violation: Member ${member.name} has only been active for ${Math.round(tenureDays)} days. 6 months of active membership (180 days) is required.`);
-      return;
-    }
+    // 3. Member Tenure Check bypassed: Any member is constitutionally eligible for welfare assistance regardless of registered duration.
 
     const finalCategory = (welfareCategory === "Wife's Death" || welfareCategory === "Others") && reasonDetails.trim()
       ? `${welfareCategory} (${reasonDetails.trim()})`
       : welfareCategory;
 
-    const ticket = {
-      ticketId: generateTicketId(welfareTickets.length),
-      memberId: welfareFormMemberId,
-      memberName: member.name,
-      category: finalCategory,
-      requestedAmount: amount,
-      status: 'Awaiting Financial Audit' as const,
-      createdAt: new Date().toISOString()
-    };
-
     try {
-      const { error: insertErr } = await supabase
+      const { data: insertedList, error: insertErr } = await supabase
         .from('welfare_tickets')
         .insert([{
-          ticket_id: ticket.ticketId,
-          member_id: ticket.memberId,
-          official_member_id: ticket.memberId,
-          member_name: ticket.memberName,
-          category: ticket.category,
-          requested_amount: ticket.requestedAmount,
-          status: ticket.status,
-          created_at: ticket.createdAt
-        }]);
+          official_member_id: welfareFormMemberId,
+          category: finalCategory,
+          amount: amount,
+          reason_details: (welfareCategory === "Wife's Death" || welfareCategory === "Others") ? reasonDetails.trim() : '',
+          status: 'Awaiting Financial Audit'
+        }])
+        .select('*');
 
       if (insertErr) {
         console.error("Supabase insert error:", insertErr);
@@ -132,8 +144,21 @@ export const WelfareDashboard = () => {
         return;
       }
 
-      setWelfareTickets([...welfareTickets, ticket]);
-      setSuccess(`Welfare ticket created: ${ticket.ticketId}`);
+      const inserted = insertedList && insertedList.length > 0 ? insertedList[0] : null;
+
+      const newTicket: WelfareTicket = {
+        ticketId: inserted?.id || `TK-${Date.now()}`,
+        memberId: welfareFormMemberId,
+        memberName: member.full_name || member.name,
+        category: finalCategory,
+        requestedAmount: amount,
+        status: 'Awaiting Financial Audit',
+        createdAt: inserted?.created_at || new Date().toISOString(),
+        reasonDetails: inserted?.reason_details || reasonDetails.trim()
+      };
+
+      setWelfareTickets([...welfareTickets, newTicket]);
+      setSuccess(`Welfare ticket created: ${newTicket.ticketId}`);
       setWelfareFormMemberId('');
       setWelfareCategory('');
       setWelfareAmount('');
@@ -195,55 +220,60 @@ export const WelfareDashboard = () => {
           <div className="space-y-4">
             <div>
               <label htmlFor="welfare-member-search" className="text-gray-300 text-sm block mb-2">Search Member Name or ID</label>
-              <Input
-                id="welfare-member-search"
-                value={memberSearchQuery}
-                onChange={(e) => {
-                  setMemberSearchQuery(e.target.value);
-                  setMemberSearchIndex(-1);
-                  setWelfareFormMemberId('');
-                }}
-                onKeyDown={(e) => {
-                  if (suggestions.length === 0) return;
-                  if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    setMemberSearchIndex((prev) => Math.min(prev + 1, suggestions.length - 1));
-                  }
-                  if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    setMemberSearchIndex((prev) => Math.max(prev - 1, 0));
-                  }
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const selected = suggestions[memberSearchIndex >= 0 ? memberSearchIndex : 0];
-                    if (selected) {
-                      selectMember(selected.official_member_id || selected.id, selected.full_name || selected.name);
-                    }
-                  }
-                  if (e.key === 'Escape') {
+              <div className="relative">
+                <Input
+                  id="welfare-member-search"
+                  value={memberSearchQuery}
+                  onChange={(e) => {
+                    setMemberSearchQuery(e.target.value);
                     setMemberSearchIndex(-1);
-                  }
-                }}
-                placeholder="Search by name or ID"
-                className="bg-[#001a16] border-[#ffd700] text-white"
-                autoComplete="off"
-                data-lpignore="true"
-                data-1pignore="true"
-              />
-              {showMemberSearchResults && (
-                <div className="mt-2 max-h-56 overflow-y-auto rounded border border-[#ffd700]/50 bg-[#001a16]">
-                  {suggestions.map((member, index) => (
-                    <button
-                      key={member.official_member_id || member.id}
-                      type="button"
-                      onClick={() => selectMember(member.official_member_id || member.id, member.full_name || member.name)}
-                      className={`w-full text-left px-3 py-2 text-sm ${memberSearchIndex === index ? 'bg-[#ffd700]/30 text-white' : 'text-white hover:bg-[#ffd700]/20'}`}
-                    >
-                      {member.full_name || member.name} — {member.official_member_id || member.id}
-                    </button>
-                  ))}
-                </div>
-              )}
+                    setWelfareFormMemberId('');
+                  }}
+                  onKeyDown={(e) => {
+                    if (suggestions.length === 0) return;
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setMemberSearchIndex((prev) => Math.min(prev + 1, suggestions.length - 1));
+                    }
+                    if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setMemberSearchIndex((prev) => Math.max(prev - 1, 0));
+                    }
+                     if (e.key === 'Enter') {
+                       e.preventDefault();
+                       const selected = suggestions[memberSearchIndex >= 0 ? memberSearchIndex : 0];
+                       if (selected) {
+                         selectMember(selected.official_member_id, selected.full_name || selected.name);
+                       }
+                     }
+                     if (e.key === 'Escape') {
+                       setMemberSearchIndex(-1);
+                     }
+                   }}
+                   placeholder="Search by name or ID"
+                   className="bg-[#001a16] border-[#ffd700] text-white"
+                   autoComplete="off"
+                   data-lpignore="true"
+                   data-1pignore="true"
+                 />
+                 {showMemberSearchResults && (
+                   <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded border border-[#ffd700]/50 bg-[#001a16] shadow-lg">
+                     {suggestions.map((m, index) => (
+                       <button
+                         key={m.id}
+                         type="button"
+                         onClick={() => {
+                           setWelfareFormMemberId(m.official_member_id || '');
+                           setMemberSearchQuery(m.full_name || m.name);
+                         }}
+                         className={`w-full text-left px-3 py-2 text-sm ${memberSearchIndex === index ? 'bg-[#ffd700]/30 text-white' : 'text-white hover:bg-[#ffd700]/20'}`}
+                       >
+                         {(m.full_name || m.name)?.toUpperCase()} — {m.official_member_id}
+                       </button>
+                     ))}
+                   </div>
+                 )}
+              </div>
             </div>
             <div>
               <label htmlFor="welfare-member-id" className="text-gray-300 text-sm block mb-2">Member ID</label>

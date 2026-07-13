@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { Member, Transaction, WelfareTicket, Expense, Announcement, Page, FamilyTransaction, FamilyExpense, FamilyWelfareTicket, FamilyAnnouncement } from '../types';
 import { seedMembers, seedAnnouncements } from '../data/seedData';
-import { supabase } from '../utils/supabaseClient';
+import { supabase } from '../lib/supabaseClient';
 
 interface AppContextType {
   members: Member[];
@@ -110,30 +110,44 @@ const transactionToDb = (t: Transaction): any => ({
   created_at: t.timestamp
 });
 
-const dbToWelfareTicket = (t: any): WelfareTicket => ({
-  ticketId: t.ticket_id,
-  memberId: t.member_id || t.official_member_id,
-  memberName: t.member_name,
-  category: t.category,
-  requestedAmount: Number(t.requested_amount),
-  status: t.status as any,
-  createdAt: t.created_at,
-  approvedAt: t.approved_at || undefined,
-  settledAt: t.settled_at || undefined
-});
+const dbToWelfareTicket = (t: any, membersList?: Member[]): WelfareTicket => {
+  const memberId = t.official_member_id;
+  let name = '';
+  if (membersList) {
+    const m = membersList.find(x => x.official_member_id === memberId || x.id === memberId);
+    if (m) name = m.full_name || m.name;
+  }
+  if (!name) {
+    const sm = seedMembers.find(x => x.official_member_id === memberId || x.id === memberId);
+    if (sm) name = sm.full_name || sm.name;
+  }
+  return {
+    ticketId: t.id,
+    memberId: memberId,
+    memberName: name || 'Unknown Member',
+    category: t.category,
+    requestedAmount: Number(t.amount),
+    status: t.status as any,
+    createdAt: t.created_at || new Date().toISOString(),
+    approvedAt: t.approved_at || undefined,
+    settledAt: t.settled_at || undefined,
+    reasonDetails: t.reason_details || undefined
+  };
+};
 
-const welfareTicketToDb = (t: WelfareTicket): any => ({
-  ticket_id: t.ticketId,
-  member_id: t.memberId,
-  official_member_id: t.memberId,
-  member_name: t.memberName,
-  category: t.category,
-  requested_amount: t.requestedAmount,
-  status: t.status,
-  created_at: t.createdAt,
-  approved_at: t.approvedAt || null,
-  settled_at: t.settledAt || null
-});
+const welfareTicketToDb = (t: WelfareTicket): any => {
+  const payload: any = {
+    official_member_id: t.memberId,
+    category: t.category,
+    amount: t.requestedAmount,
+    reason_details: t.reasonDetails || '',
+    status: t.status
+  };
+  if (t.ticketId && t.ticketId.includes('-') && t.ticketId.length > 15) {
+    payload.id = t.ticketId;
+  }
+  return payload;
+};
 
 const dbToExpense = (e: any): Expense => ({
   id: e.id,
@@ -143,31 +157,40 @@ const dbToExpense = (e: any): Expense => ({
   recordedBy: e.recorded_by
 });
 
-const expenseToDb = (e: Expense): any => ({
-  id: e.id,
-  amount: e.amount,
-  purpose: e.purpose,
-  date: e.date,
-  recorded_by: e.recordedBy
-});
+const expenseToDb = (e: Expense): any => {
+  const payload: any = {
+    amount: e.amount,
+    purpose: e.purpose,
+    date: e.date,
+    recorded_by: e.recordedBy
+  };
+  if (e.id && e.id.includes('-') && e.id.length > 15) {
+    payload.id = e.id;
+  }
+  return payload;
+};
 
 const dbToAnnouncement = (a: any): Announcement => ({
   id: a.id,
   title: a.title,
   content: a.content,
   author: a.author,
-  timestamp: a.timestamp,
+  timestamp: a.created_at || a.timestamp,
   expiresAt: a.expires_at || undefined
 });
 
-const announcementToDb = (a: Announcement): any => ({
-  id: a.id,
-  title: a.title,
-  content: a.content,
-  author: a.author,
-  timestamp: a.timestamp,
-  expires_at: a.expiresAt || null
-});
+const announcementToDb = (a: Announcement): any => {
+  const payload: any = {
+    title: a.title,
+    content: a.content,
+    author: a.author,
+    created_at: a.timestamp
+  };
+  if (a.id && a.id.includes('-') && a.id.length > 15) {
+    payload.id = a.id;
+  }
+  return payload;
+};
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [members, setMembersState] = useState<Member[]>([]);
@@ -245,11 +268,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // Fetch the global members list immediately to unblock the UI dropdown
       const { data, error } = await supabase.from('members').select('*');
       if (data) {
-        setMembersState(data.map(m => ({
+        const loadedMembers = data.map((m: any) => ({
           ...dbToMember(m),
           name: m.full_name || m.name,
           phone: m.phone_number || m.phone
-        })));
+        }));
+        setMembersState(loadedMembers);
+
+        // Also fetch welfare tickets and map them with loadedMembers context
+        try {
+          const { data: dbWelfare } = await supabase.from('welfare_tickets').select('*');
+          if (dbWelfare) {
+            setWelfareTicketsState(dbWelfare.map((t: any) => dbToWelfareTicket(t, loadedMembers)));
+          }
+        } catch (welfareErr) {
+          console.error("Immediate welfare tickets hydration error:", welfareErr);
+        }
       }
     };
     hydrateData();
@@ -266,22 +300,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setLoading(true);
       setDbError(null);
 
+      let loadedMembersList: Member[] = [];
+
       // 1. Fetch Members
       try {
-        const { data: dbMembers, error: memErr } = await supabase.from('members').select('*');
-        if (memErr) {
-          console.error("Members query error:", memErr);
-          setDbError(memErr.message || 'Members query error');
+        // Ensure all executives pull the complete human membership database rows
+        const { data: membersData, error: membersError } = await supabase
+          .from('members')
+          .select('*');
+        if (membersError) {
+          console.error("Members query error:", membersError);
+          setDbError(membersError.message || 'Members query error');
           setMembersState(seedMembers);
-        } else if (dbMembers && dbMembers.length > 0) {
-          setMembersState(dbMembers.map(dbToMember));
+          loadedMembersList = seedMembers;
+        } else if (membersData && membersData.length > 0) {
+          loadedMembersList = membersData.map(dbToMember);
+          setMembersState(loadedMembersList);
         } else {
           setMembersState(seedMembers);
+          loadedMembersList = seedMembers;
         }
       } catch (err: any) {
         console.error("Isolated member connection catch-block:", err);
         setDbError(err.message || 'Isolated member connection error');
         setMembersState(seedMembers);
+        loadedMembersList = seedMembers;
       }
 
       // 2. Fetch Transactions
@@ -304,7 +347,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (welErr) {
           console.error("Welfare tickets query error:", welErr);
         } else if (dbWelfare) {
-          setWelfareTicketsState(dbWelfare.map(dbToWelfareTicket));
+          setWelfareTicketsState(dbWelfare.map((t: any) => dbToWelfareTicket(t, loadedMembersList)));
         }
       } catch (err: any) {
         console.error("Isolated welfare tickets connection catch-block:", err);

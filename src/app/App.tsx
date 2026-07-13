@@ -8,11 +8,12 @@ import { Services } from '../pages/public/Services';
 import { Login } from '../pages/public/Login';
 import { Register } from '../pages/public/Register';
 import { MemberDashboard } from '../pages/dashboard/MemberDashboard';
-import { FinSecDashboard } from '../pages/dashboard/FinSecDashboard';
+import { FinSecDashboard as FinanceDashboard } from '../pages/dashboard/FinSecDashboard';
 import { WelfareDashboard } from '../pages/dashboard/WelfareDashboard';
 import { TreasurerDashboard } from '../pages/dashboard/TreasurerDashboard';
 import { SecretaryDashboard } from '../pages/dashboard/SecretaryDashboard';
 import { PRODashboard } from '../pages/dashboard/PRODashboard';
+import { ChairmanDashboard } from '../pages/dashboard/ChairmanDashboard';
 import { Megaphone } from 'lucide-react';
 import {
   FamilyHub,
@@ -85,9 +86,10 @@ function AppContent() {
         return <Login />;
       }
 
-      const isGlobalAdmin = currentUser?.role === 'fin_sec' || 
-                            currentUser?.role === 'chairman' || 
-                            currentUser?.role === 'cmo_chairman';
+      const roleLower = currentUser?.role?.toLowerCase();
+      const isGlobalAdmin = roleLower === 'fin_sec' || 
+                            roleLower === 'chairman' || 
+                            roleLower === 'cmo_chairman';
 
       if (!isGlobalAdmin) {
         let targetFamily = '';
@@ -115,25 +117,36 @@ function AppContent() {
     if (currentPage === 'login') return <Login />;
     if (currentPage === 'register') return <Register />;
 
-    // Dashboard pages
-    if (currentPage === 'dashboard') {
-      if (isFinSec) return <FinSecDashboard />;
-      if (isPRO) return <PRODashboard />;
-      if ((currentUser as any)?.official_member_id === 'WEL-OFF-2026' || currentUser?.id === 'WEL-OFF-2026' || currentUser?.role === 'welfare') {
-        return <WelfareDashboard />;
+    // Dashboard pages & Admin Routing Overhaul
+    if (
+      currentPage === 'dashboard' ||
+      currentPage === 'pro' ||
+      currentPage === 'welfare' ||
+      currentPage === 'treasurer' ||
+      currentPage === 'secretary' ||
+      currentPage === 'chairman' ||
+      currentPage === 'fin_sec'
+    ) {
+      // Dashboard routing — driven exclusively by role (single source of truth).
+      // The login handler resolves all canonical IDs to a full Member object with
+      // the correct role set, so ID-string checks here are redundant and fragile.
+      const userRole = currentUser?.role?.toLowerCase();
+
+      if (userRole === 'fin_sec' || userRole === 'financial_secretary') return <FinanceDashboard />;
+      if (userRole === 'welfare')          return <WelfareDashboard />;
+      if (userRole === 'treasurer')        return <TreasurerDashboard />;
+      if (userRole === 'cmo_chairman' || userRole === 'chairman') {
+        return <ChairmanDashboard />;
       }
-      if ((currentUser as any)?.official_member_id === 'TREAS-2026' || currentUser?.id === 'TREAS-2026' || currentUser?.role === 'treasurer') {
-        return <TreasurerDashboard />;
-      }
-      if (currentUser?.role === 'family_chairman' || currentUser?.role === 'family_secretary') {
+      if (userRole === 'pro')              return <PRODashboard />;
+      if (userRole === 'gen_sec' || userRole === 'secretary') return <SecretaryDashboard />;
+      if (userRole === 'family_chairman' || userRole === 'family_secretary') {
         return familyLandingPage() || <FamilyHub />;
       }
+
+      // Fallback for standard organization members
       return <MemberDashboard />;
     }
-    if (currentPage === 'pro') return <PRODashboard />;
-    if (currentPage === 'welfare') return <WelfareDashboard />;
-    if (currentPage === 'treasurer') return <TreasurerDashboard />;
-    if (currentPage === 'secretary') return <SecretaryDashboard />;
     if (currentPage === 'familyHub') return <FamilyHub />;
     if (currentPage === 'familyChairman') return <FamilyChairmanDashboard />;
     if (currentPage === 'familySecretary') return <FamilySecretaryDashboard />;

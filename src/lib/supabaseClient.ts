@@ -38,14 +38,9 @@ export const uploadProfilePhotoToStorage = async (memberId: string, file: Blob) 
     return null;
   }
 
-  const { data: publicUrlData, error: publicUrlError } = supabase.storage
+  const { data: publicUrlData } = supabase.storage
     .from('profile-pictures')
     .getPublicUrl(filePath);
-
-  if (publicUrlError) {
-    console.error('Supabase public URL retrieval failed:', publicUrlError.message);
-    return null;
-  }
 
   return publicUrlData.publicUrl;
 };
