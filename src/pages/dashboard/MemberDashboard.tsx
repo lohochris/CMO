@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { WeddingStatus, Family } from '../../types';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
@@ -67,6 +67,54 @@ export const MemberDashboard = () => {
   };
 
   const [settingsLoading, setSettingsLoading] = useState(false);
+
+  const [liveTransactions, setLiveTransactions] = useState<any[]>([]);
+  const [txLoading, setTxLoading] = useState(false);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const fetchTransactions = async () => {
+      setTxLoading(true);
+      try {
+        const { data: userLogs, error } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('official_member_id', (currentUser as any).official_member_id || currentUser.id)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        setLiveTransactions(userLogs || []);
+      } catch (err) {
+        console.error('Error fetching transactions:', err);
+      } finally {
+        setTxLoading(false);
+      }
+    };
+
+    fetchTransactions();
+
+    // Realtime Postgres changes subscription on 'transactions' table to refresh transaction history feed instantly
+    const txChannel = supabase
+      .channel(`member-tx-${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'transactions',
+          filter: `official_member_id=eq.${(currentUser as any).official_member_id || currentUser.id}`
+        },
+        () => {
+          fetchTransactions();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(txChannel);
+    };
+  }, [currentUser?.id]);
 
   const handleProfileUpdate = async () => {
     setError('');
@@ -233,14 +281,10 @@ export const MemberDashboard = () => {
           })}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
           <div className="bg-[#001a16] border border-[#ffd700] p-4 md:p-6 rounded hover:scale-105 transition-all">
             <p className="text-gray-400 text-sm mb-1">Member ID</p>
             <p className="text-white font-semibold text-lg">{currentUser.id}</p>
-          </div>
-          <div className="bg-[#001a16] border border-[#ffd700] p-4 md:p-6 rounded hover:scale-105 transition-all">
-            <p className="text-gray-400 text-sm mb-1">Current Balance</p>
-            <p className="text-[#ffd700] font-bold text-2xl">{formatCurrency(currentUser.balance)}</p>
           </div>
           <div className="bg-[#001a16] border border-[#ffd700] p-4 md:p-6 rounded hover:scale-105 transition-all">
             <p className="text-gray-400 text-sm mb-1">Status</p>
@@ -261,19 +305,39 @@ export const MemberDashboard = () => {
             Your Transaction History
           </h3>
           <div className="bg-[#001a16] border border-[#ffd700] rounded p-4">
-            {userTransactions.length === 0 ? (
+            {txLoading ? (
+              <p className="text-gray-400 text-center py-4">Loading transactions...</p>
+            ) : liveTransactions.length === 0 ? (
               <p className="text-gray-400 text-center py-4">No transactions yet</p>
             ) : (
               <div className="space-y-2">
-                {userTransactions.slice().reverse().map((txn, idx) => (
-                  <div key={idx} className="flex justify-between items-center py-2 border-b border-[#ffd700]/30">
-                    <div>
-                      <p className="text-white font-semibold">{txn.purpose}</p>
-                      <p className="text-gray-400 text-xs">{formatDateTime(txn.timestamp)}</p>
+                {liveTransactions.map((txn, idx) => {
+                  const paymentDate = new Date(txn.created_at || txn.timestamp || new Date());
+                  const formattedTimestamp = paymentDate.toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  }) + ' at ' + paymentDate.toLocaleTimeString('en-US', { 
+                    hour: '2-digit', 
+                    minute: '2-digit', 
+                    second: '2-digit' 
+                  });
+
+                  const displayPurpose = txn.purpose === 'Other Levy' && txn.notes
+                    ? `Other Levy (${txn.notes})`
+                    : txn.purpose;
+
+                  return (
+                    <div key={idx} className="flex justify-between items-center py-2 border-b border-[#ffd700]/30">
+                      <div>
+                        <p className="text-white font-semibold">{displayPurpose}</p>
+                        <p className="text-gray-400 text-xs">{formattedTimestamp}</p>
+                      </div>
+                      <p className="text-green-500 font-semibold">{formatCurrency(txn.amount)}</p>
                     </div>
-                    <p className="text-green-500 font-semibold">{formatCurrency(txn.amount)}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

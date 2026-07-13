@@ -30,6 +30,9 @@ export type Page =
 export interface Member {
   id: string;
   name: string;
+  full_name?: string;
+  official_member_id?: string;
+  phone_number?: string;
   status: MemberStatus;
   balance: number;
   role: MemberRole;
@@ -51,9 +54,13 @@ export interface Member {
 }
 
 export interface Transaction {
+  id?: number;
   memberId: string;
+  memberName?: string;
   amount: number;
   purpose: string;
+  notes?: string;
+  transactionType?: string;
   timestamp: string;
 }
 

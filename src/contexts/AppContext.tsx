@@ -40,13 +40,16 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // Mapping Utilities: Database (snake_case) <-> Frontend (camelCase)
 const dbToMember = (m: any): Member => ({
-  id: m.id,
-  name: m.name,
+  id: m.official_member_id || m.id,
+  name: m.full_name || m.name,
+  full_name: m.full_name || m.name,
+  official_member_id: m.official_member_id || m.id,
+  phone_number: m.phone_number || m.phone || undefined,
   status: m.status as any,
   balance: Number(m.balance),
   role: m.role as any,
   family: m.family as any,
-  phone: m.phone || undefined,
+  phone: m.phone_number || m.phone || undefined,
   email: m.email || undefined,
   homeTownAddress: m.home_town_address || undefined,
   residentialAddress: m.residential_address || undefined,
@@ -57,17 +60,19 @@ const dbToMember = (m: any): Member => ({
   numberOfChildren: m.number_of_children !== null ? Number(m.number_of_children) : undefined,
   wifeName: m.wife_name || undefined,
   wifePhone: m.wife_phone || undefined,
-  profilePic: m.profile_picture_url || null
+  profilePic: m.profile_picture_url || null,
+  createdAt: m.created_at || m.createdAt || undefined,
+  updatedAt: m.updated_at || m.updatedAt || undefined
 });
 
 const memberToDb = (m: Member): any => ({
-  id: m.id,
-  name: m.name,
+  official_member_id: m.official_member_id || m.id,
+  full_name: m.full_name || m.name,
   status: m.status,
   balance: m.balance,
   role: m.role,
   family: m.family || null,
-  phone: m.phone || null,
+  phone_number: m.phone_number || m.phone || null,
   email: m.email || null,
   home_town_address: m.homeTownAddress || null,
   residential_address: m.residentialAddress || null,
@@ -78,26 +83,36 @@ const memberToDb = (m: Member): any => ({
   number_of_children: m.numberOfChildren !== undefined ? m.numberOfChildren : null,
   wife_name: m.wifeName || null,
   wife_phone: m.wifePhone || null,
-  profile_picture_url: m.profilePic || null
+  profile_picture_url: m.profilePic || null,
+  created_at: m.createdAt || null,
+  updated_at: m.updatedAt || null
 });
 
 const dbToTransaction = (t: any): Transaction => ({
-  memberId: t.member_id,
+  id: t.id,
+  memberId: t.official_member_id || t.member_id,
+  memberName: t.member_name,
   amount: Number(t.amount),
   purpose: t.purpose,
-  timestamp: t.timestamp
+  notes: t.notes,
+  transactionType: t.transaction_type,
+  timestamp: t.created_at || t.timestamp
 });
 
 const transactionToDb = (t: Transaction): any => ({
-  member_id: t.memberId,
+  id: t.id,
+  official_member_id: t.memberId,
+  member_name: t.memberName,
   amount: t.amount,
   purpose: t.purpose,
-  timestamp: t.timestamp
+  notes: t.notes,
+  transaction_type: t.transactionType,
+  created_at: t.timestamp
 });
 
 const dbToWelfareTicket = (t: any): WelfareTicket => ({
   ticketId: t.ticket_id,
-  memberId: t.member_id,
+  memberId: t.member_id || t.official_member_id,
   memberName: t.member_name,
   category: t.category,
   requestedAmount: Number(t.requested_amount),
@@ -110,6 +125,7 @@ const dbToWelfareTicket = (t: any): WelfareTicket => ({
 const welfareTicketToDb = (t: WelfareTicket): any => ({
   ticket_id: t.ticketId,
   member_id: t.memberId,
+  official_member_id: t.memberId,
   member_name: t.memberName,
   category: t.category,
   requested_amount: t.requestedAmount,
@@ -165,7 +181,79 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [familyWelfareTickets, setFamilyWelfareTickets] = useState<FamilyWelfareTicket[]>([]);
   const [familyAnnouncements, setFamilyAnnouncements] = useState<FamilyAnnouncement[]>([]);
   const [currentPage, setCurrentPage] = useState<Page>('home');
-  const [currentUser, setCurrentUser] = useState<Member | null>(null);
+  const [currentUser, setCurrentUser] = useState<Member | null>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('cmo_current_user');
+        return saved ? JSON.parse(saved) : null;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return null;
+  });
+
+  // Persist currentUser changes to localStorage
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        if (currentUser) {
+          localStorage.setItem('cmo_current_user', JSON.stringify(currentUser));
+          localStorage.setItem('cmo_member_session', currentUser.id);
+          if (currentUser.id === 'WEL-OFF-2026' || currentUser.id === 'TREAS-2026') {
+            localStorage.setItem('cmo_admin_id', currentUser.id);
+          }
+        } else {
+          localStorage.removeItem('cmo_current_user');
+          localStorage.removeItem('cmo_member_session');
+          localStorage.removeItem('cmo_admin_id');
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [currentUser]);
+
+  // Ensure data hydrates even if native Supabase Auth is anonymous
+  useEffect(() => {
+    const hydrateData = async () => {
+      // Recover administrative session if present in local storage
+      try {
+        if (typeof window !== 'undefined') {
+          const savedUser = localStorage.getItem('cmo_current_user');
+          const sessionKey = localStorage.getItem('cmo_member_session') || localStorage.getItem('cmo_admin_id');
+          
+          if ((sessionKey === 'WEL-OFF-2026' || sessionKey === 'TREAS-2026' || savedUser) && !currentUser) {
+            if (savedUser) {
+              setCurrentUser(JSON.parse(savedUser));
+            } else if (sessionKey) {
+              const fallbackAdmin: Member = {
+                id: sessionKey,
+                name: sessionKey === 'WEL-OFF-2026' ? 'Welfare Officer' : 'Treasurer',
+                status: 'Active (Cleared)',
+                balance: 0,
+                role: sessionKey === 'WEL-OFF-2026' ? 'welfare' : 'treasurer'
+              };
+              setCurrentUser(fallbackAdmin);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Administrative session recovery failed:", e);
+      }
+
+      // Fetch the global members list immediately to unblock the UI dropdown
+      const { data, error } = await supabase.from('members').select('*');
+      if (data) {
+        setMembersState(data.map(m => ({
+          ...dbToMember(m),
+          name: m.full_name || m.name,
+          phone: m.phone_number || m.phone
+        })));
+      }
+    };
+    hydrateData();
+  }, [currentUser]);
   const [selectedFamily, setSelectedFamily] = useState<import('../types').Family | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -177,60 +265,80 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const fetchData = async () => {
       setLoading(true);
       setDbError(null);
+
+      // 1. Fetch Members
       try {
         const { data: dbMembers, error: memErr } = await supabase.from('members').select('*');
-        if (memErr) throw memErr;
-
-        const { data: dbTx, error: txErr } = await supabase.from('transactions').select('*');
-        if (txErr) throw txErr;
-
-        const { data: dbWelfare, error: welErr } = await supabase.from('welfare_tickets').select('*');
-        if (welErr) throw welErr;
-
-        const { data: dbExpenses, error: expErr } = await supabase.from('expenses').select('*');
-        if (expErr) throw expErr;
-
-        const { data: dbAnnouncements, error: annErr } = await supabase.from('announcements').select('*');
-        if (annErr) throw annErr;
-
-        // Map database records to frontend structures
-        if (dbMembers && dbMembers.length > 0) {
+        if (memErr) {
+          console.error("Members query error:", memErr);
+          setDbError(memErr.message || 'Members query error');
+          setMembersState(seedMembers);
+        } else if (dbMembers && dbMembers.length > 0) {
           setMembersState(dbMembers.map(dbToMember));
         } else {
-          // Initialize DB with seed members if empty
-          for (const m of seedMembers) {
-            await supabase.from('members').insert(memberToDb(m));
-          }
           setMembersState(seedMembers);
         }
+      } catch (err: any) {
+        console.error("Isolated member connection catch-block:", err);
+        setDbError(err.message || 'Isolated member connection error');
+        setMembersState(seedMembers);
+      }
 
-        if (dbTx) {
+      // 2. Fetch Transactions
+      try {
+        const { data: dbTx, error: txErr } = await supabase
+          .from('transactions')
+          .select('id, official_member_id, member_name, amount, purpose, notes, created_at');
+        if (txErr) {
+          console.error("Transactions query error:", txErr);
+        } else if (dbTx) {
           setTransactionsState(dbTx.map(dbToTransaction));
         }
-        if (dbWelfare) {
+      } catch (err: any) {
+        console.error("Isolated transactions connection catch-block:", err);
+      }
+
+      // 3. Fetch Welfare Tickets
+      try {
+        const { data: dbWelfare, error: welErr } = await supabase.from('welfare_tickets').select('*');
+        if (welErr) {
+          console.error("Welfare tickets query error:", welErr);
+        } else if (dbWelfare) {
           setWelfareTicketsState(dbWelfare.map(dbToWelfareTicket));
         }
-        if (dbExpenses) {
+      } catch (err: any) {
+        console.error("Isolated welfare tickets connection catch-block:", err);
+      }
+
+      // 4. Fetch Expenses
+      try {
+        const { data: dbExpenses, error: expErr } = await supabase.from('expenses').select('*');
+        if (expErr) {
+          console.error("Expenses query error:", expErr);
+        } else if (dbExpenses) {
           setExpensesState(dbExpenses.map(dbToExpense));
         }
+      } catch (err: any) {
+        console.error("Isolated expenses connection catch-block:", err);
+      }
 
-        if (dbAnnouncements && dbAnnouncements.length > 0) {
+      // 5. Fetch Announcements
+      try {
+        const { data: dbAnnouncements, error: annErr } = await supabase.from('announcements').select('*');
+        if (annErr) {
+          console.error("Announcements query error:", annErr);
+          setAnnouncementsState(seedAnnouncements);
+        } else if (dbAnnouncements && dbAnnouncements.length > 0) {
           setAnnouncementsState(dbAnnouncements.map(dbToAnnouncement));
         } else {
-          // Initialize DB with seed announcements if empty
-          for (const a of seedAnnouncements) {
-            await supabase.from('announcements').insert(announcementToDb(a));
-          }
           setAnnouncementsState(seedAnnouncements);
         }
       } catch (err: any) {
-        console.error('Error fetching Supabase data, falling back to seed data:', err);
-        setDbError(err.message || 'Database connection error');
-        setMembersState(seedMembers);
+        console.error("Isolated announcements connection catch-block:", err);
         setAnnouncementsState(seedAnnouncements);
-      } finally {
-        setLoading(false);
       }
+
+      setLoading(false);
     };
 
     fetchData();
@@ -241,50 +349,46 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const next = typeof newMembers === 'function' ? newMembers(members) : newMembers;
     setMembersState(next);
 
-    for (const m of next) {
+    if (dbError) {
+      console.warn('Supabase initialization failed or is in error state. Skipping members sync to prevent loops.');
+      return;
+    }
+
+    for (const member of next) {
+      const officialMemberId = member.official_member_id || member.id;
+
       // Check if the member already exists by official_member_id
       const { data: existing, error: checkErr } = await supabase
         .from('members')
         .select('official_member_id')
-        .eq('official_member_id', m.id)
+        .eq('official_member_id', officialMemberId)
         .maybeSingle();
-
-      const payload = {
-        name: m.name,
-        full_name: m.name,
-        phone_number: m.phone || null,
-        phone: m.phone || null, // Alignment safeguard mapping
-        email: m.email || null,
-        family: m.family || null,
-        cmo_family: m.family || null,
-        status: m.status,
-        role: m.role,
-        balance: m.balance,
-        home_town_address: m.homeTownAddress || null,
-        residential_address: m.residentialAddress || null,
-        marital_status: m.maritalStatus || null,
-        wedding_status: m.weddingStatus || null,
-        communicant: m.communicant || false,
-        post_held: m.postHeld || null,
-        number_of_children: m.numberOfChildren !== undefined ? m.numberOfChildren : null,
-        wife_name: m.wifeName || null,
-        wife_phone: m.wifePhone || null,
-        profile_picture_url: m.profilePic || null,
-        official_member_id: m.id
-      };
 
       if (existing) {
         // Update
         const { error: syncErr } = await supabase
           .from('members')
-          .update(payload)
-          .eq('official_member_id', m.id);
+          .update({
+            full_name: member.name || member.full_name,
+            phone_number: member.phone || member.phone_number,
+            status: member.status,
+            balance: member.balance,
+            role: member.role
+          })
+          .eq('official_member_id', officialMemberId);
         if (syncErr) console.error('Failed to sync member change to Supabase (update):', syncErr);
       } else {
         // Insert (Do not specify "id", let DB generate the UUID primary key)
         const { error: syncErr } = await supabase
           .from('members')
-          .insert(payload);
+          .insert([{
+            official_member_id: officialMemberId,
+            full_name: member.name || member.full_name,
+            phone_number: member.phone || member.phone_number,
+            status: member.status,
+            balance: member.balance,
+            role: member.role
+          }]);
         if (syncErr) console.error('Failed to sync member change to Supabase (insert):', syncErr);
       }
     }
@@ -299,8 +403,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const toInsert = next.filter(t => !currentHashes.has(`${t.memberId}-${t.timestamp}`));
 
     if (toInsert.length > 0) {
-      const { error: syncErr } = await supabase.from('transactions').insert(toInsert.map(transactionToDb));
-      if (syncErr) console.error('Failed to insert new transactions to Supabase:', syncErr);
+      const { data: insertedData, error: syncErr } = await supabase
+        .from('transactions')
+        .insert(toInsert.map(transactionToDb))
+        .select('id, official_member_id, member_name, amount, purpose, notes, created_at');
+
+      if (syncErr) {
+        console.error('Failed to insert new transactions to Supabase:', syncErr);
+      } else if (insertedData) {
+        const mappedInserted: Transaction[] = insertedData.map(dbToTransaction);
+        setTransactionsState(prev => {
+          return prev.map(t => {
+            const match = mappedInserted.find((m: Transaction) => m.memberId === t.memberId && m.timestamp === t.timestamp);
+            return match ? match : t;
+          });
+        });
+      }
     }
   };
 

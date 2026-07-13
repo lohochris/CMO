@@ -10,6 +10,7 @@ import { generateExpenseId } from '../../utils/idGenerators';
 import { calculateTotal, formatCurrency, formatDate, getCombinedTransactions } from '../../utils/helpers';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
+import { supabase } from '../../utils/supabaseClient';
 
 export const TreasurerDashboard = () => {
   const [expenseAmount, setExpenseAmount] = useState('');
@@ -69,28 +70,82 @@ export const TreasurerDashboard = () => {
     setTimeout(() => setSuccess(''), 3000);
   };
 
-  const settleTicket = (ticketId: string) => {
+  const settleTicket = async (ticketId: string) => {
+    setError('');
     const ticket = welfareTickets.find(t => t.ticketId === ticketId);
-    if (!ticket) return;
+    if (!ticket) {
+      setError('Ticket not found');
+      return;
+    }
 
-    const updatedTickets = welfareTickets.map(t =>
-      t.ticketId === ticketId
-        ? { ...t, status: 'Settled & Cleared' as const, settledAt: new Date().toISOString() }
-        : t
-    );
-    setWelfareTickets(updatedTickets);
+    try {
+      // 1. Explicit update mutation to the database for welfare ticket status
+      const { error: ticketErr } = await supabase
+        .from('welfare_tickets')
+        .update({ 
+          status: 'Settled & Cleared', 
+          settled_at: new Date().toISOString() 
+        })
+        .eq('ticket_id', ticketId);
 
-    const expense = {
-      id: generateExpenseId(),
-      amount: ticket.requestedAmount,
-      purpose: `Disbursement ${ticket.ticketId} for ${ticket.memberName}`,
-      date: new Date().toISOString().split('T')[0],
-      recordedBy: currentUser?.name || 'Treasurer'
-    };
-    setExpenses([...expenses, expense]);
+      if (ticketErr) {
+        console.error("Failed to update ticket in Supabase:", ticketErr);
+        setError(`Database Error: ${ticketErr.message}`);
+        return;
+      }
 
-    setSuccess(`Ticket ${ticketId} settled, expense added to ledger`);
-    setTimeout(() => setSuccess(''), 3000);
+      // 2. Log the expense in the unified ledger transactions table in database
+      const { error: txErr } = await supabase
+        .from('transactions')
+        .insert([{
+          official_member_id: 'GENERAL-EXPENSE',
+          member_name: 'CMO Operational Expense',
+          amount: ticket.requestedAmount,
+          purpose: `Disbursement ${ticket.ticketId} for ${ticket.memberName}`,
+          transaction_type: 'expense',
+          timestamp: new Date().toISOString()
+        }]);
+
+      if (txErr) {
+        console.error("Failed to insert transaction in Supabase:", txErr);
+        setError(`Database Error: ${txErr.message}`);
+        return;
+      }
+
+      // 3. Update local state context (which also handles local state sync to expenses table if applicable)
+      const updatedTickets = welfareTickets.map(t =>
+        t.ticketId === ticketId
+          ? { ...t, status: 'Settled & Cleared' as const, settledAt: new Date().toISOString() }
+          : t
+      );
+      setWelfareTickets(updatedTickets);
+
+      const expense = {
+        id: generateExpenseId(),
+        amount: ticket.requestedAmount,
+        purpose: `Disbursement ${ticket.ticketId} for ${ticket.memberName}`,
+        date: new Date().toISOString().split('T')[0],
+        recordedBy: currentUser?.name || 'Treasurer'
+      };
+      setExpenses([...expenses, expense]);
+
+      // Add to local transactions state to synchronize the ledger on the screen instantly
+      const newTx = {
+        memberId: 'GENERAL-EXPENSE',
+        memberName: 'CMO Operational Expense',
+        amount: ticket.requestedAmount,
+        purpose: `Disbursement ${ticket.ticketId} for ${ticket.memberName}`,
+        transactionType: 'expense',
+        timestamp: new Date().toISOString()
+      };
+      setTransactions([...transactions, newTx]);
+
+      setSuccess(`Ticket ${ticketId} settled and expense logged to ledger`);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      console.error("Settle ticket transaction failed:", err);
+      setError(`Settle failed: ${err.message}`);
+    }
   };
 
   const handleExpenseRecord = () => {
