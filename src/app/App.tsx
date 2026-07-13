@@ -119,6 +119,12 @@ function AppContent() {
     if (currentPage === 'dashboard') {
       if (isFinSec) return <FinSecDashboard />;
       if (isPRO) return <PRODashboard />;
+      if ((currentUser as any)?.official_member_id === 'WEL-OFF-2026' || currentUser?.id === 'WEL-OFF-2026' || currentUser?.role === 'welfare') {
+        return <WelfareDashboard />;
+      }
+      if ((currentUser as any)?.official_member_id === 'TREAS-2026' || currentUser?.id === 'TREAS-2026' || currentUser?.role === 'treasurer') {
+        return <TreasurerDashboard />;
+      }
       if (currentUser?.role === 'family_chairman' || currentUser?.role === 'family_secretary') {
         return familyLandingPage() || <FamilyHub />;
       }

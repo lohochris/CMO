@@ -9,6 +9,7 @@ import { formatCurrency, formatDateTime } from '../../utils/helpers';
 import { WELFARE_CATEGORIES } from '../../utils/constants';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
+import { supabase } from '../../utils/supabaseClient';
 
 export const WelfareDashboard = () => {
   const [welfareFormMemberId, setWelfareFormMemberId] = useState('');
@@ -18,6 +19,7 @@ export const WelfareDashboard = () => {
   const [memberSearchIndex, setMemberSearchIndex] = useState(-1);
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementContent, setAnnouncementContent] = useState('');
+  const [reasonDetails, setReasonDetails] = useState('');
   
   const { members, welfareTickets, setWelfareTickets, setMembers, announcements, setAnnouncements, currentUser, setCurrentUser, setSuccess, setError } = useApp();
 
@@ -36,21 +38,28 @@ export const WelfareDashboard = () => {
     setTimeout(() => setSuccess(''), 3000);
   };
 
-  const memberSearchResults = memberSearchQuery.trim()
-    ? members.filter(m => `${m.name} ${m.id}`.toLowerCase().includes(memberSearchQuery.toLowerCase())).slice(0, 8)
-    : [];
+  const suggestions = members.filter(m => {
+    const query = (memberSearchQuery || "").trim().toLowerCase();
+    if (!query) return false;
+
+    // Access the properties with absolute fallback safety checks
+    const fullName = (m.full_name || m.name || "").toString().toLowerCase();
+    const officialId = (m.official_member_id || "").toString().toLowerCase();
+
+    return fullName.includes(query) || officialId.includes(query);
+  });
 
   const showMemberSearchResults = Boolean(
-    memberSearchQuery.trim() && memberSearchResults.length > 0 && !memberSearchResults.some(m => m.id === welfareFormMemberId)
+    memberSearchQuery.trim() && suggestions.length > 0 && !suggestions.some(m => m.id === welfareFormMemberId)
   );
 
-  const selectMember = (memberId: string, displayText: string) => {
+  const selectMember = (memberId: string, memberName: string) => {
     setWelfareFormMemberId(memberId);
-    setMemberSearchQuery(displayText);
+    setMemberSearchQuery(memberName);
     setMemberSearchIndex(-1);
   };
 
-  const handleWelfareTicketSubmit = () => {
+  const handleWelfareTicketSubmit = async () => {
     setError('');
     if (!welfareFormMemberId || !welfareCategory || !welfareAmount) {
       setError('Please fill all fields');
@@ -89,23 +98,52 @@ export const WelfareDashboard = () => {
       return;
     }
 
+    const finalCategory = (welfareCategory === "Wife's Death" || welfareCategory === "Others") && reasonDetails.trim()
+      ? `${welfareCategory} (${reasonDetails.trim()})`
+      : welfareCategory;
+
     const ticket = {
       ticketId: generateTicketId(welfareTickets.length),
       memberId: welfareFormMemberId,
       memberName: member.name,
-      category: welfareCategory,
+      category: finalCategory,
       requestedAmount: amount,
       status: 'Awaiting Financial Audit' as const,
       createdAt: new Date().toISOString()
     };
 
-    setWelfareTickets([...welfareTickets, ticket]);
-    setSuccess(`Welfare ticket created: ${ticket.ticketId}`);
-    setWelfareFormMemberId('');
-    setWelfareCategory('');
-    setWelfareAmount('');
-    setMemberSearchQuery('');
-    setTimeout(() => setSuccess(''), 3000);
+    try {
+      const { error: insertErr } = await supabase
+        .from('welfare_tickets')
+        .insert([{
+          ticket_id: ticket.ticketId,
+          member_id: ticket.memberId,
+          official_member_id: ticket.memberId,
+          member_name: ticket.memberName,
+          category: ticket.category,
+          requested_amount: ticket.requestedAmount,
+          status: ticket.status,
+          created_at: ticket.createdAt
+        }]);
+
+      if (insertErr) {
+        console.error("Supabase insert error:", insertErr);
+        setError(`Database Error: ${insertErr.message}`);
+        return;
+      }
+
+      setWelfareTickets([...welfareTickets, ticket]);
+      setSuccess(`Welfare ticket created: ${ticket.ticketId}`);
+      setWelfareFormMemberId('');
+      setWelfareCategory('');
+      setWelfareAmount('');
+      setMemberSearchQuery('');
+      setReasonDetails('');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      console.error("Welfare ticket submission failed:", err);
+      setError(`Submission failed: ${err.message}`);
+    }
   };
 
   const generateAnnouncementId = (): string => `ANN-${Date.now()}`;
@@ -166,10 +204,10 @@ export const WelfareDashboard = () => {
                   setWelfareFormMemberId('');
                 }}
                 onKeyDown={(e) => {
-                  if (memberSearchResults.length === 0) return;
+                  if (suggestions.length === 0) return;
                   if (e.key === 'ArrowDown') {
                     e.preventDefault();
-                    setMemberSearchIndex((prev) => Math.min(prev + 1, memberSearchResults.length - 1));
+                    setMemberSearchIndex((prev) => Math.min(prev + 1, suggestions.length - 1));
                   }
                   if (e.key === 'ArrowUp') {
                     e.preventDefault();
@@ -177,9 +215,9 @@ export const WelfareDashboard = () => {
                   }
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    const selected = memberSearchResults[memberSearchIndex >= 0 ? memberSearchIndex : 0];
+                    const selected = suggestions[memberSearchIndex >= 0 ? memberSearchIndex : 0];
                     if (selected) {
-                      selectMember(selected.id, `${selected.name} (${selected.id})`);
+                      selectMember(selected.official_member_id || selected.id, selected.full_name || selected.name);
                     }
                   }
                   if (e.key === 'Escape') {
@@ -189,17 +227,19 @@ export const WelfareDashboard = () => {
                 placeholder="Search by name or ID"
                 className="bg-[#001a16] border-[#ffd700] text-white"
                 autoComplete="off"
+                data-lpignore="true"
+                data-1pignore="true"
               />
               {showMemberSearchResults && (
                 <div className="mt-2 max-h-56 overflow-y-auto rounded border border-[#ffd700]/50 bg-[#001a16]">
-                  {memberSearchResults.map((member, index) => (
+                  {suggestions.map((member, index) => (
                     <button
-                      key={member.id}
+                      key={member.official_member_id || member.id}
                       type="button"
-                      onClick={() => selectMember(member.id, `${member.name} (${member.id})`)}
+                      onClick={() => selectMember(member.official_member_id || member.id, member.full_name || member.name)}
                       className={`w-full text-left px-3 py-2 text-sm ${memberSearchIndex === index ? 'bg-[#ffd700]/30 text-white' : 'text-white hover:bg-[#ffd700]/20'}`}
                     >
-                      {member.name} — {member.id}
+                      {member.full_name || member.name} — {member.official_member_id || member.id}
                     </button>
                   ))}
                 </div>
@@ -221,13 +261,27 @@ export const WelfareDashboard = () => {
                 id="welfare-category"
                 value={welfareCategory}
                 onChange={(e) => setWelfareCategory(e.target.value)}
-                className="w-full bg-[#001a16] border border-[#ffd700] text-white p-2 rounded"
+                className="w-full bg-[#001a16] border border-[#ffd700] text-white p-2 rounded cursor-pointer"
               >
                 <option value="">Select category</option>
                 {WELFARE_CATEGORIES.map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
+                <option value="Wife's Death">Wife's Death</option>
+                <option value="Others">Others</option>
               </select>
+              {(welfareCategory === "Wife's Death" || welfareCategory === "Others") && (
+                <div className="mt-4 flex flex-col space-y-2">
+                  <label className="text-sm font-bold text-yellow-400">Provide Specific Details / Reason</label>
+                  <textarea 
+                    className="w-full p-2 bg-[#001a16] border border-[#ffd700] rounded text-white focus:outline-none focus:ring-1 focus:ring-[#ffd700]"
+                    rows={3}
+                    placeholder="Enter specific details regarding the case here..."
+                    value={reasonDetails}
+                    onChange={(e) => setReasonDetails(e.target.value)}
+                  />
+                </div>
+              )}
             </div>
             <div>
               <label className="text-gray-300 text-sm block mb-2">Requested Amount (₦)</label>

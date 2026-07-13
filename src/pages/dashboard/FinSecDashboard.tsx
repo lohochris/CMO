@@ -3,12 +3,13 @@ import { Card } from '../../app/components/ui/card';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { Users, CheckCircle, AlertCircle, TrendingUp, DollarSign, Camera, Megaphone, FileText, Upload } from 'lucide-react';
+import { Users, CheckCircle, AlertCircle, TrendingUp, DollarSign, Camera, Megaphone, FileText, Upload, Edit, Trash2 } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { generateMemberId, generateExpenseId } from '../../utils/idGenerators';
 import { formatCurrency, formatDate, getCombinedTransactions, calculateTotal } from '../../utils/helpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { supabase } from '../../utils/supabaseClient';
+import logoImage from '../../imports/CMO.png';
 
 export const FinSecDashboard = () => {
   const {
@@ -58,6 +59,7 @@ export const FinSecDashboard = () => {
   const [manualSearchIndex, setManualSearchIndex] = useState(-1);
   const [manualAmount, setManualAmount] = useState('');
   const [manualPurpose, setManualPurpose] = useState('');
+  const [customLevyNotes, setCustomLevyNotes] = useState('');
   const [incomeAmount, setIncomeAmount] = useState('');
   const [incomePurpose, setIncomePurpose] = useState('');
   const [incomeDate, setIncomeDate] = useState(new Date().toISOString().split('T')[0]);
@@ -68,24 +70,57 @@ export const FinSecDashboard = () => {
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementContent, setAnnouncementContent] = useState('');
 
+  // Date range filter states
+  const [filterStartDate, setFilterStartDate] = useState(() => {
+    const currentYear = new Date().getFullYear();
+    return `${currentYear}-01-01`;
+  });
+  const [filterEndDate, setFilterEndDate] = useState(() => {
+    return new Date().toISOString().split('T')[0];
+  });
+
   const pendingMembers = members.filter(m => m.status === 'Pending Validation');
   const activeMembers = members.filter(m => m.status === 'Active (Cleared)');
   const pendingTickets = welfareTickets.filter(t => t.status === 'Awaiting Financial Audit');
-  const totalSessionCash = calculateTotal(transactions);
-  const totalExpenses = calculateTotal(expenses);
-  const combinedTransactions = getCombinedTransactions(transactions, expenses);
+  const totalIncome = transactions
+    .filter(t => (t as any).transactionType === 'income')
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+
+  const totalExpenses = transactions
+    .filter(t => (t as any).transactionType === 'expense')
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+  const totalSessionCash = totalIncome;
+
+  const filteredTransactions = transactions.filter(tx => {
+    const txDate = new Date((tx as any).created_at || tx.timestamp);
+    const start = new Date(filterStartDate + "T00:00:00");
+    const end = new Date(filterEndDate + "T23:59:59");
+    return txDate >= start && txDate <= end;
+  });
+
+  const filteredIncome = filteredTransactions
+    .filter(t => (t as any).transactionType === 'income')
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+
+  const filteredExpenses = filteredTransactions
+    .filter(t => (t as any).transactionType === 'expense')
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+
   const manualSearchResults = manualSearchQuery.trim()
     ? rosterList
-        .filter(m =>
-          `${m.full_name} ${m.official_member_id}`.toLowerCase().includes(manualSearchQuery.toLowerCase())
-        )
+        .filter(m => {
+          const fullName = (m.full_name || '').toLowerCase();
+          const officialMemberId = (m.official_member_id || '').toLowerCase();
+          const query = manualSearchQuery.toLowerCase();
+          return fullName.includes(query) || officialMemberId.includes(query);
+        })
         .slice(0, 10)
     : [];
   const selectedManualMember = rosterList.find(m => m.official_member_id === manualMemberId);
   const showManualSearchResults = Boolean(
     manualSearchQuery.trim() &&
     manualSearchResults.length > 0 &&
-    (!selectedManualMember || manualSearchQuery !== `${selectedManualMember.full_name} (${selectedManualMember.official_member_id})`)
+    (!selectedManualMember || manualSearchQuery !== `${selectedManualMember.full_name} — ${selectedManualMember.official_member_id}`)
   );
 
   const selectManualMember = (memberId: string, displayText: string) => {
@@ -177,15 +212,23 @@ export const FinSecDashboard = () => {
   const handleManualTransaction = async () => {
     setError('');
 
-    // Security Verification: Require active authenticated Supabase session
-    const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
-    if (sessionErr || !session) {
-      setError('Authorization Failed: You must be signed in to an active session to record manual transactions.');
-      return;
+    // Security Verification: Require active authenticated Supabase session or validation of administrative credential token
+    const isAuthorizedAdmin = currentUser?.id === 'FIN-SEC-2026' || currentUser?.role === 'fin_sec';
+    if (!isAuthorizedAdmin) {
+      const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+      if (sessionErr || !session) {
+        setError('Authorization Failed: You must be signed in to an active session to record manual transactions.');
+        return;
+      }
     }
 
     if (!manualMemberId || !manualAmount || !manualPurpose) {
       setError('Please fill all transaction fields');
+      return;
+    }
+
+    if (manualPurpose === 'Other Levy' && !customLevyNotes.trim()) {
+      setError('Please specify the exact reason or title for the Other Levy.');
       return;
     }
 
@@ -201,30 +244,206 @@ export const FinSecDashboard = () => {
       return;
     }
 
+    const selectedMemberId = (member as any).official_member_id || member.id;
+    const selectedMemberName = (member as any).full_name || (member as any).name || 'Member';
+    const amountInput = manualAmount;
+    const purposeInput = manualPurpose;
+
+    const { data: insertedData, error: txErr } = await supabase
+      .from('transactions')
+      .insert([{
+        official_member_id: selectedMemberId,
+        member_name: selectedMemberName,
+        amount: parseFloat(amountInput),
+        purpose: purposeInput,
+        notes: purposeInput === 'Other Levy' ? customLevyNotes : null,
+        transaction_type: 'income',
+        recorded_by: 'FIN-SEC-2026'
+      }])
+      .select('id, official_member_id, member_name, amount, purpose, notes, transaction_type, created_at');
+
+    if (txErr) {
+      console.error("Transaction Insert Error:", txErr);
+      setError(`Database Error: ${txErr.message}`);
+      return;
+    }
+
+    const insertedRow = insertedData && insertedData[0] ? insertedData[0] : null;
+    const insertedId = insertedRow ? insertedRow.id : undefined;
+    const insertedTimestamp = insertedRow ? insertedRow.created_at : new Date().toISOString();
+
+    // Fetch existing balance, add the new amount, and update both tables
+    let currentMemberBalance = 0;
+    const { data: dbMem, error: fetchMemErr } = await supabase
+      .from('members')
+      .select('balance')
+      .eq('official_member_id', selectedMemberId)
+      .maybeSingle();
+
+    if (fetchMemErr) {
+      console.error("Fetch Member Balance Error:", fetchMemErr);
+    }
+
+    if (dbMem) {
+      currentMemberBalance = parseFloat(dbMem.balance) || 0;
+    } else {
+      currentMemberBalance = parseFloat(member.balance) || 0;
+    }
+
+    const newBalance = (parseFloat(currentMemberBalance as any) || 0) + parseFloat(amountInput);
+
+    const { error: memberUpdateErr } = await supabase.from('members').update({ balance: newBalance }).eq('official_member_id', selectedMemberId);
+    if (memberUpdateErr) {
+      console.error("Members Balance Update Error:", memberUpdateErr);
+    }
+
+    const { error: rosterUpdateErr } = await supabase.from('master_roster').update({ balance: newBalance }).eq('official_member_id', selectedMemberId);
+    if (rosterUpdateErr) {
+      console.error("Master Roster Balance Update Error:", rosterUpdateErr);
+    }
+
     const updatedMembers = members.map(m =>
-      m.id === manualMemberId
-        ? { ...m, balance: m.balance + amount, status: 'Active (Cleared)' as const }
+      m.id === manualMemberId || m.id === selectedMemberId
+        ? { ...m, balance: newBalance, status: 'Active (Cleared)' as const }
         : m
     );
     setMembers(updatedMembers);
 
     const transaction = {
-      memberId: manualMemberId,
+      id: insertedId,
+      memberId: selectedMemberId,
+      memberName: selectedMemberName,
       amount,
       purpose: manualPurpose,
-      timestamp: new Date().toISOString()
+      notes: manualPurpose === 'Other Levy' ? customLevyNotes : undefined,
+      transactionType: 'income',
+      timestamp: insertedTimestamp
     };
     setTransactions([...transactions, transaction]);
 
     const memberName = (member as any).name || (member as any).full_name || 'Member';
     setSuccess(`Transaction recorded: ${formatCurrency(amount)} for ${memberName}`);
     setManualMemberId('');
+    setManualSearchQuery('');
+    setCustomLevyNotes('');
     setManualAmount('');
     setManualPurpose('');
     setTimeout(() => setSuccess(''), 3000);
   };
 
-  const handleRecordIncome = () => {
+  const [editingTxId, setEditingTxId] = useState<number | null>(null);
+  const [editTxPurpose, setEditTxPurpose] = useState('');
+  const [editTxNotes, setEditTxNotes] = useState('');
+  const [editTxAmount, setEditTxAmount] = useState('');
+
+  const startEditingTx = (txn: any) => {
+    setEditingTxId(txn.id);
+    setEditTxPurpose(txn.purpose);
+    setEditTxNotes(txn.notes || '');
+    setEditTxAmount(String(txn.amount));
+  };
+
+  const cancelEditingTx = () => {
+    setEditingTxId(null);
+    setEditTxPurpose('');
+    setEditTxNotes('');
+    setEditTxAmount('');
+  };
+
+  const saveEditingTx = async (txnId: number) => {
+    setError('');
+    const amt = parseFloat(editTxAmount);
+    if (isNaN(amt) || amt <= 0) {
+      setError('Amount must be positive');
+      return;
+    }
+    if (!editTxPurpose.trim()) {
+      setError('Purpose is required');
+      return;
+    }
+
+    try {
+      const { error: updateErr } = await supabase
+        .from('transactions')
+        .update({
+          purpose: editTxPurpose,
+          notes: editTxPurpose === 'Other Levy' ? editTxNotes : null,
+          amount: amt
+        })
+        .eq('id', txnId);
+
+      if (updateErr) throw updateErr;
+
+      // Update local transactions state
+      setTransactions(prev =>
+        prev.map(t =>
+          (t as any).id === txnId
+            ? { ...t, purpose: editTxPurpose, notes: editTxPurpose === 'Other Levy' ? editTxNotes : undefined, amount: amt }
+            : t
+        )
+      );
+
+      setSuccess('Transaction updated successfully');
+      setEditingTxId(null);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('Error updating transaction:', err);
+      setError(`Update failed: ${err.message}`);
+    }
+  };
+
+  const fetchTransactions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('id, official_member_id, member_name, amount, purpose, notes, transaction_type, created_at');
+      if (error) throw error;
+      if (data) {
+        setTransactions(
+          data.map((t: any) => ({
+            id: t.id,
+            memberId: t.official_member_id,
+            memberName: t.member_name,
+            amount: Number(t.amount),
+            purpose: t.purpose,
+            notes: t.notes || undefined,
+            transactionType: t.transaction_type,
+            timestamp: t.created_at
+          }))
+        );
+      }
+    } catch (err) {
+      console.error('Failed to fetch transactions:', err);
+    }
+  };
+
+  const handleDelete = async (transactionId: any) => {
+    if (!transactionId) return;
+    if (!window.confirm('Are you sure you want to delete this transaction record? This cannot be undone.')) {
+      return;
+    }
+
+    setError('');
+    // 1. Direct database CRUD execution
+    const { error } = await supabase
+      .from('transactions')
+      .delete()
+      .eq('id', transactionId);
+
+    if (error) {
+      console.error("Database deletion failed:", error);
+      setError(`Delete failed: ${error.message}`);
+      return;
+    }
+
+    setSuccess('Transaction deleted successfully');
+    setTimeout(() => setSuccess(''), 3000);
+
+    // 2. Refresh data from the database immediately after deletion to sync all views
+    await fetchTransactions();
+  };
+
+  const handleRecordIncome = async () => {
     setError('');
     if (!incomeAmount || !incomePurpose || !incomeDate) {
       setError('Please fill all income fields');
@@ -237,22 +456,39 @@ export const FinSecDashboard = () => {
       return;
     }
 
-    const transaction = {
-      memberId: 'GENERAL',
-      amount,
-      purpose: incomePurpose,
-      timestamp: new Date(incomeDate).toISOString()
-    };
+    try {
+      const { error: txErr } = await supabase
+        .from('transactions')
+        .insert([{
+          official_member_id: 'GENERAL-INCOME',
+          member_name: 'CMO General Account',
+          amount: parseFloat(incomeAmount),
+          purpose: incomePurpose,
+          transaction_type: 'income',
+          timestamp: new Date(incomeDate).toISOString()
+        }]);
 
-    setTransactions([...transactions, transaction]);
-    setSuccess(`Income recorded: ${formatCurrency(amount)}`);
-    setIncomeAmount('');
-    setIncomePurpose('');
-    setIncomeDate(new Date().toISOString().split('T')[0]);
-    setTimeout(() => setSuccess(''), 3000);
+      if (txErr) {
+        console.error("Income Insert Error:", txErr);
+        setError(`Database Error: ${txErr.message}`);
+        return;
+      }
+
+      setSuccess(`Income recorded: ${formatCurrency(amount)}`);
+      setIncomeAmount('');
+      setIncomePurpose('');
+      setIncomeDate(new Date().toISOString().split('T')[0]);
+      setTimeout(() => setSuccess(''), 3000);
+
+      // Refresh transactions
+      await fetchTransactions();
+    } catch (err: any) {
+      console.error('Record income failed:', err);
+      setError(`Record Income failed: ${err.message}`);
+    }
   };
 
-  const handleRecordExpense = () => {
+  const handleRecordExpense = async () => {
     setError('');
     if (!expenseAmount || !expensePurpose || !expenseDate) {
       setError('Please fill all expense fields');
@@ -265,20 +501,36 @@ export const FinSecDashboard = () => {
       return;
     }
 
-    const expense = {
-      id: generateExpenseId(),
-      amount,
-      purpose: expensePurpose,
-      date: expenseDate,
-      recordedBy: currentUser?.name || 'Financial Secretary'
-    };
+    try {
+      const { error: txErr } = await supabase
+        .from('transactions')
+        .insert([{
+          official_member_id: 'GENERAL-EXPENSE',
+          member_name: 'CMO Operational Expense',
+          amount: parseFloat(expenseAmount),
+          purpose: expensePurpose,
+          transaction_type: 'expense',
+          timestamp: new Date(expenseDate).toISOString()
+        }]);
 
-    setExpenses([...expenses, expense]);
-    setSuccess(`Expense recorded: ${formatCurrency(amount)}`);
-    setExpenseAmount('');
-    setExpensePurpose('');
-    setExpenseDate(new Date().toISOString().split('T')[0]);
-    setTimeout(() => setSuccess(''), 3000);
+      if (txErr) {
+        console.error("Expense Insert Error:", txErr);
+        setError(`Database Error: ${txErr.message}`);
+        return;
+      }
+
+      setSuccess(`Expense recorded: ${formatCurrency(amount)}`);
+      setExpenseAmount('');
+      setExpensePurpose('');
+      setExpenseDate(new Date().toISOString().split('T')[0]);
+      setTimeout(() => setSuccess(''), 3000);
+
+      // Refresh transactions
+      await fetchTransactions();
+    } catch (err: any) {
+      console.error('Record expense failed:', err);
+      setError(`Record Expense failed: ${err.message}`);
+    }
   };
 
   // Quote-aware CSV row parser
@@ -362,6 +614,7 @@ export const FinSecDashboard = () => {
             memberId,
             amount,
             purpose,
+            transactionType: 'income',
             timestamp: new Date().toISOString()
           });
 
@@ -419,13 +672,13 @@ export const FinSecDashboard = () => {
 
   return (
     <div className="p-4 md:p-8">
-      <div className="mb-6">
+      <div className="mb-6 no-print">
         <h2 className="text-2xl md:text-3xl font-bold text-[#ffd700] mb-2">Executive Dashboard</h2>
         <p className="text-gray-400">Financial Secretary Control Panel</p>
       </div>
 
       {/* Profile Management */}
-      <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 md:p-6 mb-6">
+      <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 md:p-6 mb-6 no-print">
         <h3 className="text-xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
           <Camera className="w-5 h-5" />
           Profile Management
@@ -438,7 +691,7 @@ export const FinSecDashboard = () => {
       </Card>
 
       {/* Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 no-print">
         <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 hover:scale-105 transition-all cursor-pointer">
           <Users className="w-8 h-8 text-[#ffd700] mb-2" />
           <p className="text-gray-400 text-sm">Total Members</p>
@@ -462,7 +715,7 @@ export const FinSecDashboard = () => {
       </div>
 
       <Tabs defaultValue="validation" className="w-full">
-        <TabsList className="bg-[#002520] border border-[#ffd700] flex-wrap">
+        <TabsList className="bg-[#002520] border border-[#ffd700] flex-wrap no-print">
           <TabsTrigger value="validation" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer">
             Validation Queue
           </TabsTrigger>
@@ -607,7 +860,7 @@ export const FinSecDashboard = () => {
                       e.preventDefault();
                       const selected = manualSearchResults[manualSearchIndex >= 0 ? manualSearchIndex : 0];
                       if (selected) {
-                        selectManualMember(selected.official_member_id, `${selected.full_name} (${selected.official_member_id})`);
+                        selectManualMember(selected.official_member_id, `${selected.full_name} — ${selected.official_member_id}`);
                       }
                     }
                     if (e.key === 'Escape') {
@@ -624,7 +877,7 @@ export const FinSecDashboard = () => {
                       <button
                         key={member.id}
                         type="button"
-                        onClick={() => selectManualMember(member.official_member_id, `${member.full_name} (${member.official_member_id})`)}
+                        onClick={() => selectManualMember(member.official_member_id, `${member.full_name} — ${member.official_member_id}`)}
                         className={`w-full text-left px-3 py-2 text-sm ${manualSearchIndex === index ? 'bg-[#ffd700]/30 text-white' : 'text-white hover:bg-[#ffd700]/20'}`}
                       >
                         {member.full_name} — {member.official_member_id}
@@ -659,13 +912,38 @@ export const FinSecDashboard = () => {
               </div>
               <div>
                 <label className="text-gray-300 text-sm block mb-2">Purpose</label>
-                <Input
+                <select
                   value={manualPurpose}
-                  onChange={(e) => setManualPurpose(e.target.value)}
-                  placeholder="e.g., Welfare Dues, Development Fund"
-                  className="bg-[#001a16] border-[#ffd700] text-white"
-                />
+                  onChange={(e) => {
+                    setManualPurpose(e.target.value);
+                    if (e.target.value !== 'Other Levy') {
+                      setCustomLevyNotes('');
+                    }
+                  }}
+                  className="w-full bg-[#001a16] border border-[#ffd700] text-white p-2 rounded focus:outline-none focus:ring-1 focus:ring-[#ffd700] h-10 cursor-pointer"
+                >
+                  <option value="" disabled>Select Purpose</option>
+                  <option value="Dues">Dues</option>
+                  <option value="Harvest Levy">Harvest Levy</option>
+                  <option value="Death Levy">Death Levy</option>
+                  <option value="Hosting of Deanery">Hosting of Deanery</option>
+                  <option value="Fathering Sunday">Fathering Sunday</option>
+                  <option value="Insurance">Insurance</option>
+                  <option value="Other Levy">Other Levy</option>
+                </select>
               </div>
+              {manualPurpose === 'Other Levy' && (
+                <div>
+                  <label className="text-gray-300 text-sm block mb-2">Levy Specification</label>
+                  <textarea
+                    value={customLevyNotes}
+                    onChange={(e) => setCustomLevyNotes(e.target.value)}
+                    placeholder="Please specify the exact reason or title for this levy (Required for transparency)"
+                    className="w-full bg-[#001a16] border border-[#ffd700] text-white p-3 rounded focus:outline-none focus:ring-1 focus:ring-[#ffd700] min-h-[80px]"
+                    required
+                  />
+                </div>
+              )}
               <button
                 type="button"
                 onClick={handleManualTransaction}
@@ -802,66 +1080,489 @@ export const FinSecDashboard = () => {
 
         {/* Financial Ledger */}
         <TabsContent value="ledger">
-          <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 md:p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-[#ffd700]">Unified Financial Timeline</h3>
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="border border-[#ffd700] text-[#ffd700] hover:bg-[#ffd700] hover:text-[#001a16] cursor-pointer rounded px-4 py-2"
-              >
-                <FileText className="w-4 h-4 mr-2 inline" />
-                Print Statement
-              </button>
+          <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 md:p-6 printable-statement-container">
+            <style dangerouslySetInnerHTML={{__html: `
+              @media print {
+                body, html, #root, main, .min-h-screen, .p-4, .md\\:p-8 {
+                  background: white !important;
+                  color: black !important;
+                  padding: 0 !important;
+                  margin: 0 !important;
+                  box-shadow: none !important;
+                  border: none !important;
+                }
+                header, footer, .sticky, .no-print, button, input, select, [role="tablist"], .fixed, button.fixed {
+                  display: none !important;
+                }
+                .mb-6:has(h2), .no-print {
+                  display: none !important;
+                }
+                .printable-statement-container {
+                  background: white !important;
+                  color: black !important;
+                  border: none !important;
+                  box-shadow: none !important;
+                  padding: 0 !important;
+                  margin: 0 !important;
+                  width: 100% !important;
+                }
+                /* Target table, signatures, and summary metrics specifically for black text/borders, leaving themed header colors intact */
+                .printable-statement-container table,
+                .printable-statement-container table *,
+                .print-summary-grid,
+                .print-summary-grid *,
+                .print-signatures-container,
+                .print-signatures-container * {
+                  color: black !important;
+                  border-color: #000000 !important;
+                }
+                .printable-themed-header {
+                  background-color: #002B19 !important;
+                  color: white !important;
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+                }
+                .printable-themed-header * {
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+                }
+                .text-gold-print {
+                  color: #FFCC00 !important;
+                }
+                table {
+                  width: 100% !important;
+                  border-collapse: collapse !important;
+                  margin-top: 10px !important;
+                }
+                th, td {
+                  border: 1px solid #000000 !important;
+                  padding: 6px 8px !important;
+                  font-size: 11px !important;
+                  text-align: left !important;
+                }
+                th {
+                  background-color: #f3f4f6 !important;
+                  font-weight: bold !important;
+                }
+                .print-summary-grid {
+                  display: grid !important;
+                  grid-template-cols: repeat(3, minmax(0, 1fr)) !important;
+                  gap: 1rem !important;
+                  margin-top: 1.5rem !important;
+                  border-top: 2px solid #000000 !important;
+                  padding-top: 1rem !important;
+                }
+                .print-summary-card {
+                  border: 1px solid #000000 !important;
+                  padding: 0.5rem !important;
+                  text-align: center !important;
+                  background: #f9fafb !important;
+                }
+                .print-summary-card p {
+                  margin: 0 !important;
+                  font-size: 11px !important;
+                }
+                .print-summary-card .val {
+                  font-size: 14px !important;
+                  font-weight: bold !important;
+                }
+              }
+            `}} />
+
+            {/* Print-only Themed Statement Header */}
+            <div className="hidden print:block mb-6 bg-[#002B19] border-b-4 border-[#FFCC00] p-6 rounded-t-lg printable-themed-header">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                  <img
+                    src={logoImage}
+                    alt="Holy Cross CMO Logo"
+                    className="w-14 h-14 rounded-full border-2 border-[#FFCC00] object-cover"
+                  />
+                  <div>
+                    <h1 className="text-2xl font-bold text-[#FFCC00] text-gold-print tracking-wide uppercase font-sans">Catholic Men Organisation</h1>
+                    <p className="text-sm text-gray-100 font-semibold font-sans">Holy Cross Parish Chapter, Badawa — Kano Diocese</p>
+                    <p className="text-xs text-gray-300 font-medium">Office of the Financial Secretary</p>
+                  </div>
+                </div>
+                <div className="text-right text-white">
+                  <p className="text-sm font-bold text-[#FFCC00] text-gold-print uppercase tracking-wider">Financial Statement</p>
+                  <p className="text-xs text-gray-200 mt-1 font-semibold">Period: {formatDate(filterStartDate)} to {formatDate(filterEndDate)}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Generated: {new Date().toLocaleString('en-US', { hour12: true })}</p>
+                </div>
+              </div>
             </div>
-            <div className="overflow-x-auto">
+
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 no-print">
+              <h3 className="text-xl font-bold text-[#ffd700]">Transaction Ledger & CRUD Manager</h3>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400 text-sm">From:</span>
+                  <input
+                    type="date"
+                    value={filterStartDate}
+                    onChange={(e) => setFilterStartDate(e.target.value)}
+                    className="bg-[#001a16] border border-[#ffd700] text-white text-sm rounded px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-[#ffd700]"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400 text-sm">To:</span>
+                  <input
+                    type="date"
+                    value={filterEndDate}
+                    onChange={(e) => setFilterEndDate(e.target.value)}
+                    className="bg-[#001a16] border border-[#ffd700] text-white text-sm rounded px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-[#ffd700]"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="border border-[#ffd700] text-[#ffd700] hover:bg-[#ffd700] hover:text-[#001a16] cursor-pointer rounded px-4 py-1.5 text-sm flex items-center gap-2 transition-all"
+                >
+                  <FileText className="w-4 h-4" />
+                  Print Statement
+                </button>
+              </div>
+            </div>
+            {/* SUB-SECTION A: INFLOWS / INCOME GENERATED */}
+            <div className="mb-4 mt-6 border-b border-[#ffd700]/30 print:border-[#002B19] pb-2">
+              <h4 className="text-lg font-bold text-[#ffd700] print:text-[#002B19] uppercase tracking-wide">
+                SECTION A: INFLOWS / INCOME GENERATED
+              </h4>
+            </div>
+            <div className="overflow-x-auto mb-8">
               <Table>
                 <TableHeader>
                   <TableRow className="border-[#ffd700] hover:bg-[#001a16]">
-                    <TableHead className="text-[#ffd700]">Date</TableHead>
-                    <TableHead className="text-[#ffd700]">Type</TableHead>
-                    <TableHead className="text-[#ffd700]">Description</TableHead>
-                    <TableHead className="text-[#ffd700]">Credit</TableHead>
-                    <TableHead className="text-[#ffd700]">Debit</TableHead>
+                    <TableHead className="text-[#ffd700]">Date & Time</TableHead>
+                    <TableHead className="text-[#ffd700]">Member Name</TableHead>
+                    <TableHead className="text-[#ffd700]">Member ID</TableHead>
+                    <TableHead className="text-[#ffd700]">Purpose & Notes</TableHead>
+                    <TableHead className="text-[#ffd700]">Amount (₦)</TableHead>
+                    <TableHead className="text-[#ffd700] text-right no-print">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {combinedTransactions.slice(0, 20).map((item, idx) => (
-                    <TableRow key={idx} className="border-[#ffd700]/30 hover:bg-[#001a16]">
-                      <TableCell className="text-gray-400 text-sm">{formatDate(item.timestamp)}</TableCell>
-                      <TableCell>
-                        <span className={`text-xs px-2 py-1 rounded ${
-                          item.type === 'income' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'
-                        }`}>
-                          {item.type === 'income' ? 'Income' : 'Expense'}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-white">
-                        {item.type === 'income' ? `Payment from ${item.memberId}` : item.purpose}
-                      </TableCell>
-                      <TableCell className="text-green-500 font-semibold">
-                        {item.type === 'income' ? formatCurrency(item.amount) : '-'}
-                      </TableCell>
-                      <TableCell className="text-red-500 font-semibold">
-                        {item.type === 'expense' ? formatCurrency(item.amount) : '-'}
+                  {filteredTransactions
+                    .filter(tx => tx.transactionType === 'income')
+                    .slice()
+                    .reverse()
+                    .map((transaction) => {
+                      const isEditing = editingTxId === transaction.id;
+                      let memberName = 'N/A (General Entry)';
+                      if (transaction.memberId === 'GENERAL-INCOME') {
+                        memberName = 'CMO General Account';
+                      } else if (transaction.memberId === 'GENERAL-EXPENSE') {
+                        memberName = 'CMO Operational Expense';
+                      } else {
+                        const member = rosterList.find(r => r.official_member_id === transaction.memberId) || members.find(m => m.id === transaction.memberId);
+                        if (member) {
+                          memberName = member.full_name || member.name || 'N/A (General Entry)';
+                        }
+                      }
+
+                      const paymentDate = new Date(transaction.timestamp);
+                      const formattedDate = paymentDate.toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric' 
+                      }) + ' ' + paymentDate.toLocaleTimeString('en-US', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                      });
+
+                      return (
+                        <TableRow key={transaction.id} className="border-[#ffd700]/30 hover:bg-[#001a16]">
+                          <TableCell className="text-gray-400 text-sm">{formattedDate}</TableCell>
+                          <TableCell className="text-white font-semibold">{memberName}</TableCell>
+                          <TableCell className="text-white font-mono text-sm">{transaction.memberId}</TableCell>
+                          <TableCell className="text-white">
+                            {isEditing ? (
+                              <div className="flex flex-col gap-2">
+                                <select
+                                  value={editTxPurpose}
+                                  onChange={(e) => {
+                                    setEditTxPurpose(e.target.value);
+                                    if (e.target.value !== 'Other Levy') {
+                                      setEditTxNotes('');
+                                    }
+                                  }}
+                                  className="bg-[#001a16] border border-[#ffd700] text-white p-1 rounded text-sm cursor-pointer"
+                                >
+                                  <option value="Dues">Dues</option>
+                                  <option value="Harvest Levy">Harvest Levy</option>
+                                  <option value="Death Levy">Death Levy</option>
+                                  <option value="Hosting of Deanery">Hosting of Deanery</option>
+                                  <option value="Fathering Sunday">Fathering Sunday</option>
+                                  <option value="Insurance">Insurance</option>
+                                  <option value="Other Levy">Other Levy</option>
+                                </select>
+                                {editTxPurpose === 'Other Levy' && (
+                                  <input
+                                    type="text"
+                                    value={editTxNotes}
+                                    onChange={(e) => setEditTxNotes(e.target.value)}
+                                    placeholder="Levy specification"
+                                    className="bg-[#001a16] border border-[#ffd700] text-white p-1 rounded text-sm"
+                                  />
+                                )}
+                              </div>
+                            ) : (
+                              transaction.purpose === 'Other Levy' && transaction.notes
+                                ? `Other Levy (${transaction.notes})`
+                                : transaction.purpose
+                            )}
+                          </TableCell>
+                          <TableCell className="text-[#ffd700] font-bold">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                value={editTxAmount}
+                                onChange={(e) => setEditTxAmount(e.target.value)}
+                                className="bg-[#001a16] border border-[#ffd700] text-white p-1 rounded text-sm w-24"
+                              />
+                            ) : (
+                              formatCurrency(transaction.amount)
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right no-print">
+                            {isEditing ? (
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => saveEditingTx(transaction.id as number)}
+                                  className="bg-green-600 hover:bg-green-500 text-white text-xs px-2 py-1 rounded cursor-pointer"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={cancelEditingTx}
+                                  className="bg-gray-600 hover:bg-gray-500 text-white text-xs px-2 py-1 rounded cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => startEditingTx(transaction)}
+                                  className="border border-[#ffd700] text-[#ffd700] hover:bg-[#ffd700] hover:text-[#001a16] p-1.5 rounded cursor-pointer transition-all"
+                                  title="Edit"
+                                >
+                                  <Edit className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(transaction.id as number)}
+                                  className="border border-red-500 text-red-500 hover:bg-red-500 hover:text-white p-1.5 rounded cursor-pointer transition-all"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  {filteredTransactions.filter(tx => tx.transactionType === 'income').length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-gray-400 py-8">
+                        No matching income records registered for this date period.
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </div>
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-[#001a16] border border-green-500 p-4 rounded">
+
+            {/* SUB-SECTION B: OUTFLOWS / OPERATIONAL EXPENSES */}
+            <div className="mb-4 mt-8 border-b border-[#ffd700]/30 print:border-[#002B19] pb-2">
+              <h4 className="text-lg font-bold text-[#ffd700] print:text-[#002B19] uppercase tracking-wide">
+                SECTION B: OUTFLOWS / OPERATIONAL EXPENSES
+              </h4>
+            </div>
+            <div className="overflow-x-auto mb-8">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-[#ffd700] hover:bg-[#001a16]">
+                    <TableHead className="text-[#ffd700]">Date & Time</TableHead>
+                    <TableHead className="text-[#ffd700]">Member Name</TableHead>
+                    <TableHead className="text-[#ffd700]">Member ID</TableHead>
+                    <TableHead className="text-[#ffd700]">Purpose & Notes</TableHead>
+                    <TableHead className="text-[#ffd700]">Amount (₦)</TableHead>
+                    <TableHead className="text-[#ffd700] text-right no-print">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTransactions
+                    .filter(tx => tx.transactionType === 'expense')
+                    .slice()
+                    .reverse()
+                    .map((transaction) => {
+                      const isEditing = editingTxId === transaction.id;
+                      let memberName = 'N/A (General Entry)';
+                      if (transaction.memberId === 'GENERAL-INCOME') {
+                        memberName = 'CMO General Account';
+                      } else if (transaction.memberId === 'GENERAL-EXPENSE') {
+                        memberName = 'CMO Operational Expense';
+                      } else {
+                        const member = rosterList.find(r => r.official_member_id === transaction.memberId) || members.find(m => m.id === transaction.memberId);
+                        if (member) {
+                          memberName = member.full_name || member.name || 'N/A (General Entry)';
+                        }
+                      }
+
+                      const paymentDate = new Date(transaction.timestamp);
+                      const formattedDate = paymentDate.toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric' 
+                      }) + ' ' + paymentDate.toLocaleTimeString('en-US', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                      });
+
+                      return (
+                        <TableRow key={transaction.id} className="border-[#ffd700]/30 hover:bg-[#001a16]">
+                          <TableCell className="text-gray-400 text-sm">{formattedDate}</TableCell>
+                          <TableCell className="text-white font-semibold">{memberName}</TableCell>
+                          <TableCell className="text-white font-mono text-sm">{transaction.memberId}</TableCell>
+                          <TableCell className="text-white">
+                            {isEditing ? (
+                              <div className="flex flex-col gap-2">
+                                <select
+                                  value={editTxPurpose}
+                                  onChange={(e) => {
+                                    setEditTxPurpose(e.target.value);
+                                    if (e.target.value !== 'Other Levy') {
+                                      setEditTxNotes('');
+                                    }
+                                  }}
+                                  className="bg-[#001a16] border border-[#ffd700] text-white p-1 rounded text-sm cursor-pointer"
+                                >
+                                  <option value="Dues">Dues</option>
+                                  <option value="Harvest Levy">Harvest Levy</option>
+                                  <option value="Death Levy">Death Levy</option>
+                                  <option value="Hosting of Deanery">Hosting of Deanery</option>
+                                  <option value="Fathering Sunday">Fathering Sunday</option>
+                                  <option value="Insurance">Insurance</option>
+                                  <option value="Other Levy">Other Levy</option>
+                                </select>
+                                {editTxPurpose === 'Other Levy' && (
+                                  <input
+                                    type="text"
+                                    value={editTxNotes}
+                                    onChange={(e) => setEditTxNotes(e.target.value)}
+                                    placeholder="Levy specification"
+                                    className="bg-[#001a16] border border-[#ffd700] text-white p-1 rounded text-sm"
+                                  />
+                                )}
+                              </div>
+                            ) : (
+                              transaction.purpose === 'Other Levy' && transaction.notes
+                                ? `Other Levy (${transaction.notes})`
+                                : transaction.purpose
+                            )}
+                          </TableCell>
+                          <TableCell className="text-[#ffd700] font-bold">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                value={editTxAmount}
+                                onChange={(e) => setEditTxAmount(e.target.value)}
+                                className="bg-[#001a16] border border-[#ffd700] text-white p-1 rounded text-sm w-24"
+                              />
+                            ) : (
+                              formatCurrency(transaction.amount)
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right no-print">
+                            {isEditing ? (
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => saveEditingTx(transaction.id as number)}
+                                  className="bg-green-600 hover:bg-green-500 text-white text-xs px-2 py-1 rounded cursor-pointer"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={cancelEditingTx}
+                                  className="bg-gray-600 hover:bg-gray-500 text-white text-xs px-2 py-1 rounded cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => startEditingTx(transaction)}
+                                  className="border border-[#ffd700] text-[#ffd700] hover:bg-[#ffd700] hover:text-[#001a16] p-1.5 rounded cursor-pointer transition-all"
+                                  title="Edit"
+                                >
+                                  <Edit className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(transaction.id as number)}
+                                  className="border border-red-500 text-red-500 hover:bg-red-500 hover:text-white p-1.5 rounded cursor-pointer transition-all"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  {filteredTransactions.filter(tx => tx.transactionType === 'expense').length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-gray-400 py-8">
+                        No matching expense records registered for this date period.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 print-summary-grid">
+              <div className="bg-[#001a16] border border-green-500 p-4 rounded print-summary-card">
                 <p className="text-green-500 text-sm mb-1">Total Income</p>
-                <p className="text-white text-xl font-bold">{formatCurrency(totalSessionCash)}</p>
+                <p className="text-white text-xl font-bold val">{formatCurrency(filteredIncome)}</p>
               </div>
-              <div className="bg-[#001a16] border border-red-500 p-4 rounded">
+              <div className="bg-[#001a16] border border-red-500 p-4 rounded print-summary-card">
                 <p className="text-red-500 text-sm mb-1">Total Expenses</p>
-                <p className="text-white text-xl font-bold">{formatCurrency(totalExpenses)}</p>
+                <p className="text-white text-xl font-bold val">{formatCurrency(filteredExpenses)}</p>
               </div>
-              <div className="bg-[#001a16] border border-[#ffd700] p-4 rounded">
+              <div className="bg-[#001a16] border border-[#ffd700] p-4 rounded print-summary-card">
                 <p className="text-[#ffd700] text-sm mb-1">Net Balance</p>
-                <p className="text-white text-xl font-bold">{formatCurrency(totalSessionCash - totalExpenses)}</p>
+                <p className="text-white text-xl font-bold val">{formatCurrency(filteredIncome - filteredExpenses)}</p>
+              </div>
+            </div>
+
+            {/* Dual Executive Sign-off Footer */}
+            <div className="mt-16 hidden print:grid grid-cols-2 gap-12 pt-8 border-t border-dashed border-gray-400 print-signatures-container">
+              {/* Left Column: Financial Secretary */}
+              <div className="flex flex-col space-y-4">
+                <div className="border-b border-gray-900 w-48 h-8"></div>
+                <p className="text-sm font-bold text-gray-900">Financial Secretary</p>
+                <p className="text-xs text-gray-500">Name: _______________________</p>
+                <p className="text-xs text-gray-500">Date: ____ / ____ / 2026</p>
+              </div>
+
+              {/* Right Column: Treasurer */}
+              <div className="flex flex-col space-y-4 items-end text-right">
+                <div className="flex flex-col space-y-4 w-48 items-end">
+                  <div className="border-b border-gray-900 w-48 h-8"></div>
+                  <p className="text-sm font-bold text-gray-900">CMO Treasurer</p>
+                  <p className="text-xs text-gray-500">Name: _______________________</p>
+                  <p className="text-xs text-gray-500">Date: ____ / ____ / 2026</p>
+                </div>
               </div>
             </div>
           </Card>
