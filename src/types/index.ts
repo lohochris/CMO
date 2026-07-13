@@ -15,6 +15,8 @@ export type Page =
   | 'treasurer'
   | 'secretary'
   | 'pro'
+  | 'chairman'
+  | 'fin_sec'
   | 'familyHub'
   | 'familyChairman'
   | 'familySecretary'
@@ -82,6 +84,7 @@ export interface WelfareTicket {
   createdAt: string;
   approvedAt?: string;
   settledAt?: string;
+  reasonDetails?: string;
 }
 
 export interface Expense {

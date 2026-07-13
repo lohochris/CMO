@@ -17,6 +17,32 @@ export const Header = () => {
   const { currentUser, setCurrentUser, setCurrentPage, currentPage, selectedFamily, setSelectedFamily } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const getAdminTitle = (role: string): string => {
+    switch (role.toLowerCase()) {
+      case 'chairman':
+      case 'cmo_chairman':
+        return 'EXECUTIVE CHAIRMAN';
+      case 'fin_sec':
+        return 'FINANCIAL SECRETARY';
+      case 'welfare':
+        return 'WELFARE OFFICER';
+      case 'treasurer':
+        return 'TREASURER';
+      case 'gen_sec':
+        return 'GENERAL SECRETARY';
+      case 'pro':
+        return 'PUBLIC RELATIONS OFFICER';
+      default:
+        return 'EXECUTIVE';
+    }
+  };
+
+  const displayName = currentUser?.role === 'member'
+    ? (currentUser?.full_name || currentUser?.name || 'CMO Member').toUpperCase()
+    : getAdminTitle(currentUser?.role || '');
+
+  const displaySubtitle = currentUser?.role === 'member' ? 'member' : 'executive';
+
   const handleLogout = () => {
     setCurrentUser(null);
     setCurrentPage('home');
@@ -64,17 +90,21 @@ export const Header = () => {
           <div className="hidden md:flex items-center gap-3">
             {currentUser ? (
               <>
-                <div className="flex items-center gap-3 rounded-full border border-[#ffd700] px-3 py-2">
+                <div
+                  onClick={() => setCurrentPage('dashboard')}
+                  className="flex items-center gap-3 rounded-full border border-[#ffd700] px-3 py-2 cursor-pointer hover:bg-[#ffd700]/10 transition"
+                  title="Go to Dashboard"
+                >
                   {currentUser.profilePic && (
                     <img
                       src={currentUser.profilePic}
-                      alt={currentUser.name}
+                      alt={displayName}
                       className="w-8 h-8 rounded-full border-2 border-[#ffd700]"
                     />
                   )}
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-[#ffd700] truncate">{currentUser.name}</p>
-                    <p className="text-xs text-gray-400 truncate">{currentUser.family || currentUser.role}</p>
+                    <p className="text-sm font-semibold text-[#ffd700] truncate">{displayName}</p>
+                    <p className="text-xs text-gray-400 truncate">{displaySubtitle}</p>
                   </div>
                 </div>
                 <Button
@@ -183,21 +213,28 @@ export const Header = () => {
 
             {currentUser ? (
               <div className="space-y-3 rounded-xl border border-[#ffd700]/30 bg-[#001a16] p-4">
-                <div className="flex items-center gap-3">
+                <div
+                  onClick={() => {
+                    setCurrentPage('dashboard');
+                    setMenuOpen(false);
+                  }}
+                  className="flex items-center gap-3 cursor-pointer hover:bg-[#ffd700]/5 p-1 rounded transition"
+                  title="Go to Dashboard"
+                >
                   {currentUser.profilePic ? (
                     <img
                       src={currentUser.profilePic}
-                      alt={currentUser.name}
+                      alt={displayName}
                       className="h-10 w-10 rounded-full border border-[#ffd700] object-cover"
                     />
                   ) : (
                     <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#ffd700] text-sm text-[#ffd700]">
-                      {currentUser.name.charAt(0)}
+                      {displayName.charAt(0)}
                     </div>
                   )}
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-[#ffd700]">{currentUser.name}</p>
-                    <p className="truncate text-xs text-gray-400">{currentUser.family || currentUser.role}</p>
+                    <p className="truncate text-sm font-semibold text-[#ffd700]">{displayName}</p>
+                    <p className="truncate text-xs text-gray-400">{displaySubtitle}</p>
                   </div>
                 </div>
                 <Button

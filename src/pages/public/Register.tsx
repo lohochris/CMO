@@ -5,7 +5,7 @@ import { Input } from '../../app/components/ui/input';
 import { UserPlus } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { Member, Family } from '../../types';
-import { supabase } from '../../utils/supabaseClient';
+import { supabase } from '../../lib/supabaseClient';
 
 const familyOptions: Family[] = ['Wisdom', 'Honour', 'Integrity', 'Talent'];
 
