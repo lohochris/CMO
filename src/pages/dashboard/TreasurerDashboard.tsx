@@ -22,7 +22,7 @@ export const TreasurerDashboard = () => {
 
   const { welfareTickets, setWelfareTickets, expenses, setExpenses, transactions, setTransactions, members, setMembers, currentUser, setCurrentUser, setSuccess, setError } = useApp();
 
-  const awaitingDisbursement = welfareTickets.filter(t => t.status === 'Awaiting Disbursement');
+  const awaitingDisbursement = welfareTickets.filter(t => t.status === 'Approved');
   const totalSessionCash = calculateTotal(transactions);
 
   const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
@@ -83,7 +83,7 @@ export const TreasurerDashboard = () => {
       const { error: ticketErr } = await supabase
         .from('welfare_tickets')
         .update({ 
-          status: 'Settled & Cleared', 
+          status: 'Completed', 
           settled_at: new Date().toISOString() 
         })
         .eq('ticket_id', ticketId);
@@ -115,7 +115,7 @@ export const TreasurerDashboard = () => {
       // 3. Update local state context (which also handles local state sync to expenses table if applicable)
       const updatedTickets = welfareTickets.map(t =>
         t.ticketId === ticketId
-          ? { ...t, status: 'Settled & Cleared' as const, settledAt: new Date().toISOString() }
+          ? { ...t, status: 'Completed' as const, settledAt: new Date().toISOString() }
           : t
       );
       setWelfareTickets(updatedTickets);
@@ -252,7 +252,7 @@ export const TreasurerDashboard = () => {
                           onClick={() => settleTicket(ticket.ticketId)}
                           className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] text-xs"
                         >
-                          Disburse & Settle
+                          Disburse Funds
                         </Button>
                       </TableCell>
                     </TableRow>

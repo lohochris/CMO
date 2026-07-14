@@ -1,6 +1,7 @@
 import { Member, Transaction, WelfareTicket, Expense, Announcement } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { GoogleGenAI } from '@google/genai';
+import { isAdministrativeId } from './helpers';
 
 const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
 
@@ -178,9 +179,8 @@ export const processAIQuery = async (
     toolsUsed.push('DirectDatabaseInjectionTool');
     try {
       const { data: txs } = await supabase.from('transactions').select('*');
-      const { data: pendingMembers } = await supabase.from('members').select('*').eq('status', 'Pending Validation');
       const { data: expensesList } = await supabase.from('expenses').select('*');
-      const { data: dbMembers } = await supabase.from('members').select('status');
+      const { data: dbMembers } = await supabase.from('members').select('*');
 
       // Map DB tables into a combined virtual ledger to support t.type checks
       const combinedTxs = [
@@ -192,8 +192,12 @@ export const processAIQuery = async (
       const totalInflows = combinedTxs.filter(t => t.type === 'credit').reduce((sum, t) => sum + t.amount, 0) || 0;
       const totalExpenses = combinedTxs.filter(t => t.type === 'debit').reduce((sum, t) => sum + t.amount, 0) || 0;
       const currentNetBalance = totalInflows - totalExpenses;
-      const pendingCount = pendingMembers?.length || 0;
-      const totalMembersCount = dbMembers?.length || 0;
+      
+      const humanMembers = (dbMembers || []).filter(m => !isAdministrativeId(m.official_member_id || m.id || ''));
+      const unvalidated = humanMembers.filter(m => m.status === 'Inactive' && (m.official_member_id || m.id || '').startsWith('HCC-CMO-26-'));
+      
+      const pendingCount = unvalidated.length;
+      const totalMembersCount = humanMembers.filter(m => m.status !== 'Deceased').length;
 
       return {
         answer: `**Holy Cross CMO Real-time Executive Report Summary (Direct Injection)**:\n- **Total Revenue (Inflows)**: ₦${totalInflows.toLocaleString()}\n- **Total Outflows (Expenses)**: ₦${totalExpenses.toLocaleString()}\n- **Operational Net Balance**: ₦${currentNetBalance.toLocaleString()}\n- **Pending Validation Queue**: ${pendingCount} member(s) awaiting verification\n- **Total Registered Members**: ${totalMembersCount} members\n\n*Verified under credential session: ${user.username}. Data injected directly from Supabase DB.*`,
@@ -252,7 +256,7 @@ export const processAIQuery = async (
         citations: []
       };
     } else {
-      const pending = welfareTickets.filter(t => t.status !== 'Settled & Cleared' && t.status !== 'Declined');
+      const pending = welfareTickets.filter(t => t.status !== 'Completed' && t.status !== 'Settled & Cleared' && t.status !== 'Declined');
       if (pending.length === 0) {
         return {
           answer: "There are currently no pending welfare requests awaiting approval.",

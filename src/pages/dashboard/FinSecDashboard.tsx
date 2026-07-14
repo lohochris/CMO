@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Users, CheckCircle, AlertCircle, TrendingUp, DollarSign, Camera, Megaphone, FileText, Upload, Edit, Trash2 } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { generateMemberId, generateExpenseId } from '../../utils/idGenerators';
-import { formatCurrency, formatDate, getCombinedTransactions, calculateTotal } from '../../utils/helpers';
+import { formatCurrency, formatDate, getCombinedTransactions, calculateTotal, isAdministrativeId } from '../../utils/helpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { supabase } from '../../lib/supabaseClient';
 import logoImage from '../../imports/CMO.png';
@@ -25,6 +25,7 @@ export const FinSecDashboard = () => {
   const [rosterCount, setRosterCount] = useState(0);
   const [dbMembersList, setDbMembersList] = useState<any[]>([]);
   const [rosterList, setRosterList] = useState<any[]>([]);
+  const [registrySearch, setRegistrySearch] = useState('');
 
   useEffect(() => {
     const fetchLiveCounts = async () => {
@@ -69,6 +70,8 @@ export const FinSecDashboard = () => {
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementContent, setAnnouncementContent] = useState('');
+  const [decliningTicketId, setDecliningTicketId] = useState<string | null>(null);
+  const [declineReasonText, setDeclineReasonText] = useState('');
 
   // Date range filter states
   const [filterStartDate, setFilterStartDate] = useState(() => {
@@ -79,9 +82,26 @@ export const FinSecDashboard = () => {
     return new Date().toISOString().split('T')[0];
   });
 
-  const pendingMembers = members.filter(m => m.status === 'Pending Validation');
-  const activeMembers = members.filter(m => m.status === 'Active (Cleared)');
-  const pendingTickets = welfareTickets.filter(t => t.status === 'Awaiting Financial Audit');
+  const humanRoster = members.filter(m => {
+    const memberId = m.official_member_id || m.id || '';
+    if (memberId.startsWith('HCC-')) return true;
+    return !isAdministrativeId(memberId);
+  });
+  const pendingMembers = humanRoster.filter(m => m.status === 'Pending' || m.status === 'Inactive');
+  const activeMembers = humanRoster.filter(m => m.status === 'Active');
+  const totalMembersCount = humanRoster.filter(m => m.status !== 'Deceased').length;
+  const activeMembersCount = humanRoster.filter(m => m.status === 'Active').length;
+
+  const filteredMembers = humanRoster.filter(m => {
+    const q = registrySearch.toLowerCase();
+    if (!q) return true;
+    return (
+      (m.official_member_id || '').toLowerCase().includes(q) ||
+      (m.full_name || m.name || '').toLowerCase().includes(q) ||
+      (m.phone_number || m.phone || '').toLowerCase().includes(q)
+    );
+  });
+  const pendingTickets = welfareTickets.filter(t => t.status === 'Awaiting Financial Audit' || t.status === 'Pending');
   const totalIncome = transactions
     .filter(t => (t as any).transactionType === 'income')
     .reduce((sum, t) => sum + Number(t.amount), 0);
@@ -112,7 +132,16 @@ export const FinSecDashboard = () => {
           const fullName = (m.full_name || '').toLowerCase();
           const officialMemberId = (m.official_member_id || '').toLowerCase();
           const query = manualSearchQuery.toLowerCase();
-          return fullName.includes(query) || officialMemberId.includes(query);
+          
+          // Exclude Deceased members and administrative accounts
+          const existingMem = members.find(x => (x.official_member_id || x.id) === m.official_member_id);
+          const isDeceased = existingMem?.status === 'Deceased';
+          const memberId = m.official_member_id || '';
+          const isNotAdmin = memberId.startsWith('HCC-') 
+            ? true 
+            : !isAdministrativeId(memberId);
+          
+          return !isDeceased && isNotAdmin && (fullName.includes(query) || officialMemberId.includes(query));
         })
         .slice(0, 10)
     : [];
@@ -129,23 +158,57 @@ export const FinSecDashboard = () => {
     setManualSearchIndex(-1);
   };
 
-  const validateMember = (index: number) => {
+  const validateMember = async (index: number) => {
     const pendingMember = pendingMembers[index];
     if (!pendingMember) return;
 
-    const memberId = generateMemberId(members, pendingMember.family);
-    const updatedMembers = members.map(m =>
-      m === pendingMember
-        ? { ...m, id: memberId, status: 'Active (Cleared)' as const, createdAt: new Date().toISOString() }
-        : m
-    );
+    const memberUUID = pendingMember.id;
+    const existingId = pendingMember.official_member_id || pendingMember.id || '';
+    const hasValidId = existingId && existingId.startsWith('HCC-');
 
-    setMembers(updatedMembers);
-    setSuccess(`Member validated! ID assigned: ${memberId}`);
-    setTimeout(() => setSuccess(''), 5000);
+    let generatedNewId = existingId;
+    if (!hasValidId) {
+      generatedNewId = generateMemberId(members, pendingMember.family);
+    }
+
+    try {
+      // Update the registered member's official ID and status
+      const { error } = await supabase
+        .from('members')
+        .update({ 
+          official_member_id: generatedNewId, // Write 'HCC-CMO-26-165' here!
+          status: 'Active'                    // Set them as validated
+        })
+        .eq('id', memberUUID);                // Match by their internal primary key UUID
+
+      if (error) {
+        console.error("Database update error on validateMember:", error);
+        setError(`Database Error: ${error.message}`);
+        return;
+      }
+
+      const updatedMembers = members.map(m =>
+        m === pendingMember
+          ? { 
+              ...m, 
+              id: generatedNewId, 
+              official_member_id: generatedNewId, 
+              status: 'Active' as const, 
+              createdAt: m.createdAt || new Date().toISOString() 
+            }
+          : m
+      );
+
+      setMembers(updatedMembers);
+      setSuccess(hasValidId ? `Member validated! ID preserved: ${generatedNewId}` : `Member validated! ID assigned: ${generatedNewId}`);
+      setTimeout(() => setSuccess(''), 5000);
+    } catch (err: any) {
+      console.error("Validation error:", err);
+      setError(`Validation failed: ${err.message}`);
+    }
   };
 
-  const approveTicket = (ticketId: string) => {
+  const approveTicket = async (ticketId: string) => {
     setError('');
     const ticket = welfareTickets.find(t => t.ticketId === ticketId);
     if (!ticket) {
@@ -171,42 +234,134 @@ export const FinSecDashboard = () => {
       return;
     }
 
-    // 3. Member Tenure Check: Must have been active for at least 6 months (180 days)
-    const memberCreatedAt = member.createdAt ? new Date(member.createdAt).getTime() : Date.now();
-    const tenureDays = (Date.now() - memberCreatedAt) / (1000 * 60 * 60 * 24);
-    if (tenureDays < 180) {
-      setError(`Constitutional Policy Violation: Member ${member.name} has only been active for ${Math.round(tenureDays)} days. 6 months (180 days) of active tenure is required for welfare eligibility.`);
+    try {
+      const { error: dbErr } = await supabase
+        .from('welfare_tickets')
+        .update({
+          status: 'Approved',
+          approved_at: new Date().toISOString(),
+          decline_reason: null
+        })
+        .eq('ticket_id', ticketId);
+
+      if (dbErr) {
+        console.error("Supabase update error on approval:", dbErr);
+        setError(`Database Error: ${dbErr.message}`);
+        return;
+      }
+
+      const updatedTickets = welfareTickets.map(t =>
+        t.ticketId === ticketId
+          ? { ...t, status: 'Approved' as const, approvedAt: new Date().toISOString(), declineReason: undefined }
+          : t
+      );
+      setWelfareTickets(updatedTickets);
+      setSuccess(`Ticket ${ticketId} approved for disbursement`);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      console.error("Failed to approve ticket:", err);
+      setError(`Failed to approve ticket: ${err.message}`);
+    }
+  };
+
+  const submitDeclineTicket = async (ticketId: string) => {
+    setError('');
+    if (!declineReasonText.trim()) {
+      setError('Please type a reason for declining this request.');
       return;
     }
 
-    const updatedTickets = welfareTickets.map(t =>
-      t.ticketId === ticketId
-        ? { ...t, status: 'Awaiting Disbursement' as const, approvedAt: new Date().toISOString() }
-        : t
-    );
-    setWelfareTickets(updatedTickets);
-    setSuccess(`Ticket ${ticketId} approved for disbursement`);
-    setTimeout(() => setSuccess(''), 3000);
+    try {
+      const { error: dbErr } = await supabase
+        .from('welfare_tickets')
+        .update({
+          status: 'Declined',
+          decline_reason: declineReasonText.trim()
+        })
+        .eq('ticket_id', ticketId);
+
+      if (dbErr) {
+        console.error("Supabase update error on decline:", dbErr);
+        setError(`Database Error: ${dbErr.message}`);
+        return;
+      }
+
+      const updatedTickets = welfareTickets.map(t =>
+        t.ticketId === ticketId
+          ? { ...t, status: 'Declined' as const, declineReason: declineReasonText.trim() }
+          : t
+      );
+      setWelfareTickets(updatedTickets);
+      setSuccess(`Ticket ${ticketId} declined successfully.`);
+      setDecliningTicketId(null);
+      setDeclineReasonText('');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      console.error("Failed to decline ticket:", err);
+      setError(`Failed to decline ticket: ${err.message}`);
+    }
   };
 
-  const declineTicket = (ticketId: string) => {
-    const ticket = welfareTickets.find(t => t.ticketId === ticketId);
-    if (!ticket) return;
+  const handleToggleActiveInactive = async (memberId: string, currentStatus: string) => {
+    const nextStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+    setError('');
+    try {
+      const { error: dbErr } = await supabase
+        .from('members')
+        .update({ status: nextStatus })
+        .eq('official_member_id', memberId);
 
-    const updatedTickets = welfareTickets.map(t =>
-      t.ticketId === ticketId
-        ? { ...t, status: 'Declined' as const }
-        : t
-    );
-    setWelfareTickets(updatedTickets);
+      if (dbErr) {
+        console.error("Supabase update error on toggle status:", dbErr);
+        setError(`Database Error: ${dbErr.message}`);
+        return;
+      }
 
-    const member = members.find(m => m.id === ticket.memberId);
-    const overdueMessage = member && (member.balance < 0 || member.status !== 'Active (Cleared)')
-      ? `Member ${member.name} is not up to date. Welfare team has been notified.`
-      : `Ticket ${ticketId} declined.`;
+      // Update local state context
+      const updatedMembers = members.map(m =>
+        (m.official_member_id || m.id) === memberId
+          ? { ...m, status: nextStatus as any }
+          : m
+      );
+      setMembers(updatedMembers);
+      setSuccess(`Member ${memberId} status updated to ${nextStatus}.`);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      console.error("Failed to toggle status:", err);
+      setError(`Failed to update status: ${err.message}`);
+    }
+  };
 
-    setSuccess(overdueMessage);
-    setTimeout(() => setSuccess(''), 4000);
+  const handleMarkDeceased = async (memberId: string) => {
+    if (!window.confirm('Are you sure you want to mark this member as Deceased? This will lock their account and freeze their profile.')) {
+      return;
+    }
+    setError('');
+    try {
+      const { error: dbErr } = await supabase
+        .from('members')
+        .update({ status: 'Deceased' })
+        .eq('official_member_id', memberId);
+
+      if (dbErr) {
+        console.error("Supabase update error on mark deceased:", dbErr);
+        setError(`Database Error: ${dbErr.message}`);
+        return;
+      }
+
+      // Update local state context
+      const updatedMembers = members.map(m =>
+        (m.official_member_id || m.id) === memberId
+          ? { ...m, status: 'Deceased' as const }
+          : m
+      );
+      setMembers(updatedMembers);
+      setSuccess(`Member ${memberId} marked as Deceased.`);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      console.error("Failed to mark member as deceased:", err);
+      setError(`Failed to mark member as deceased: ${err.message}`);
+    }
   };
 
   const handleManualTransaction = async () => {
@@ -245,6 +400,18 @@ export const FinSecDashboard = () => {
     }
 
     const selectedMemberId = (member as any).official_member_id || member.id;
+    
+    // Validate if member is Deceased or Admin
+    const actualMember = members.find(m => (m.official_member_id || m.id) === selectedMemberId);
+    if (actualMember && actualMember.status === 'Deceased') {
+      setError('Constitutional Policy Violation: Cannot record transactions for a Deceased member.');
+      return;
+    }
+    if (isAdministrativeId(selectedMemberId)) {
+      setError('Policy Violation: Cannot record transactions for administrative profiles.');
+      return;
+    }
+
     const selectedMemberName = (member as any).full_name || (member as any).name || 'Member';
     const amountInput = manualAmount;
     const purposeInput = manualPurpose;
@@ -297,6 +464,15 @@ export const FinSecDashboard = () => {
       console.error("Members Balance Update Error:", memberUpdateErr);
     }
 
+    // When any payment is recorded, activate the member
+    const { error: statusError } = await supabase
+      .from('members')
+      .update({ status: 'Active' })
+      .eq('official_member_id', selectedMemberId);
+    if (statusError) {
+      console.error("Status Update Error:", statusError);
+    }
+
     const { error: rosterUpdateErr } = await supabase.from('master_roster').update({ balance: newBalance }).eq('official_member_id', selectedMemberId);
     if (rosterUpdateErr) {
       console.error("Master Roster Balance Update Error:", rosterUpdateErr);
@@ -304,7 +480,7 @@ export const FinSecDashboard = () => {
 
     const updatedMembers = members.map(m =>
       m.id === manualMemberId || m.id === selectedMemberId
-        ? { ...m, balance: newBalance, status: 'Active (Cleared)' as const }
+        ? { ...m, balance: newBalance, status: 'Active' as const }
         : m
     );
     setMembers(updatedMembers);
@@ -604,11 +780,30 @@ export const FinSecDashboard = () => {
           const memberIndex = updatedMembers.findIndex(m => m.id === memberId);
           if (memberIndex === -1) return;
 
+          // Skip if Deceased or Admin
+          if (updatedMembers[memberIndex].status === 'Deceased') {
+            console.warn(`Skipping CSV transaction for Deceased member: ${memberId}`);
+            return;
+          }
+          if (isAdministrativeId(memberId)) {
+            console.warn(`Skipping CSV transaction for administrative profile: ${memberId}`);
+            return;
+          }
+
           updatedMembers[memberIndex] = {
             ...updatedMembers[memberIndex],
             balance: updatedMembers[memberIndex].balance + amount,
-            status: 'Active (Cleared)'
+            status: 'Active'
           };
+
+          // Fire a database update to activate the member
+          supabase
+            .from('members')
+            .update({ status: 'Active' })
+            .eq('official_member_id', memberId)
+            .then(({ error }) => {
+              if (error) console.error("CSV Status Update Error:", error);
+            });
 
           newTransactions.push({
             memberId,
@@ -695,12 +890,12 @@ export const FinSecDashboard = () => {
         <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 hover:scale-105 transition-all cursor-pointer">
           <Users className="w-8 h-8 text-[#ffd700] mb-2" />
           <p className="text-gray-400 text-sm">Total Members</p>
-          <p className="text-2xl font-bold text-white">{rosterCount}</p>
+          <p className="text-2xl font-bold text-white">{totalMembersCount}</p>
         </Card>
         <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 hover:scale-105 transition-all cursor-pointer">
           <CheckCircle className="w-8 h-8 text-green-500 mb-2" />
           <p className="text-gray-400 text-sm">Active Members</p>
-          <p className="text-2xl font-bold text-white">{dbMembersList.filter(m => m.status === 'Active (Cleared)').length}</p>
+          <p className="text-2xl font-bold text-white">{activeMembersCount}</p>
         </Card>
         <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 hover:scale-105 transition-all cursor-pointer">
           <AlertCircle className="w-8 h-8 text-yellow-500 mb-2" />
@@ -723,19 +918,22 @@ export const FinSecDashboard = () => {
             Welfare Audit
           </TabsTrigger>
           <TabsTrigger value="manual" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer">
-            Manual Entry
+            Record Payment
           </TabsTrigger>
           <TabsTrigger value="income" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer">
-            Record Income
+            Income Log
           </TabsTrigger>
           <TabsTrigger value="expense" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer">
-            Record Expense
+            Expense Log
           </TabsTrigger>
           <TabsTrigger value="bulk" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer">
-            CSV Upload
+            Bulk CSV Upload
           </TabsTrigger>
           <TabsTrigger value="ledger" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer">
-            Financial Ledger
+            General Ledger
+          </TabsTrigger>
+          <TabsTrigger value="roster" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer">
+            Membership Registry
           </TabsTrigger>
           <TabsTrigger value="announcements" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer">
             Announcements
@@ -798,20 +996,56 @@ export const FinSecDashboard = () => {
                         <TableCell className="text-[#ffd700]">{formatCurrency(ticket.requestedAmount)}</TableCell>
                         <TableCell className="text-green-500">{formatCurrency(member?.balance || 0)}</TableCell>
                         <TableCell className="space-x-2">
-                          <button
-                            type="button"
-                            onClick={() => approveTicket(ticket.ticketId)}
-                            className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] text-xs cursor-pointer rounded px-3 py-2"
-                          >
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => declineTicket(ticket.ticketId)}
-                            className="bg-red-600 text-white hover:bg-red-500 text-xs cursor-pointer rounded px-3 py-2"
-                          >
-                            Decline
-                          </button>
+                          {decliningTicketId === ticket.ticketId ? (
+                            <div className="flex flex-col space-y-2 min-w-[200px]">
+                              <textarea
+                                value={declineReasonText}
+                                onChange={(e) => setDeclineReasonText(e.target.value)}
+                                placeholder="Reason for declining..."
+                                className="w-full bg-[#001a16] border border-[#ffd700]/30 text-white p-2 rounded text-xs focus:outline-none focus:border-[#ffd700]"
+                                rows={2}
+                              />
+                              <div className="flex space-x-2">
+                                <button
+                                  type="button"
+                                  onClick={() => submitDeclineTicket(ticket.ticketId)}
+                                  className="bg-red-600 text-white hover:bg-red-500 text-xs cursor-pointer rounded px-2 py-1 flex-1 font-semibold"
+                                >
+                                  Submit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDecliningTicketId(null);
+                                    setDeclineReasonText('');
+                                  }}
+                                  className="bg-gray-600 text-white hover:bg-gray-500 text-xs cursor-pointer rounded px-2 py-1 flex-1"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => approveTicket(ticket.ticketId)}
+                                className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] text-xs cursor-pointer rounded px-3 py-2"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDecliningTicketId(ticket.ticketId);
+                                  setDeclineReasonText('');
+                                }}
+                                className="bg-red-600 text-white hover:bg-red-500 text-xs cursor-pointer rounded px-3 py-2"
+                              >
+                                Decline
+                              </button>
+                            </>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
@@ -1564,6 +1798,107 @@ export const FinSecDashboard = () => {
                   <p className="text-xs text-gray-500">Date: ____ / ____ / 2026</p>
                 </div>
               </div>
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* Membership Registry */}
+        <TabsContent value="roster">
+          <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 md:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+              <h3 className="text-xl font-bold text-[#ffd700] flex items-center gap-2">
+                <FileText className="w-5 h-5" /> Holy Cross CMO — Membership Registry
+              </h3>
+              <span className="text-xs text-gray-500">
+                {filteredMembers.length} of {humanRoster.length} member{humanRoster.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+
+            <div className="mb-4">
+              <Input
+                id="registry-search"
+                placeholder="Search by member ID, name, or phone number…"
+                value={registrySearch}
+                onChange={(e) => setRegistrySearch(e.target.value)}
+                className="bg-[#001a16] border-[#ffd700]/30 text-white placeholder:text-gray-500 focus:border-[#ffd700] max-w-md"
+              />
+            </div>
+
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b border-[#ffd700]/20 hover:bg-[#001a16]/50">
+                    <TableHead className="text-[#ffd700]">Member ID</TableHead>
+                    <TableHead className="text-[#ffd700]">Full Name</TableHead>
+                    <TableHead className="text-[#ffd700]">Phone Number</TableHead>
+                    <TableHead className="text-[#ffd700]">Status</TableHead>
+                    <TableHead className="text-[#ffd700] text-right">Ledger Balance</TableHead>
+                    <TableHead className="text-[#ffd700] text-center">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredMembers.map((member) => (
+                    <TableRow key={member.id} className="border-b border-[#ffd700]/10 hover:bg-[#001a16]/50">
+                      <TableCell className="text-white font-mono text-xs">{member.official_member_id || member.id}</TableCell>
+                      <TableCell className="text-white font-medium">{member.full_name || member.name}</TableCell>
+                      <TableCell className="text-gray-300 text-xs">{member.phone_number || member.phone || 'N/A'}</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                          member.status === 'Active'
+                            ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/30'
+                            : member.status === 'Deceased'
+                            ? 'bg-red-950 text-red-400 border border-red-500/30'
+                            : 'bg-amber-950 text-amber-400 border border-amber-500/30'
+                        }`}>
+                          {member.status}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-[#ffd700]">
+                        {formatCurrency(member.balance)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {member.status !== 'Deceased' ? (
+                          <div className="flex justify-center gap-2">
+                            {member.status === 'Active' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleActiveInactive(member.official_member_id || member.id, member.status)}
+                                className="bg-amber-600 hover:bg-amber-500 text-[#001a16] font-semibold text-xs py-1 px-2 rounded cursor-pointer"
+                              >
+                                Deactivate
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleActiveInactive(member.official_member_id || member.id, member.status)}
+                                className="bg-[#ffd700] hover:bg-[#ffc700] text-[#001a16] font-semibold text-xs py-1 px-2 rounded cursor-pointer"
+                              >
+                                Activate
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleMarkDeceased(member.official_member_id || member.id)}
+                              className="bg-red-600 hover:bg-red-500 text-white font-semibold text-xs py-1 px-2 rounded cursor-pointer"
+                            >
+                              Mark Deceased
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-gray-500 text-xs italic font-bold">Profile Frozen</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredMembers.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-gray-500 py-6">
+                        {registrySearch ? `No members match "${registrySearch}".` : 'No church members found in registry.'}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </div>
           </Card>
         </TabsContent>

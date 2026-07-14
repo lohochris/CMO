@@ -6,6 +6,7 @@ import { UserPlus } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { Member, Family } from '../../types';
 import { supabase } from '../../lib/supabaseClient';
+import { toast } from 'sonner';
 
 const familyOptions: Family[] = ['Wisdom', 'Honour', 'Integrity', 'Talent'];
 
@@ -28,46 +29,52 @@ export const Register = () => {
 
     setLoading(true);
     try {
-      // Query the master roster table for phone number or email matches
-      const { data: rosterMatch, error: rosterError } = await supabase
-        .from('master_roster')
+      const fullName = registerName;
+      const phoneNumber = registerPhone;
+      const email = registerEmail;
+      const family = registerFamily;
+
+      const { data: insertedData, error: insertErr } = await supabase
+        .from('members')
+        .insert({
+          full_name: fullName.toUpperCase(),
+          phone_number: phoneNumber,
+          email: email,
+          cmo_family: family, // Map the dropdown selection 'family' to 'cmo_family'
+          status: 'Pending',
+          role: 'member'
+        })
         .select('*')
-        .or(`phone_number.eq.${registerPhone},email.eq.${registerEmail}`)
-        .maybeSingle();
+        .single();
 
-      if (rosterError || !rosterMatch) {
-        setError('Verification failed: Your phone number or email is not listed on the official Holy Cross CMO Master Roster. Please contact the Financial Secretary.');
-        setLoading(false);
-        return;
-      }
-
-      // Check if this member has already registered in the system members table
-      const alreadyRegistered = members.some(m => m.id === rosterMatch.official_member_id);
-      if (alreadyRegistered) {
-        setError('This member has already been registered in the system.');
+      if (insertErr || !insertedData) {
+        console.error('Registration insertion failed:', insertErr);
+        setError('Submission failed: Could not write details directly to the database.');
         setLoading(false);
         return;
       }
 
       const newMember: Member = {
-        id: rosterMatch.official_member_id,
-        name: rosterMatch.full_name,
-        status: 'Pending Validation',
+        id: insertedData.id,
+        name: insertedData.full_name || insertedData.name,
+        full_name: insertedData.full_name || insertedData.name,
+        official_member_id: undefined,
+        phone: insertedData.phone_number,
+        phone_number: insertedData.phone_number,
+        email: insertedData.email || undefined,
+        status: 'Pending',
         balance: 0,
         role: 'member',
         family: registerFamily,
-        phone: rosterMatch.phone_number,
-        email: rosterMatch.email,
-        profilePic: null
+        profilePic: insertedData.profile_picture_url || null
       };
 
-      await setMembers([...members, newMember]);
-      setSuccess(`Registration submitted! Welcoming you as ${rosterMatch.full_name}. Awaiting validation from Financial Secretary.`);
-      
-      setRegisterName('');
-      setRegisterPhone('');
-      setRegisterEmail('');
-      setTimeout(() => setSuccess(''), 5000);
+      // Add to local state (non-blocking)
+      setMembers([...members, newMember]);
+
+      // Immediately trigger success toast and redirect with zero lag
+      toast.success(`Registration submitted! Awaiting validation from Financial Secretary.`);
+      setCurrentPage('login');
     } catch (err: any) {
       console.error('Registration validation check failed:', err);
       setError('An error occurred during registration. Please try again.');

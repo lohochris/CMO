@@ -306,7 +306,7 @@ const FamilyDashboardBase = ({ mode, family: dashboardFamily }: { mode: 'chairma
 
     const updatedMembers = members.map(m =>
       m.id === manualMemberId
-        ? { ...m, balance: m.balance + amount, status: 'Active (Cleared)' as const }
+        ? { ...m, balance: m.balance + amount, status: 'Active' as const }
         : m
     );
     setMembers(updatedMembers);

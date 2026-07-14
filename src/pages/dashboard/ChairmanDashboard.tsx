@@ -4,11 +4,12 @@ import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { Users, CheckCircle, AlertCircle, DollarSign, Megaphone, FileText, Shield, Heart } from 'lucide-react';
+import { Users, CheckCircle, CheckCheck, AlertCircle, DollarSign, Megaphone, FileText, Shield, Heart } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
-import { formatCurrency, formatDate } from '../../utils/helpers';
+import { formatCurrency, formatDate, isAdministrativeId } from '../../utils/helpers';
+import { supabase } from '../../lib/supabaseClient';
 
 export const ChairmanDashboard = () => {
   const {
@@ -16,12 +17,14 @@ export const ChairmanDashboard = () => {
     setMembers,
     transactions,
     welfareTickets,
+    setWelfareTickets,
     announcements,
     setAnnouncements,
     currentUser,
     setCurrentUser,
     setSuccess,
-    setError
+    setError,
+    rosterCount
   } = useApp();
 
   const [announcementTitle, setAnnouncementTitle] = useState('');
@@ -68,7 +71,69 @@ export const ChairmanDashboard = () => {
     setTimeout(() => setSuccess(''), 3000);
   };
 
-  const pendingTickets = welfareTickets.filter(t => t.status === 'Awaiting Financial Audit');
+  const pendingTickets = welfareTickets.filter(t => t.status === 'Awaiting Financial Audit' || t.status === 'Pending');
+  const unreadWelfareCount = welfareTickets.filter(ticket => !ticket.chairmanRead).length;
+
+  const acknowledgeTicket = async (ticketId: string) => {
+    setError('');
+    try {
+      const { error: dbErr } = await supabase
+        .from('welfare_tickets')
+        .update({ chairman_read: true })
+        .eq('ticket_id', ticketId);
+
+      if (dbErr) {
+        console.error("Supabase update error on acknowledge:", dbErr);
+        setError(`Database Error: ${dbErr.message}`);
+        return;
+      }
+
+      // Update local state context (via setWelfareTickets)
+      const updatedTickets = welfareTickets.map(t =>
+        t.ticketId === ticketId
+          ? { ...t, chairmanRead: true }
+          : t
+      );
+      setWelfareTickets(updatedTickets);
+      setSuccess(`Ticket ${ticketId} acknowledged.`);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      console.error("Failed to acknowledge ticket:", err);
+      setError(`Failed to acknowledge ticket: ${err.message}`);
+    }
+  };
+
+  const handleMarkDeceased = async (memberId: string) => {
+    if (!window.confirm('Are you sure you want to mark this member as Deceased? This will lock their account and freeze their profile.')) {
+      return;
+    }
+    setError('');
+    try {
+      const { error: dbErr } = await supabase
+        .from('members')
+        .update({ status: 'Deceased' })
+        .eq('official_member_id', memberId);
+
+      if (dbErr) {
+        console.error("Supabase update error on mark deceased:", dbErr);
+        setError(`Database Error: ${dbErr.message}`);
+        return;
+      }
+
+      // Update local state context
+      const updatedMembers = members.map(m =>
+        (m.official_member_id || m.id) === memberId
+          ? { ...m, status: 'Deceased' as const }
+          : m
+      );
+      setMembers(updatedMembers);
+      setSuccess(`Member ${memberId} marked as Deceased.`);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      console.error("Failed to mark member as deceased:", err);
+      setError(`Failed to mark member as deceased: ${err.message}`);
+    }
+  };
 
   // ══════════════════════════════════════════════════════════════════════════════
   // DUAL-LAYER ADMINISTRATIVE EXCLUSION
@@ -90,53 +155,28 @@ export const ChairmanDashboard = () => {
     'gen_sec', 'pro', 'family_chairman', 'family_secretary'
   ]);
 
-  // Layer 2 — known administrative ID prefixes/values (uppercase, anchored)
-  // Using startsWith / exact value checks — NOT broad .includes() — to prevent
-  // false-positive exclusion of legitimate member IDs that share common substrings.
-  const isAdministrativeId = (rawId: string): boolean => {
-    const id = rawId.toUpperCase();
-    return (
-      id === 'FIN-SEC-2026'         || // Financial Secretary
-      id === 'WEL-OFF-2026'         || // Welfare Officer
-      id === 'WELFARE-2026'         || // Welfare Officer
-      id === 'TREAS-2026'           || // Treasurer
-      id === 'TREASURER-2026'       || // Treasurer
-      id === 'SECRETARY-2026'       || // General Secretary
-      id === 'PRO-2026'             || // Public Relations Officer
-      id === 'CMO-CHAIRMAN-2026'    || // CMO Executive Chairman
-      id === 'CHAIRMAN-2026'        || // Executive Chairman
-      id.startsWith('FIN-SEC-')     || // future fin-sec cohort IDs
-      id.startsWith('WELFARE-')     || // future welfare cohort IDs
-      id.startsWith('WEL-OFF-')     || // future welfare cohort IDs
-      id.startsWith('TREASURER-')   || // future treasurer cohort IDs
-      id.startsWith('TREAS-')       || // future treasurer cohort IDs
-      id.startsWith('SECRETARY-')   || // future secretary cohort IDs
-      id.startsWith('CMO-CHAIRMAN-')|| // future chairman cohort IDs
-      id.startsWith('CHAIRMAN-')    || // future chairman cohort IDs
-      id.startsWith('PRO-')            // future PRO cohort IDs
-    );
-  };
-
   // Combined predicate — a row is a human church member only if BOTH layers clear it
   const isHumanChurchMember = (m: { role?: string; official_member_id?: string; id?: string }): boolean => {
-    const roleOk = !EXEC_ADMIN_ROLES.has((m.role ?? '').toLowerCase());
-    const idOk   = !isAdministrativeId(m.official_member_id || m.id || '');
-    return roleOk && idOk;
+    const memberId = m.official_member_id || m.id || '';
+    if (memberId.startsWith('HCC-')) return true;
+    return !isAdministrativeId(memberId);
   };
 
   const isHumanRegistryMember = (m: { role?: string; official_member_id?: string; id?: string }): boolean => {
-    const roleOk = !REGISTRY_ADMIN_ROLES.has((m.role ?? '').toLowerCase());
-    const idOk   = !isAdministrativeId(m.official_member_id || m.id || '');
-    return roleOk && idOk;
+    const memberId = m.official_member_id || m.id || '';
+    if (memberId.startsWith('HCC-')) return true;
+    return !isAdministrativeId(memberId);
   };
 
   // KPI metrics — live church members only (admin-stripped, dual-validated)
   const churchMembers  = members.filter(isHumanChurchMember);
-  const activeMembers  = churchMembers.filter(m => m.status === 'Active (Cleared)');
-  const pendingMembers = churchMembers.filter(m => m.status === 'Pending Validation');
+  const activeMembers  = churchMembers.filter(m => m.status === 'Active');
+  const pendingMembers = churchMembers.filter(m => m.status === 'Inactive');
+  const totalMembersCount = churchMembers.filter(m => m.status !== 'Deceased').length;
+  const activeMembersCount = churchMembers.filter(m => m.status === 'Active').length;
 
-  // Registry table source — dual-validated, displays all human members (including family officers)
-  const humanMembers = members.filter(isHumanChurchMember);
+  // Registry table source — displays the complete, unfiltered database roster
+  const humanMembers = members.filter(isHumanRegistryMember);
 
   const filteredMembers = humanMembers.filter(m => {
     const q = registrySearch.toLowerCase();
@@ -193,15 +233,15 @@ export const ChairmanDashboard = () => {
         <Card className="bg-[#002520] border border-[#ffd700]/20 p-6 flex items-center justify-between">
           <div>
             <p className="text-gray-400 text-sm">Total Members</p>
-            <h3 className="text-2xl font-bold text-white mt-1">{churchMembers.length}</h3>
+            <h3 className="text-2xl font-bold text-white mt-1">{totalMembersCount}</h3>
           </div>
           <Users className="w-8 h-8 text-[#ffd700]" />
         </Card>
 
         <Card className="bg-[#002520] border border-[#ffd700]/20 p-6 flex items-center justify-between">
           <div>
-            <p className="text-gray-400 text-sm">Active (Cleared)</p>
-            <h3 className="text-2xl font-bold text-emerald-400 mt-1">{activeMembers.length}</h3>
+            <p className="text-gray-400 text-sm">Active Members</p>
+            <h3 className="text-2xl font-bold text-emerald-400 mt-1">{activeMembersCount}</h3>
           </div>
           <CheckCircle className="w-8 h-8 text-emerald-400" />
         </Card>
@@ -233,7 +273,7 @@ export const ChairmanDashboard = () => {
             Announcements & Decrees
           </TabsTrigger>
           <TabsTrigger value="welfare" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
-            Welfare Review ({pendingTickets.length})
+            Welfare Review {unreadWelfareCount > 0 ? `(${unreadWelfareCount})` : ''}
           </TabsTrigger>
           <TabsTrigger value="roster" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
             CMO Roster
@@ -361,6 +401,7 @@ export const ChairmanDashboard = () => {
                     <TableHead className="text-[#ffd700]">Amount</TableHead>
                     <TableHead className="text-[#ffd700]">Status</TableHead>
                     <TableHead className="text-[#ffd700]">Date Filed</TableHead>
+                    <TableHead className="text-[#ffd700] text-center">Acknowledgment</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -368,11 +409,18 @@ export const ChairmanDashboard = () => {
                     <TableRow key={ticket.ticketId} className="border-b border-[#ffd700]/10 hover:bg-[#001a16]/50">
                       <TableCell className="text-white font-mono text-xs">{ticket.ticketId}</TableCell>
                       <TableCell className="text-white font-medium">{ticket.memberName}</TableCell>
-                      <TableCell className="text-gray-300 text-xs">{ticket.category}</TableCell>
+                      <TableCell className="text-gray-300 text-xs">
+                        {ticket.category}
+                        {ticket.status === 'Declined' && ticket.declineReason && (
+                          <div className="text-red-400 italic mt-1 text-[11px]">
+                            Reason: {ticket.declineReason}
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell className="text-[#ffd700] font-semibold">{formatCurrency(ticket.requestedAmount)}</TableCell>
                       <TableCell>
                         <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                          ticket.status === 'Awaiting Disbursement' || ticket.status === 'Settled & Cleared'
+                          ticket.status === 'Awaiting Disbursement' || ticket.status === 'Approved' || ticket.status === 'Settled & Cleared' || ticket.status === 'Completed'
                             ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/30'
                             : 'bg-amber-950 text-amber-400 border border-amber-500/30'
                         }`}>
@@ -380,11 +428,29 @@ export const ChairmanDashboard = () => {
                         </span>
                       </TableCell>
                       <TableCell className="text-gray-400 text-xs">{formatDate(ticket.createdAt)}</TableCell>
+                      <TableCell className="text-center">
+                        {!ticket.chairmanRead ? (
+                          <button
+                            type="button"
+                            onClick={() => acknowledgeTicket(ticket.ticketId)}
+                            className="bg-[#ffd700] hover:bg-[#ffc700] text-[#001a16] font-semibold text-xs py-1.5 px-3 rounded flex items-center gap-1.5 mx-auto cursor-pointer"
+                            title="Mark as read"
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            Acknowledge
+                          </button>
+                        ) : (
+                          <span className="text-emerald-400 text-xs font-semibold flex items-center gap-1 justify-center">
+                            <CheckCheck className="w-4 h-4" />
+                            Acknowledged
+                          </span>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                   {welfareTickets.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-gray-500 py-4">No welfare requests registered.</TableCell>
+                      <TableCell colSpan={7} className="text-center text-gray-500 py-4">No welfare requests registered.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -425,6 +491,7 @@ export const ChairmanDashboard = () => {
                     <TableHead className="text-[#ffd700]">Phone Number</TableHead>
                     <TableHead className="text-[#ffd700]">Status</TableHead>
                     <TableHead className="text-[#ffd700] text-right">Ledger Balance</TableHead>
+                    <TableHead className="text-[#ffd700] text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -435,8 +502,10 @@ export const ChairmanDashboard = () => {
                       <TableCell className="text-gray-300 text-xs">{member.phone_number || member.phone || 'N/A'}</TableCell>
                       <TableCell>
                         <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                          member.status === 'Active (Cleared)'
+                          member.status === 'Active'
                             ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/30'
+                            : member.status === 'Deceased'
+                            ? 'bg-red-950 text-red-400 border border-red-500/30'
                             : 'bg-amber-950 text-amber-400 border border-amber-500/30'
                         }`}>
                           {member.status}
@@ -444,6 +513,19 @@ export const ChairmanDashboard = () => {
                       </TableCell>
                       <TableCell className="text-right font-semibold text-[#ffd700]">
                         {formatCurrency(member.balance)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {member.status !== 'Deceased' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleMarkDeceased(member.official_member_id || member.id)}
+                            className="bg-red-600 hover:bg-red-500 text-white font-semibold text-xs py-1 px-2 rounded cursor-pointer"
+                          >
+                            Mark Deceased
+                          </button>
+                        ) : (
+                          <span className="text-gray-500 text-xs italic">Deceased (Locked)</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

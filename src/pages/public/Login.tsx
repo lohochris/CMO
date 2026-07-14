@@ -175,7 +175,13 @@ export const Login = () => {
       }
 
       // 3. Validate status
-      if (member.status === 'Pending Validation') {
+      if (member.status === 'Deceased') {
+        setError('This account is locked.');
+        setLoading(false);
+        return;
+      }
+
+      if (member.status === 'Pending Validation' || (member.status === 'Inactive' && (member.official_member_id || member.id || '').startsWith('HCC-CMO-26-'))) {
         setError('Your account is pending validation. Please contact the Financial Secretary.');
         setLoading(false);
         return;
