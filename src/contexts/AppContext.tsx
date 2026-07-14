@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { Member, Transaction, WelfareTicket, Expense, Announcement, Page, FamilyTransaction, FamilyExpense, FamilyWelfareTicket, FamilyAnnouncement } from '../types';
-import { seedMembers, seedAnnouncements } from '../data/seedData';
+import { seedAnnouncements } from '../data/seedData';
 import { supabase } from '../lib/supabaseClient';
+import { toast } from 'sonner';
 
 interface AppContextType {
   members: Member[];
@@ -34,36 +35,43 @@ interface AppContextType {
   setSuccess: React.Dispatch<React.SetStateAction<string>>;
   loading: boolean;
   dbError: string | null;
+  rosterCount: number;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // Mapping Utilities: Database (snake_case) <-> Frontend (camelCase)
-const dbToMember = (m: any): Member => ({
-  id: m.official_member_id || m.id,
-  name: m.full_name || m.name,
-  full_name: m.full_name || m.name,
-  official_member_id: m.official_member_id || m.id,
-  phone_number: m.phone_number || m.phone || undefined,
-  status: m.status as any,
-  balance: Number(m.balance),
-  role: m.role as any,
-  family: m.family as any,
-  phone: m.phone_number || m.phone || undefined,
-  email: m.email || undefined,
-  homeTownAddress: m.home_town_address || undefined,
-  residentialAddress: m.residential_address || undefined,
-  maritalStatus: m.marital_status as any || undefined,
-  weddingStatus: m.wedding_status as any || undefined,
-  communicant: m.communicant || false,
-  postHeld: m.post_held || undefined,
-  numberOfChildren: m.number_of_children !== null ? Number(m.number_of_children) : undefined,
-  wifeName: m.wife_name || undefined,
-  wifePhone: m.wife_phone || undefined,
-  profilePic: m.profile_picture_url || null,
-  createdAt: m.created_at || m.createdAt || undefined,
-  updatedAt: m.updated_at || m.updatedAt || undefined
-});
+const dbToMember = (m: any): Member => {
+  let mappedStatus = m.status;
+  if (mappedStatus === 'Active (Cleared)') mappedStatus = 'Active';
+  else if (mappedStatus === 'Pending Validation') mappedStatus = 'Inactive';
+
+  return {
+    id: m.official_member_id || m.id,
+    name: m.full_name || m.name,
+    full_name: m.full_name || m.name,
+    official_member_id: m.official_member_id || undefined,
+    phone_number: m.phone_number || m.phone || undefined,
+    status: mappedStatus as any,
+    balance: Number(m.balance),
+    role: m.role as any,
+    family: m.family as any,
+    phone: m.phone_number || m.phone || undefined,
+    email: m.email || undefined,
+    homeTownAddress: m.home_town_address || undefined,
+    residentialAddress: m.residential_address || undefined,
+    maritalStatus: m.marital_status as any || undefined,
+    weddingStatus: m.wedding_status as any || undefined,
+    communicant: m.communicant || false,
+    postHeld: m.post_held || undefined,
+    numberOfChildren: m.number_of_children !== null ? Number(m.number_of_children) : undefined,
+    wifeName: m.wife_name || undefined,
+    wifePhone: m.wife_phone || undefined,
+    profilePic: m.profile_picture_url || null,
+    createdAt: m.created_at || m.createdAt || undefined,
+    updatedAt: m.updated_at || m.updatedAt || undefined
+  };
+};
 
 const memberToDb = (m: Member): any => ({
   official_member_id: m.official_member_id || m.id,
@@ -117,34 +125,35 @@ const dbToWelfareTicket = (t: any, membersList?: Member[]): WelfareTicket => {
     const m = membersList.find(x => x.official_member_id === memberId || x.id === memberId);
     if (m) name = m.full_name || m.name;
   }
-  if (!name) {
-    const sm = seedMembers.find(x => x.official_member_id === memberId || x.id === memberId);
-    if (sm) name = sm.full_name || sm.name;
-  }
   return {
-    ticketId: t.id,
+    ticketId: t.ticket_id || t.id,
     memberId: memberId,
-    memberName: name || 'Unknown Member',
+    memberName: t.member_name || name || 'Unknown Member',
     category: t.category,
-    requestedAmount: Number(t.amount),
+    requestedAmount: Number(t.requested_amount !== undefined ? t.requested_amount : t.amount),
     status: t.status as any,
     createdAt: t.created_at || new Date().toISOString(),
     approvedAt: t.approved_at || undefined,
     settledAt: t.settled_at || undefined,
-    reasonDetails: t.reason_details || undefined
+    reasonDetails: t.reason_details || undefined,
+    declineReason: t.decline_reason || undefined,
+    chairmanRead: t.chairman_read !== undefined ? !!t.chairman_read : false
   };
 };
 
 const welfareTicketToDb = (t: WelfareTicket): any => {
   const payload: any = {
     official_member_id: t.memberId,
+    member_name: t.memberName,
     category: t.category,
-    amount: t.requestedAmount,
+    requested_amount: t.requestedAmount,
     reason_details: t.reasonDetails || '',
+    decline_reason: t.declineReason || '',
+    chairman_read: t.chairmanRead !== undefined ? t.chairmanRead : false,
     status: t.status
   };
   if (t.ticketId && t.ticketId.includes('-') && t.ticketId.length > 15) {
-    payload.id = t.ticketId;
+    payload.ticket_id = t.ticketId;
   }
   return payload;
 };
@@ -195,6 +204,7 @@ const announcementToDb = (a: Announcement): any => {
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [members, setMembersState] = useState<Member[]>([]);
   const [transactions, setTransactionsState] = useState<Transaction[]>([]);
+  const [rosterCount, setRosterCount] = useState(0);
   const [welfareTickets, setWelfareTicketsState] = useState<WelfareTicket[]>([]);
   const [expenses, setExpensesState] = useState<Expense[]>([]);
   const [announcements, setAnnouncementsState] = useState<Announcement[]>([]);
@@ -253,7 +263,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               const fallbackAdmin: Member = {
                 id: sessionKey,
                 name: sessionKey === 'WEL-OFF-2026' ? 'Welfare Officer' : 'Treasurer',
-                status: 'Active (Cleared)',
+                status: 'Active',
                 balance: 0,
                 role: sessionKey === 'WEL-OFF-2026' ? 'welfare' : 'treasurer'
               };
@@ -284,6 +294,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         } catch (welfareErr) {
           console.error("Immediate welfare tickets hydration error:", welfareErr);
         }
+
+        // Fetch master_roster count
+        try {
+          const { count, error: rosterErr } = await supabase
+            .from('master_roster')
+            .select('*', { count: 'exact', head: true });
+          if (!rosterErr && count !== null) {
+            setRosterCount(count);
+          }
+        } catch (rosterErr) {
+          console.error("Immediate roster count hydration error:", rosterErr);
+        }
       }
     };
     hydrateData();
@@ -311,20 +333,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (membersError) {
           console.error("Members query error:", membersError);
           setDbError(membersError.message || 'Members query error');
-          setMembersState(seedMembers);
-          loadedMembersList = seedMembers;
+          setMembersState([]);
+          loadedMembersList = [];
         } else if (membersData && membersData.length > 0) {
           loadedMembersList = membersData.map(dbToMember);
           setMembersState(loadedMembersList);
         } else {
-          setMembersState(seedMembers);
-          loadedMembersList = seedMembers;
+          setMembersState([]);
+          loadedMembersList = [];
         }
       } catch (err: any) {
         console.error("Isolated member connection catch-block:", err);
         setDbError(err.message || 'Isolated member connection error');
-        setMembersState(seedMembers);
-        loadedMembersList = seedMembers;
+        setMembersState([]);
+        loadedMembersList = [];
       }
 
       // 2. Fetch Transactions
@@ -381,11 +403,86 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setAnnouncementsState(seedAnnouncements);
       }
 
+      // Fetch master_roster count
+      try {
+        const { count, error: rosterErr } = await supabase
+          .from('master_roster')
+          .select('*', { count: 'exact', head: true });
+        if (!rosterErr && count !== null) {
+          setRosterCount(count);
+        }
+      } catch (err) {
+        console.error("AppContext roster count fetch error:", err);
+      }
+
       setLoading(false);
     };
 
     fetchData();
   }, []);
+
+  // Real-time Supabase Postgres changes subscription to welfare_tickets
+  useEffect(() => {
+    const channel = supabase
+      .channel('welfare-tickets-real-time')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'welfare_tickets' },
+        (payload) => {
+          console.log('Real-time database payload received:', payload);
+          if (payload.eventType === 'INSERT') {
+            const newTicket = dbToWelfareTicket(payload.new, members);
+            setWelfareTicketsState(prev => {
+              if (prev.some(t => t.ticketId === newTicket.ticketId)) return prev;
+              return [...prev, newTicket];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedTicket = dbToWelfareTicket(payload.new, members);
+            
+            // Check status change to trigger toast notification
+            setWelfareTicketsState(prev => {
+              const oldTicket = prev.find(t => t.ticketId === updatedTicket.ticketId);
+              if (oldTicket && oldTicket.status !== updatedTicket.status) {
+                const memberName = updatedTicket.memberName;
+                const roleLower = currentUser?.role?.toLowerCase();
+                
+                if (roleLower === 'welfare' || roleLower === 'treasurer') {
+                  if (updatedTicket.status === 'Approved' || updatedTicket.status === 'Declined') {
+                    toast.success(`Ticket for ${memberName} has been ${updatedTicket.status}!`, {
+                      style: {
+                        background: '#002520',
+                        border: '2px solid #ffd700',
+                        color: '#ffd700'
+                      }
+                    });
+                  }
+                } else if (roleLower === 'chairman' || roleLower === 'cmo_chairman') {
+                  if (updatedTicket.status === 'Approved' || updatedTicket.status === 'Declined' || updatedTicket.status === 'Completed') {
+                    const statusStr = updatedTicket.status === 'Completed' ? 'Disbursed' : updatedTicket.status;
+                    toast.info(`Transparency Alert: Ticket for ${memberName} was ${statusStr}!`, {
+                      style: {
+                        background: '#002520',
+                        border: '2px solid #ffd700',
+                        color: '#ffd700'
+                      }
+                    });
+                  }
+                }
+              }
+              return prev.map(t => t.ticketId === updatedTicket.ticketId ? updatedTicket : t);
+            });
+          } else if (payload.eventType === 'DELETE') {
+            const ticketId = payload.old.ticket_id || payload.old.id;
+            setWelfareTicketsState(prev => prev.filter(t => t.ticketId !== ticketId));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser, members]);
 
   // Intercepting State Setters to sync to Supabase asynchronously
   const setMembers = async (newMembers: Member[] | ((prev: Member[]) => Member[])) => {
@@ -398,34 +495,45 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
 
     for (const member of next) {
-      const officialMemberId = member.official_member_id || member.id;
-
-      // Check if the member already exists by official_member_id
-      const { data: existing, error: checkErr } = await supabase
-        .from('members')
-        .select('official_member_id')
-        .eq('official_member_id', officialMemberId)
-        .maybeSingle();
+      const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+      
+      let existing = null;
+      if (isUuid(member.id)) {
+        const { data } = await supabase
+          .from('members')
+          .select('id, official_member_id')
+          .eq('id', member.id)
+          .maybeSingle();
+        existing = data;
+      } else if (member.official_member_id) {
+        const { data } = await supabase
+          .from('members')
+          .select('id, official_member_id')
+          .eq('official_member_id', member.official_member_id)
+          .maybeSingle();
+        existing = data;
+      }
 
       if (existing) {
         // Update
         const { error: syncErr } = await supabase
           .from('members')
           .update({
+            official_member_id: member.official_member_id || null,
             full_name: member.name || member.full_name,
             phone_number: member.phone || member.phone_number,
             status: member.status,
             balance: member.balance,
             role: member.role
           })
-          .eq('official_member_id', officialMemberId);
+          .eq('id', existing.id);
         if (syncErr) console.error('Failed to sync member change to Supabase (update):', syncErr);
       } else {
         // Insert (Do not specify "id", let DB generate the UUID primary key)
         const { error: syncErr } = await supabase
           .from('members')
           .insert([{
-            official_member_id: officialMemberId,
+            official_member_id: member.official_member_id || null,
             full_name: member.name || member.full_name,
             phone_number: member.phone || member.phone_number,
             status: member.status,
@@ -446,21 +554,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const toInsert = next.filter(t => !currentHashes.has(`${t.memberId}-${t.timestamp}`));
 
     if (toInsert.length > 0) {
-      const { data: insertedData, error: syncErr } = await supabase
-        .from('transactions')
-        .insert(toInsert.map(transactionToDb))
-        .select('id, official_member_id, member_name, amount, purpose, notes, created_at');
+      try {
+        const { data: insertedData, error: syncErr, status } = await supabase
+          .from('transactions')
+          .insert(toInsert.map(transactionToDb))
+          .select('id, official_member_id, member_name, amount, purpose, notes, created_at');
 
-      if (syncErr) {
-        console.error('Failed to insert new transactions to Supabase:', syncErr);
-      } else if (insertedData) {
-        const mappedInserted: Transaction[] = insertedData.map(dbToTransaction);
-        setTransactionsState(prev => {
-          return prev.map(t => {
-            const match = mappedInserted.find((m: Transaction) => m.memberId === t.memberId && m.timestamp === t.timestamp);
-            return match ? match : t;
+        if (syncErr) {
+          console.error('Failed to insert new transactions to Supabase:', syncErr);
+          
+          // Clear specific conflicting/duplicate items from the local state queue to prevent infinite conflict loops
+          const isConflict = syncErr.code === '23505' || String(status) === '409' || 
+                             syncErr.message?.includes('duplicate') || syncErr.message?.includes('conflict');
+          if (isConflict) {
+            console.warn('Conflict/Duplicate key detected on transactions sync. Clearing conflicting item from the queue.');
+            setTransactionsState(prev => prev.filter(t => {
+              const isConflicting = toInsert.some(ins => ins.memberId === t.memberId && ins.timestamp === t.timestamp);
+              return !isConflicting;
+            }));
+          }
+        } else if (insertedData) {
+          const mappedInserted: Transaction[] = insertedData.map(dbToTransaction);
+          setTransactionsState(prev => {
+            return prev.map(t => {
+              const match = mappedInserted.find((m: Transaction) => m.memberId === t.memberId && m.timestamp === t.timestamp);
+              return match ? match : t;
+            });
           });
-        });
+        }
+      } catch (err: any) {
+        console.error('Transaction sync exception:', err);
       }
     }
   };
@@ -522,7 +645,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       currentUser, setCurrentUser,
       error, setError,
       success, setSuccess,
-      loading, dbError
+      loading, dbError,
+      rosterCount
     }}>
       {children}
     </AppContext.Provider>

@@ -28,3 +28,22 @@ export const getCombinedTransactions = (
     ...expenses.map(e => ({ ...e, type: 'expense' as const, timestamp: e.date }))
   ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 };
+
+export const isAdministrativeId = (rawId: string): boolean => {
+  if (!rawId) return false;
+  const id = rawId.toUpperCase();
+  // Sequential IDs starting with HCC are standard members
+  if (id.startsWith('HCC-')) return false;
+
+  return (
+    id === 'FIN-SEC-2026'         ||
+    id === 'WEL-OFF-2026'         ||
+    id === 'WELFARE-2026'         ||
+    id === 'TREAS-2026'           ||
+    id === 'TREASURER-2026'       ||
+    id === 'SECRETARY-2026'       ||
+    id === 'PRO-2026'             ||
+    id === 'CMO-CHAIRMAN-2026'    ||
+    id === 'CHAIRMAN-2026'
+  );
+};

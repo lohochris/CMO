@@ -2,6 +2,7 @@ import { AppProvider, useApp } from '../contexts/AppContext';
 import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
 import { Notification } from './components/layout/Notification';
+import { Toaster } from './components/ui/sonner';
 import { Home } from '../pages/public/Home';
 import { About } from '../pages/public/About';
 import { Services } from '../pages/public/Services';
@@ -189,6 +190,7 @@ export default function App() {
   return (
     <AppProvider>
       <AppContent />
+      <Toaster />
     </AppProvider>
   );
 }

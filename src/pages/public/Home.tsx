@@ -5,7 +5,7 @@ import { useApp } from '../../contexts/AppContext';
 
 export const Home = () => {
   const { welfareTickets } = useApp();
-  const activeTickets = welfareTickets.filter(t => t.status !== 'Settled & Cleared').slice(0, 5);
+  const activeTickets = welfareTickets.filter(t => t.status !== 'Settled & Cleared' && t.status !== 'Completed').slice(0, 5);
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
@@ -61,7 +61,7 @@ export const Home = () => {
                   <TableCell className="text-[#ffd700] font-semibold">₦{ticket.requestedAmount.toLocaleString()}</TableCell>
                   <TableCell>
                     <span className={`text-xs px-2 py-1 rounded ${
-                      ticket.status === 'Awaiting Financial Audit' ? 'bg-yellow-500/20 text-yellow-500' :
+                      ticket.status === 'Awaiting Financial Audit' || ticket.status === 'Pending' ? 'bg-yellow-500/20 text-yellow-500' :
                       ticket.status === 'Awaiting Disbursement' ? 'bg-blue-500/20 text-blue-500' :
                       'bg-green-500/20 text-green-500'
                     }`}>

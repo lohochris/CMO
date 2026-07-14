@@ -5,7 +5,7 @@ import { Input } from '../../app/components/ui/input';
 import { Heart } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { generateTicketId } from '../../utils/idGenerators';
-import { formatCurrency, formatDateTime } from '../../utils/helpers';
+import { formatCurrency, formatDateTime, isAdministrativeId } from '../../utils/helpers';
 import { WELFARE_CATEGORIES } from '../../utils/constants';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
@@ -47,39 +47,14 @@ export const WelfareDashboard = () => {
     setTimeout(() => setSuccess(''), 3000);
   };
 
-  const isAdministrativeId = (rawId: string): boolean => {
-    const id = rawId.toUpperCase();
-    return (
-      id === 'FIN-SEC-2026'         ||
-      id === 'WEL-OFF-2026'         ||
-      id === 'WELFARE-2026'         ||
-      id === 'TREAS-2026'           ||
-      id === 'TREASURER-2026'       ||
-      id === 'SECRETARY-2026'       ||
-      id === 'PRO-2026'             ||
-      id === 'CMO-CHAIRMAN-2026'    ||
-      id === 'CHAIRMAN-2026'        ||
-      id.startsWith('FIN-SEC-')     ||
-      id.startsWith('WELFARE-')     ||
-      id.startsWith('WEL-OFF-')     ||
-      id.startsWith('TREASURER-')   ||
-      id.startsWith('TREAS-')       ||
-      id.startsWith('SECRETARY-')   ||
-      id.startsWith('CMO-CHAIRMAN-')||
-      id.startsWith('CHAIRMAN-')    ||
-      id.startsWith('PRO-')
-    );
-  };
-
   const query = memberSearchQuery.toLowerCase().trim();
   const suggestions = query 
     ? members.filter(m => {
         const id = m.official_member_id || m.id || '';
-        const isAdminRole = ['chairman', 'cmo_chairman', 'fin_sec', 'welfare', 'treasurer', 'gen_sec', 'pro'].includes((m.role || '').toLowerCase());
-        const isAdminId = isAdministrativeId(id);
-        if (isAdminRole || isAdminId) return false;
-        
-        return (m.full_name || m.name || "").toLowerCase().includes(query) || id.toLowerCase().includes(query);
+        const isNotDeceased = m.status !== 'Deceased';
+        const isNotAdmin = id.startsWith('HCC-') ? true : !isAdministrativeId(id);
+        const matchesQuery = (m.full_name || m.name || "").toLowerCase().includes(query) || id.toLowerCase().includes(query);
+        return isNotDeceased && isNotAdmin && matchesQuery;
       })
     : [];
 
@@ -129,13 +104,14 @@ export const WelfareDashboard = () => {
     try {
       const { data: insertedList, error: insertErr } = await supabase
         .from('welfare_tickets')
-        .insert([{
+        .insert({
           official_member_id: welfareFormMemberId,
+          member_name: member.full_name || member.name,
           category: finalCategory,
-          amount: amount,
+          requested_amount: amount,
           reason_details: (welfareCategory === "Wife's Death" || welfareCategory === "Others") ? reasonDetails.trim() : '',
-          status: 'Awaiting Financial Audit'
-        }])
+          status: 'Pending'
+        })
         .select('*');
 
       if (insertErr) {
@@ -147,12 +123,12 @@ export const WelfareDashboard = () => {
       const inserted = insertedList && insertedList.length > 0 ? insertedList[0] : null;
 
       const newTicket: WelfareTicket = {
-        ticketId: inserted?.id || `TK-${Date.now()}`,
+        ticketId: inserted?.ticket_id || inserted?.id || `TK-${Date.now()}`,
         memberId: welfareFormMemberId,
         memberName: member.full_name || member.name,
         category: finalCategory,
         requestedAmount: amount,
-        status: 'Awaiting Financial Audit',
+        status: 'Pending',
         createdAt: inserted?.created_at || new Date().toISOString(),
         reasonDetails: inserted?.reason_details || reasonDetails.trim()
       };
@@ -345,7 +321,7 @@ export const WelfareDashboard = () => {
                     <p className="text-gray-400 text-sm">{ticket.memberName}</p>
                   </div>
                   <span className={`text-xs px-2 py-1 rounded ${
-                    ticket.status === 'Awaiting Financial Audit' ? 'bg-yellow-500/20 text-yellow-500' :
+                    ticket.status === 'Awaiting Financial Audit' || ticket.status === 'Pending' ? 'bg-yellow-500/20 text-yellow-500' :
                     ticket.status === 'Awaiting Disbursement' ? 'bg-blue-500/20 text-blue-500' :
                     ticket.status === 'Declined' ? 'bg-red-500/20 text-red-500' :
                     'bg-green-500/20 text-green-500'
@@ -355,6 +331,11 @@ export const WelfareDashboard = () => {
                 </div>
                 <p className="text-gray-300 text-sm mb-1">{ticket.category}</p>
                 <p className="text-[#ffd700] font-bold">{formatCurrency(ticket.requestedAmount)}</p>
+                {ticket.status === 'Declined' && ticket.declineReason && (
+                  <p className="text-xs italic text-red-400 mt-2 bg-red-950/20 border border-red-500/20 p-2 rounded">
+                    Reason: {ticket.declineReason}
+                  </p>
+                )}
                 <p className="text-xs text-gray-500 mt-2">
                   Created: {formatDateTime(ticket.createdAt)}
                 </p>
