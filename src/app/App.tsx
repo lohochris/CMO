@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { AppProvider, useApp } from '../contexts/AppContext';
 import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
@@ -15,7 +16,9 @@ import { TreasurerDashboard } from '../pages/dashboard/TreasurerDashboard';
 import { SecretaryDashboard } from '../pages/dashboard/SecretaryDashboard';
 import { PRODashboard } from '../pages/dashboard/PRODashboard';
 import { ChairmanDashboard } from '../pages/dashboard/ChairmanDashboard';
-import { Megaphone } from 'lucide-react';
+import { Megaphone, ShieldCheck } from 'lucide-react';
+import { Card } from './components/ui/card';
+import { Button } from './components/ui/button';
 import {
   FamilyHub,
   FamilyChairmanDashboard,
@@ -28,12 +31,55 @@ import {
   FamilyIntegritySecretaryDashboard,
   FamilyTalentChairmanDashboard,
   FamilyTalentSecretaryDashboard,
+  FamilyPortal,
 } from '../pages/dashboard/FamilyDashboard';
 
 import { CmoAngelChat } from './components/ui/CmoAngelChat';
 
+const matchFamily = (param: string): import('../types').Family | null => {
+  const normalized = param.toLowerCase();
+  if (normalized === 'wisdom') return 'Wisdom';
+  if (normalized === 'honour') return 'Honour';
+  if (normalized === 'integrity') return 'Integrity';
+  if (normalized === 'talent') return 'Talent';
+  return null;
+};
+
 function AppContent() {
   const { currentPage, currentUser, announcements, setError, setCurrentPage, loading } = useApp();
+
+  // Synchronize browser history and pathnames
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      if (path === '/') {
+        setCurrentPage('home');
+      } else {
+        const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+        setCurrentPage(cleanPath as any);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    
+    // Set initial page from URL path on load
+    const initialPath = window.location.pathname;
+    if (initialPath !== '/') {
+      const cleanPath = initialPath.startsWith('/') ? initialPath.substring(1) : initialPath;
+      if (['about', 'services', 'register', 'login', 'dashboard', 'familyHub'].includes(cleanPath) || cleanPath.startsWith('family/')) {
+        setCurrentPage(cleanPath as any);
+      }
+    }
+
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [setCurrentPage]);
+
+  useEffect(() => {
+    const currentUrlPath = window.location.pathname;
+    const expectedPath = currentPage === 'home' ? '/' : `/${currentPage}`;
+    if (currentUrlPath !== expectedPath) {
+      window.history.pushState(null, '', expectedPath);
+    }
+  }, [currentPage]);
 
   const activeAnnouncements = announcements.filter((ann) => {
     const expiresAt = ann.expiresAt ? new Date(ann.expiresAt).getTime() : new Date(ann.timestamp).getTime() + 2 * 24 * 60 * 60 * 1000;
@@ -65,8 +111,63 @@ function AppContent() {
   };
 
   const renderPage = () => {
+    // 1. Strict route guard and handler for /family/:familyName
+    if (currentPage.startsWith('family/')) {
+      if (loading) {
+        return (
+          <div className="flex h-64 items-center justify-center">
+            <div className="text-[#ffd700] text-lg font-semibold animate-pulse">
+              Verifying security clearance...
+            </div>
+          </div>
+        );
+      }
+
+      if (!currentUser) {
+        setTimeout(() => setCurrentPage('login'), 10);
+        return <Login />;
+      }
+
+      const familyParam = currentPage.split('/')[1];
+      const normalizedParam = familyParam ? familyParam.toLowerCase() : '';
+      const matched = matchFamily(normalizedParam);
+
+      if (!matched) {
+        return <Home />;
+      }
+
+      const roleLower = currentUser?.role?.toLowerCase();
+      const isGlobalAdmin = ['fin_sec', 'chairman', 'cmo_chairman', 'welfare', 'treasurer', 'gen_sec', 'pro'].includes(roleLower);
+      const userFamilyLower = (currentUser?.family || '').toLowerCase();
+
+      if (!isGlobalAdmin && userFamilyLower !== normalizedParam) {
+        return (
+          <div className="p-4 md:p-8 max-w-2xl mx-auto text-center mt-12 font-sans">
+            <Card className="bg-[#002520] border-2 border-red-500/50 p-8 shadow-xl rounded-xl">
+              <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/30">
+                <ShieldCheck className="w-8 h-8" />
+              </div>
+              <h2 className="text-2xl font-bold text-red-400 mb-4">Access Denied</h2>
+              <p className="text-gray-300 mb-6 text-sm leading-relaxed">
+                Access Denied. You are not registered to the <span className="text-[#ffd700] font-semibold">{matched} Family</span>. Please visit your Profile Settings if you need to update your family assignment.
+              </p>
+              <Button 
+                onClick={() => setCurrentPage('dashboard')} 
+                className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold"
+              >
+                Go to My Dashboard
+              </Button>
+            </Card>
+          </div>
+        );
+      }
+
+      return <FamilyPortal family={matched} />;
+    }
+
     // Family specific dashboards routing guards
     const isFamilyPage = currentPage.startsWith('family') && 
+      !currentPage.startsWith('family/') &&
       currentPage !== 'familyHub' && 
       currentPage !== 'familyChairman' && 
       currentPage !== 'familySecretary';
@@ -111,6 +212,7 @@ function AppContent() {
         }
       }
     }
+
     // Public pages
     if (currentPage === 'home') return <Home />;
     if (currentPage === 'about') return <About />;

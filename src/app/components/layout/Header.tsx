@@ -153,25 +153,7 @@ export const Header = () => {
           </button>
         </div>
 
-        <div className="hidden md:flex items-center gap-2 flex-wrap mt-6 border-t border-[#ffd700]/10 pt-5">
-          {familyLinks.map((family) => (
-            <button
-              key={family}
-              type="button"
-              onClick={() => {
-                setSelectedFamily && setSelectedFamily(family);
-                setCurrentPage('login');
-              }}
-              className={`px-3 py-2 text-sm font-medium rounded-md transition ${
-                selectedFamily === family
-                  ? 'bg-[#ffd700] text-[#001a16]'
-                  : 'text-gray-300 hover:text-[#ffd700] hover:bg-[#002520]'
-              }`}
-            >
-              {family} Family
-            </button>
-          ))}
-        </div>
+
 
         <div className={`overflow-hidden transition-all duration-300 md:hidden ${menuOpen ? 'max-h-[480px] mt-4' : 'max-h-0'}`}>
           <div className="space-y-4 pb-4">
@@ -190,26 +172,7 @@ export const Header = () => {
               ))}
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {familyLinks.map((family) => (
-                <button
-                  key={family}
-                  type="button"
-                  onClick={() => {
-                    setSelectedFamily && setSelectedFamily(family);
-                    setCurrentPage('login');
-                    setMenuOpen(false);
-                  }}
-                  className={`px-3 py-2 text-sm font-medium rounded-md transition ${
-                    selectedFamily === family
-                      ? 'bg-[#ffd700] text-[#001a16]'
-                      : 'text-gray-300 hover:text-[#ffd700] hover:bg-[#002520]'
-                  }`}
-                >
-                  {family} Family
-                </button>
-              ))}
-            </div>
+
 
             {currentUser ? (
               <div className="space-y-3 rounded-xl border border-[#ffd700]/30 bg-[#001a16] p-4">

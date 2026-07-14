@@ -36,6 +36,10 @@ interface AppContextType {
   loading: boolean;
   dbError: string | null;
   rosterCount: number;
+  totalIncome: number;
+  totalExpenses: number;
+  vaultBalance: number;
+  refreshDatabase: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -55,7 +59,7 @@ const dbToMember = (m: any): Member => {
     status: mappedStatus as any,
     balance: Number(m.balance),
     role: m.role as any,
-    family: m.family as any,
+    family: m.cmo_family || m.family as any,
     phone: m.phone_number || m.phone || undefined,
     email: m.email || undefined,
     homeTownAddress: m.home_town_address || undefined,
@@ -79,6 +83,7 @@ const memberToDb = (m: Member): any => ({
   status: m.status,
   balance: m.balance,
   role: m.role,
+  cmo_family: m.family || null,
   family: m.family || null,
   phone_number: m.phone_number || m.phone || null,
   email: m.email || null,
@@ -316,105 +321,107 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [loading, setLoading] = useState(true);
   const [dbError, setDbError] = useState<string | null>(null);
 
+  const refreshDatabase = async () => {
+    let loadedMembersList: Member[] = [];
+
+    // 1. Fetch Members
+    try {
+      // Ensure all executives pull the complete human membership database rows
+      const { data: membersData, error: membersError } = await supabase
+        .from('members')
+        .select('*');
+      if (membersError) {
+        console.error("Members query error:", membersError);
+        setDbError(membersError.message || 'Members query error');
+        setMembersState([]);
+        loadedMembersList = [];
+      } else if (membersData && membersData.length > 0) {
+        loadedMembersList = membersData.map(dbToMember);
+        setMembersState(loadedMembersList);
+      } else {
+        setMembersState([]);
+        loadedMembersList = [];
+      }
+    } catch (err: any) {
+      console.error("Isolated member connection catch-block:", err);
+      setDbError(err.message || 'Isolated member connection error');
+      setMembersState([]);
+      loadedMembersList = [];
+    }
+
+    // 2. Fetch Transactions
+    try {
+      const { data: dbTx, error: txErr } = await supabase
+        .from('transactions')
+        .select('id, official_member_id, member_name, amount, purpose, notes, transaction_type, created_at');
+      if (txErr) {
+        console.error("Transactions query error:", txErr);
+      } else if (dbTx) {
+        setTransactionsState(dbTx.map(dbToTransaction));
+      }
+    } catch (err: any) {
+      console.error("Isolated transactions connection catch-block:", err);
+    }
+
+    // 3. Fetch Welfare Tickets
+    try {
+      const { data: dbWelfare, error: welErr } = await supabase.from('welfare_tickets').select('*');
+      if (welErr) {
+        console.error("Welfare tickets query error:", welErr);
+      } else if (dbWelfare) {
+        setWelfareTicketsState(dbWelfare.map((t: any) => dbToWelfareTicket(t, loadedMembersList)));
+      }
+    } catch (err: any) {
+      console.error("Isolated welfare tickets connection catch-block:", err);
+    }
+
+    // 4. Fetch Expenses
+    try {
+      const { data: dbExpenses, error: expErr } = await supabase.from('expenses').select('*');
+      if (expErr) {
+        console.error("Expenses query error:", expErr);
+      } else if (dbExpenses) {
+        setExpensesState(dbExpenses.map(dbToExpense));
+      }
+    } catch (err: any) {
+      console.error("Isolated expenses connection catch-block:", err);
+    }
+
+    // 5. Fetch Announcements
+    try {
+      const { data: dbAnnouncements, error: annErr } = await supabase.from('announcements').select('*');
+      if (annErr) {
+        console.error("Announcements query error:", annErr);
+        setAnnouncementsState(seedAnnouncements);
+      } else if (dbAnnouncements && dbAnnouncements.length > 0) {
+        setAnnouncementsState(dbAnnouncements.map(dbToAnnouncement));
+      } else {
+        setAnnouncementsState(seedAnnouncements);
+      }
+    } catch (err: any) {
+      console.error("Isolated announcements connection catch-block:", err);
+      setAnnouncementsState(seedAnnouncements);
+    }
+
+    // Fetch master_roster count
+    try {
+      const { count, error: rosterErr } = await supabase
+        .from('master_roster')
+        .select('*', { count: 'exact', head: true });
+      if (!rosterErr && count !== null) {
+        setRosterCount(count);
+      }
+    } catch (err) {
+      console.error("AppContext roster count fetch error:", err);
+    }
+  };
+
   // Initial fetch from Supabase
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       setDbError(null);
-
-      let loadedMembersList: Member[] = [];
-
-      // 1. Fetch Members
-      try {
-        // Ensure all executives pull the complete human membership database rows
-        const { data: membersData, error: membersError } = await supabase
-          .from('members')
-          .select('*');
-        if (membersError) {
-          console.error("Members query error:", membersError);
-          setDbError(membersError.message || 'Members query error');
-          setMembersState([]);
-          loadedMembersList = [];
-        } else if (membersData && membersData.length > 0) {
-          loadedMembersList = membersData.map(dbToMember);
-          setMembersState(loadedMembersList);
-        } else {
-          setMembersState([]);
-          loadedMembersList = [];
-        }
-      } catch (err: any) {
-        console.error("Isolated member connection catch-block:", err);
-        setDbError(err.message || 'Isolated member connection error');
-        setMembersState([]);
-        loadedMembersList = [];
-      }
-
-      // 2. Fetch Transactions
-      try {
-        const { data: dbTx, error: txErr } = await supabase
-          .from('transactions')
-          .select('id, official_member_id, member_name, amount, purpose, notes, created_at');
-        if (txErr) {
-          console.error("Transactions query error:", txErr);
-        } else if (dbTx) {
-          setTransactionsState(dbTx.map(dbToTransaction));
-        }
-      } catch (err: any) {
-        console.error("Isolated transactions connection catch-block:", err);
-      }
-
-      // 3. Fetch Welfare Tickets
-      try {
-        const { data: dbWelfare, error: welErr } = await supabase.from('welfare_tickets').select('*');
-        if (welErr) {
-          console.error("Welfare tickets query error:", welErr);
-        } else if (dbWelfare) {
-          setWelfareTicketsState(dbWelfare.map((t: any) => dbToWelfareTicket(t, loadedMembersList)));
-        }
-      } catch (err: any) {
-        console.error("Isolated welfare tickets connection catch-block:", err);
-      }
-
-      // 4. Fetch Expenses
-      try {
-        const { data: dbExpenses, error: expErr } = await supabase.from('expenses').select('*');
-        if (expErr) {
-          console.error("Expenses query error:", expErr);
-        } else if (dbExpenses) {
-          setExpensesState(dbExpenses.map(dbToExpense));
-        }
-      } catch (err: any) {
-        console.error("Isolated expenses connection catch-block:", err);
-      }
-
-      // 5. Fetch Announcements
-      try {
-        const { data: dbAnnouncements, error: annErr } = await supabase.from('announcements').select('*');
-        if (annErr) {
-          console.error("Announcements query error:", annErr);
-          setAnnouncementsState(seedAnnouncements);
-        } else if (dbAnnouncements && dbAnnouncements.length > 0) {
-          setAnnouncementsState(dbAnnouncements.map(dbToAnnouncement));
-        } else {
-          setAnnouncementsState(seedAnnouncements);
-        }
-      } catch (err: any) {
-        console.error("Isolated announcements connection catch-block:", err);
-        setAnnouncementsState(seedAnnouncements);
-      }
-
-      // Fetch master_roster count
-      try {
-        const { count, error: rosterErr } = await supabase
-          .from('master_roster')
-          .select('*', { count: 'exact', head: true });
-        if (!rosterErr && count !== null) {
-          setRosterCount(count);
-        }
-      } catch (err) {
-        console.error("AppContext roster count fetch error:", err);
-      }
-
+      await refreshDatabase();
       setLoading(false);
     };
 
@@ -558,7 +565,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const { data: insertedData, error: syncErr, status } = await supabase
           .from('transactions')
           .insert(toInsert.map(transactionToDb))
-          .select('id, official_member_id, member_name, amount, purpose, notes, created_at');
+          .select('id, official_member_id, member_name, amount, purpose, notes, transaction_type, created_at');
 
         if (syncErr) {
           console.error('Failed to insert new transactions to Supabase:', syncErr);
@@ -629,6 +636,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   }, [announcements]);
 
+  // database-driven reactive financial totals
+  const totalIncome = useMemo(() => {
+    return transactions
+      .filter(t => (t.transactionType ?? '').toLowerCase() === 'income')
+      .reduce((sum, t) => sum + (t.amount || 0), 0);
+  }, [transactions]);
+
+  const totalExpenses = useMemo(() => {
+    return transactions
+      .filter(t => (t.transactionType ?? '').toLowerCase() === 'expense')
+      .reduce((sum, t) => sum + (t.amount || 0), 0);
+  }, [transactions]);
+
+  const vaultBalance = useMemo(() => {
+    return totalIncome - totalExpenses;
+  }, [totalIncome, totalExpenses]);
+
   return (
     <AppContext.Provider value={{
       members, setMembers,
@@ -646,7 +670,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       error, setError,
       success, setSuccess,
       loading, dbError,
-      rosterCount
+      rosterCount,
+      totalIncome,
+      totalExpenses,
+      vaultBalance,
+      refreshDatabase
     }}>
       {children}
     </AppContext.Provider>
