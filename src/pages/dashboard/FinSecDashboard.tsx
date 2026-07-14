@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Card } from '../../app/components/ui/card';
+import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { Users, CheckCircle, AlertCircle, TrendingUp, DollarSign, Camera, Megaphone, FileText, Upload, Edit, Trash2 } from 'lucide-react';
+import { Users, CheckCircle, AlertCircle, TrendingUp, DollarSign, Camera, Megaphone, FileText, Upload, Edit, Trash2, ShieldCheck } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { generateMemberId, generateExpenseId } from '../../utils/idGenerators';
 import { formatCurrency, formatDate, getCombinedTransactions, calculateTotal, isAdministrativeId } from '../../utils/helpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { supabase } from '../../lib/supabaseClient';
 import logoImage from '../../imports/CMO.png';
+import { Member, Family, MemberStatus } from '../../types';
 
 export const FinSecDashboard = () => {
   const {
@@ -19,7 +21,11 @@ export const FinSecDashboard = () => {
     expenses, setExpenses,
     announcements, setAnnouncements,
     currentUser, setCurrentUser,
-    setError, setSuccess
+    setError, setSuccess,
+    totalIncome,
+    totalExpenses,
+    vaultBalance,
+    refreshDatabase
   } = useApp();
 
   const [rosterCount, setRosterCount] = useState(0);
@@ -73,6 +79,77 @@ export const FinSecDashboard = () => {
   const [decliningTicketId, setDecliningTicketId] = useState<string | null>(null);
   const [declineReasonText, setDeclineReasonText] = useState('');
 
+  // Member editing states
+  const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [editMemberName, setEditMemberName] = useState('');
+  const [editMemberPhone, setEditMemberPhone] = useState('');
+  const [editMemberFamily, setEditMemberFamily] = useState<Family | ''>('');
+  const [editMemberStatus, setEditMemberStatus] = useState<MemberStatus | ''>('');
+  const [adminEditLoading, setAdminEditLoading] = useState(false);
+
+  const handleEditMemberSave = async () => {
+    if (!editingMember) return;
+    setError('');
+    setSuccess('');
+
+    if (!editMemberName.trim()) {
+      setError('Name is required');
+      return;
+    }
+
+    setAdminEditLoading(true);
+    try {
+      const updatePayload = {
+        full_name: editMemberName,
+        phone_number: editMemberPhone,
+        phone: editMemberPhone,
+        cmo_family: editMemberFamily || null,
+        status: editMemberStatus
+      };
+
+      // 1. Update members table
+      const { error: memberErr } = await supabase
+        .from('members')
+        .update(updatePayload)
+        .eq('official_member_id', editingMember.id);
+
+      if (memberErr) throw memberErr;
+
+      // 2. Update master_roster table
+      const { error: rosterErr } = await supabase
+        .from('master_roster')
+        .update(updatePayload)
+        .eq('official_member_id', editingMember.id);
+
+      if (rosterErr) throw rosterErr;
+
+      // 3. Update local state
+      const updatedMembers = members.map(m =>
+        m.id === editingMember.id
+          ? {
+              ...m,
+              name: editMemberName,
+              full_name: editMemberName,
+              phone: editMemberPhone,
+              phone_number: editMemberPhone,
+              family: editMemberFamily || undefined,
+              status: editMemberStatus as any
+            }
+          : m
+      );
+      setMembers(updatedMembers);
+
+      setSuccess('✓ Member profile updated successfully!');
+      setEditingMember(null);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('Failed to update member:', err);
+      setError(err.message || 'Failed to update member.');
+    } finally {
+      setAdminEditLoading(false);
+    }
+  };
+
   // Date range filter states
   const [filterStartDate, setFilterStartDate] = useState(() => {
     const currentYear = new Date().getFullYear();
@@ -102,14 +179,7 @@ export const FinSecDashboard = () => {
     );
   });
   const pendingTickets = welfareTickets.filter(t => t.status === 'Awaiting Financial Audit' || t.status === 'Pending');
-  const totalIncome = transactions
-    .filter(t => (t as any).transactionType === 'income')
-    .reduce((sum, t) => sum + Number(t.amount), 0);
-
-  const totalExpenses = transactions
-    .filter(t => (t as any).transactionType === 'expense')
-    .reduce((sum, t) => sum + Number(t.amount), 0);
-  const totalSessionCash = totalIncome;
+  const totalSessionCash = vaultBalance;
 
   const filteredTransactions = transactions.filter(tx => {
     const txDate = new Date((tx as any).created_at || tx.timestamp);
@@ -425,7 +495,8 @@ export const FinSecDashboard = () => {
         purpose: purposeInput,
         notes: purposeInput === 'Other Levy' ? customLevyNotes : null,
         transaction_type: 'income',
-        recorded_by: 'FIN-SEC-2026'
+        recorded_by: 'FIN-SEC-2026',
+        status: 'Approved'
       }])
       .select('id, official_member_id, member_name, amount, purpose, notes, transaction_type, created_at');
 
@@ -505,6 +576,9 @@ export const FinSecDashboard = () => {
     setManualAmount('');
     setManualPurpose('');
     setTimeout(() => setSuccess(''), 3000);
+    
+    // Refresh to synchronize totals across all dashboards
+    await refreshDatabase();
   };
 
   const [editingTxId, setEditingTxId] = useState<number | null>(null);
@@ -641,7 +715,8 @@ export const FinSecDashboard = () => {
           amount: parseFloat(incomeAmount),
           purpose: incomePurpose,
           transaction_type: 'income',
-          timestamp: new Date(incomeDate).toISOString()
+          timestamp: new Date(incomeDate).toISOString(),
+          status: 'Approved'
         }]);
 
       if (txErr) {
@@ -657,7 +732,7 @@ export const FinSecDashboard = () => {
       setTimeout(() => setSuccess(''), 3000);
 
       // Refresh transactions
-      await fetchTransactions();
+      await refreshDatabase();
     } catch (err: any) {
       console.error('Record income failed:', err);
       setError(`Record Income failed: ${err.message}`);
@@ -686,7 +761,8 @@ export const FinSecDashboard = () => {
           amount: parseFloat(expenseAmount),
           purpose: expensePurpose,
           transaction_type: 'expense',
-          timestamp: new Date(expenseDate).toISOString()
+          timestamp: new Date(expenseDate).toISOString(),
+          status: 'Approved'
         }]);
 
       if (txErr) {
@@ -702,7 +778,7 @@ export const FinSecDashboard = () => {
       setTimeout(() => setSuccess(''), 3000);
 
       // Refresh transactions
-      await fetchTransactions();
+      await refreshDatabase();
     } catch (err: any) {
       console.error('Record expense failed:', err);
       setError(`Record Expense failed: ${err.message}`);
@@ -1857,36 +1933,51 @@ export const FinSecDashboard = () => {
                         {formatCurrency(member.balance)}
                       </TableCell>
                       <TableCell className="text-center">
-                        {member.status !== 'Deceased' ? (
-                          <div className="flex justify-center gap-2">
-                            {member.status === 'Active' ? (
+                        <div className="flex justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingMember(member);
+                              setEditMemberName(member.full_name || member.name);
+                              setEditMemberPhone(member.phone || member.phone_number || '');
+                              setEditMemberFamily(member.family || '');
+                              setEditMemberStatus(member.status);
+                            }}
+                            className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-1 px-2 rounded cursor-pointer"
+                          >
+                            Edit
+                          </button>
+                          {member.status !== 'Deceased' ? (
+                            <div className="flex gap-2">
+                              {member.status === 'Active' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleActiveInactive(member.official_member_id || member.id, member.status)}
+                                  className="bg-amber-600 hover:bg-amber-500 text-[#001a16] font-semibold text-xs py-1 px-2 rounded cursor-pointer"
+                                >
+                                  Deactivate
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleActiveInactive(member.official_member_id || member.id, member.status)}
+                                  className="bg-[#ffd700] hover:bg-[#ffc700] text-[#001a16] font-semibold text-xs py-1 px-2 rounded cursor-pointer"
+                                >
+                                  Activate
+                                </button>
+                              )}
                               <button
-                                type="button"
-                                onClick={() => handleToggleActiveInactive(member.official_member_id || member.id, member.status)}
-                                className="bg-amber-600 hover:bg-amber-500 text-[#001a16] font-semibold text-xs py-1 px-2 rounded cursor-pointer"
-                              >
-                                Deactivate
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleToggleActiveInactive(member.official_member_id || member.id, member.status)}
-                                className="bg-[#ffd700] hover:bg-[#ffc700] text-[#001a16] font-semibold text-xs py-1 px-2 rounded cursor-pointer"
-                              >
-                                Activate
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleMarkDeceased(member.official_member_id || member.id)}
-                              className="bg-red-600 hover:bg-red-500 text-white font-semibold text-xs py-1 px-2 rounded cursor-pointer"
-                            >
-                              Mark Deceased
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-gray-500 text-xs italic font-bold">Profile Frozen</span>
-                        )}
+                                  type="button"
+                                  onClick={() => handleMarkDeceased(member.official_member_id || member.id)}
+                                  className="bg-red-600 hover:bg-red-500 text-white font-semibold text-xs py-1 px-2 rounded cursor-pointer"
+                                >
+                                  Mark Deceased
+                                </button>
+                            </div>
+                          ) : (
+                            <span className="text-gray-500 text-xs italic font-bold">Profile Frozen</span>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1942,6 +2033,88 @@ export const FinSecDashboard = () => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Administrative Edit Member Modal */}
+      {editingMember && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 font-sans animate-fadeIn">
+          <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 md:p-8 max-w-md w-full shadow-2xl rounded-xl">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-[#ffd700]">Edit Member Details</h3>
+              <button 
+                onClick={() => setEditingMember(null)}
+                className="text-gray-400 hover:text-white transition-colors text-lg"
+                aria-label="Close edit member modal"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-gray-300 text-sm mb-1">Full Name</label>
+                <Input
+                  value={editMemberName}
+                  onChange={(e) => setEditMemberName(e.target.value)}
+                  className="bg-[#001a16] border-[#ffd700]/30 text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-300 text-sm mb-1">Phone Number</label>
+                <Input
+                  value={editMemberPhone}
+                  onChange={(e) => setEditMemberPhone(e.target.value)}
+                  className="bg-[#001a16] border-[#ffd700]/30 text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-300 text-sm mb-1">CMO Family Division</label>
+                <select
+                  value={editMemberFamily}
+                  onChange={(e) => setEditMemberFamily(e.target.value as Family)}
+                  className="w-full bg-[#001a16] border border-[#ffd700]/30 text-white p-2 rounded focus:outline-none focus:border-[#ffd700] h-10 cursor-pointer"
+                >
+                  <option value="">No assigned family</option>
+                  <option value="Wisdom">Wisdom Family</option>
+                  <option value="Honour">Honour Family</option>
+                  <option value="Integrity">Integrity Family</option>
+                  <option value="Talent">Talent Family</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-gray-300 text-sm mb-1">Account Status</label>
+                <select
+                  value={editMemberStatus}
+                  onChange={(e) => setEditMemberStatus(e.target.value as MemberStatus)}
+                  className="w-full bg-[#001a16] border border-[#ffd700]/30 text-white p-2 rounded focus:outline-none focus:border-[#ffd700] h-10 cursor-pointer"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                  <option value="Deceased">Deceased</option>
+                  <option value="Pending">Pending</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-8">
+              <Button 
+                onClick={() => setEditingMember(null)}
+                variant="outline"
+                className="flex-1 border-[#ffd700]/40 text-gray-300 hover:bg-[#ffd700]/10 hover:text-white"
+                disabled={adminEditLoading}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleEditMemberSave}
+                className="flex-1 bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold"
+                disabled={adminEditLoading}
+              >
+                {adminEditLoading ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

@@ -20,10 +20,25 @@ export const TreasurerDashboard = () => {
   const [incomePurpose, setIncomePurpose] = useState('');
   const [incomeDate, setIncomeDate] = useState(new Date().toISOString().split('T')[0]);
 
-  const { welfareTickets, setWelfareTickets, expenses, setExpenses, transactions, setTransactions, members, setMembers, currentUser, setCurrentUser, setSuccess, setError } = useApp();
+  const {
+    welfareTickets,
+    setWelfareTickets,
+    expenses,
+    setExpenses,
+    transactions,
+    setTransactions,
+    members,
+    setMembers,
+    currentUser,
+    setCurrentUser,
+    setSuccess,
+    setError,
+    totalIncome,
+    totalExpenses,
+    refreshDatabase
+  } = useApp();
 
   const awaitingDisbursement = welfareTickets.filter(t => t.status === 'Approved');
-  const totalSessionCash = calculateTotal(transactions);
 
   const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
     if (!currentUser) return;
@@ -39,10 +54,9 @@ export const TreasurerDashboard = () => {
     setSuccess('Profile picture updated successfully!');
     setTimeout(() => setSuccess(''), 3000);
   };
-  const totalExpenses = calculateTotal(expenses);
   const combinedTransactions = getCombinedTransactions(transactions, expenses);
 
-  const handleIncomeRecord = () => {
+  const handleIncomeRecord = async () => {
     setError('');
     if (!incomeAmount || !incomePurpose || !incomeDate) {
       setError('Please fill all income fields');
@@ -50,24 +64,42 @@ export const TreasurerDashboard = () => {
     }
 
     const amount = parseFloat(incomeAmount);
-    if (isNaN(amount)) {
+    if (isNaN(amount) || amount <= 0) {
       setError('Invalid income amount');
       return;
     }
 
-    const transaction = {
-      memberId: 'GENERAL',
-      amount,
-      purpose: incomePurpose,
-      timestamp: new Date(incomeDate).toISOString()
-    };
+    try {
+      const { error: txErr } = await supabase
+        .from('transactions')
+        .insert([{
+          official_member_id: 'GENERAL-INCOME',
+          member_name: 'CMO General Account',
+          amount: amount,
+          purpose: incomePurpose,
+          transaction_type: 'income',
+          timestamp: new Date(incomeDate).toISOString(),
+          status: 'Approved'
+        }]);
 
-    setTransactions([...transactions, transaction]);
-    setSuccess(`Income recorded: ${formatCurrency(amount)}`);
-    setIncomeAmount('');
-    setIncomePurpose('');
-    setIncomeDate(new Date().toISOString().split('T')[0]);
-    setTimeout(() => setSuccess(''), 3000);
+      if (txErr) {
+        console.error("Income Insert Error:", txErr);
+        setError(`Database Error: ${txErr.message}`);
+        return;
+      }
+
+      setSuccess(`Income recorded: ${formatCurrency(amount)}`);
+      setIncomeAmount('');
+      setIncomePurpose('');
+      setIncomeDate(new Date().toISOString().split('T')[0]);
+      setTimeout(() => setSuccess(''), 3000);
+
+      // Refresh to synchronize totals across all dashboards
+      await refreshDatabase();
+    } catch (err: any) {
+      console.error('Record income failed:', err);
+      setError(`Record Income failed: ${err.message}`);
+    }
   };
 
   const settleTicket = async (ticketId: string) => {
@@ -103,7 +135,8 @@ export const TreasurerDashboard = () => {
           amount: ticket.requestedAmount,
           purpose: `Disbursement ${ticket.ticketId} for ${ticket.memberName}`,
           transaction_type: 'expense',
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          status: 'Approved'
         }]);
 
       if (txErr) {
@@ -142,13 +175,16 @@ export const TreasurerDashboard = () => {
 
       setSuccess(`Ticket ${ticketId} settled and expense logged to ledger`);
       setTimeout(() => setSuccess(''), 3000);
+
+      // Refresh to synchronize totals across all dashboards
+      await refreshDatabase();
     } catch (err: any) {
       console.error("Settle ticket transaction failed:", err);
       setError(`Settle failed: ${err.message}`);
     }
   };
 
-  const handleExpenseRecord = () => {
+  const handleExpenseRecord = async () => {
     setError('');
     if (!expenseAmount || !expensePurpose || !expenseDate) {
       setError('Please fill all fields');
@@ -156,25 +192,64 @@ export const TreasurerDashboard = () => {
     }
 
     const amount = parseFloat(expenseAmount);
-    if (isNaN(amount)) {
+    if (isNaN(amount) || amount <= 0) {
       setError('Invalid amount');
       return;
     }
 
-    const expense = {
-      id: generateExpenseId(),
-      amount,
-      purpose: expensePurpose,
-      date: expenseDate,
-      recordedBy: currentUser?.name || 'Treasurer'
-    };
+    try {
+      // 1. Log the expense in the unified ledger transactions table in database
+      const { error: txErr } = await supabase
+        .from('transactions')
+        .insert([{
+          official_member_id: 'GENERAL-EXPENSE',
+          member_name: 'CMO Operational Expense',
+          amount: amount,
+          purpose: expensePurpose,
+          transaction_type: 'expense',
+          timestamp: new Date(expenseDate).toISOString(),
+          status: 'Approved'
+        }]);
 
-    setExpenses([...expenses, expense]);
-    setSuccess(`Expense recorded: ${formatCurrency(amount)}`);
-    setExpenseAmount('');
-    setExpensePurpose('');
-    setExpenseDate(new Date().toISOString().split('T')[0]);
-    setTimeout(() => setSuccess(''), 3000);
+      if (txErr) {
+        console.error("Failed to insert transaction in Supabase:", txErr);
+        setError(`Database Error: ${txErr.message}`);
+        return;
+      }
+
+      // 2. Add to local transactions state to synchronize the ledger instantly
+      const newTx = {
+        memberId: 'GENERAL-EXPENSE',
+        memberName: 'CMO Operational Expense',
+        amount: amount,
+        purpose: expensePurpose,
+        transactionType: 'expense',
+        timestamp: new Date(expenseDate).toISOString()
+      };
+      setTransactions([...transactions, newTx]);
+
+      // 3. Log the expense in the expenses table
+      const expense = {
+        id: generateExpenseId(),
+        amount,
+        purpose: expensePurpose,
+        date: expenseDate,
+        recordedBy: currentUser?.name || 'Treasurer'
+      };
+      setExpenses([...expenses, expense]);
+
+      setSuccess(`Expense recorded: ${formatCurrency(amount)}`);
+      setExpenseAmount('');
+      setExpensePurpose('');
+      setExpenseDate(new Date().toISOString().split('T')[0]);
+      setTimeout(() => setSuccess(''), 3000);
+
+      // Refresh to synchronize totals across all dashboards
+      await refreshDatabase();
+    } catch (err: any) {
+      console.error("Record expense failed:", err);
+      setError(`Record expense failed: ${err.message}`);
+    }
   };
 
   return (
@@ -201,7 +276,7 @@ export const TreasurerDashboard = () => {
         <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 hover:scale-105 transition-all">
           <TrendingUp className="w-8 h-8 text-green-500 mb-2" />
           <p className="text-gray-400 text-sm">Total Income</p>
-          <p className="text-xl md:text-2xl font-bold text-white">{formatCurrency(totalSessionCash)}</p>
+          <p className="text-xl md:text-2xl font-bold text-white">{formatCurrency(totalIncome)}</p>
         </Card>
         <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 hover:scale-105 transition-all">
           <Receipt className="w-8 h-8 text-red-500 mb-2" />
@@ -436,7 +511,7 @@ export const TreasurerDashboard = () => {
             <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-[#001a16] border border-green-500 p-4 rounded">
                 <p className="text-green-500 text-sm mb-1">Total Income</p>
-                <p className="text-white text-xl font-bold">{formatCurrency(totalSessionCash)}</p>
+                <p className="text-white text-xl font-bold">{formatCurrency(totalIncome)}</p>
               </div>
               <div className="bg-[#001a16] border border-red-500 p-4 rounded">
                 <p className="text-red-500 text-sm mb-1">Total Expenses</p>
@@ -444,7 +519,7 @@ export const TreasurerDashboard = () => {
               </div>
               <div className="bg-[#001a16] border border-[#ffd700] p-4 rounded">
                 <p className="text-[#ffd700] text-sm mb-1">Net Position</p>
-                <p className="text-white text-xl font-bold">{formatCurrency(totalSessionCash - totalExpenses)}</p>
+                <p className="text-white text-xl font-bold">{formatCurrency(totalIncome - totalExpenses)}</p>
               </div>
             </div>
           </Card>

@@ -1,11 +1,9 @@
 import { Card } from '../../app/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { Users, DollarSign, ClipboardCheck, Heart } from 'lucide-react';
+import { Users, DollarSign, ClipboardCheck } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 
 export const Home = () => {
-  const { welfareTickets } = useApp();
-  const activeTickets = welfareTickets.filter(t => t.status !== 'Settled & Cleared' && t.status !== 'Completed').slice(0, 5);
+  const { setCurrentPage } = useApp();
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
@@ -35,52 +33,61 @@ export const Home = () => {
         </div>
       </Card>
 
-      {/* Welfare Transparency Dashboard */}
-      <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 md:p-6">
-        <h3 className="text-xl md:text-2xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
-          <Heart className="w-6 h-6" />
-          Welfare Transparency Dashboard
+      {/* Premium Family Entry Portals */}
+      <div className="mb-6">
+        <h3 className="text-xl md:text-2xl font-bold text-[#ffd700] mb-6 flex items-center gap-2">
+          <Users className="w-6 h-6" />
+          CMO Family Units
         </h3>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-[#ffd700] hover:bg-[#001a16]">
-                <TableHead className="text-[#ffd700]">Ticket ID</TableHead>
-                <TableHead className="text-[#ffd700]">Member</TableHead>
-                <TableHead className="text-[#ffd700]">Category</TableHead>
-                <TableHead className="text-[#ffd700]">Amount</TableHead>
-                <TableHead className="text-[#ffd700]">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {activeTickets.map(ticket => (
-                <TableRow key={ticket.ticketId} className="border-[#ffd700]/30 hover:bg-[#001a16]">
-                  <TableCell className="text-white">{ticket.ticketId}</TableCell>
-                  <TableCell className="text-white">{ticket.memberName}</TableCell>
-                  <TableCell className="text-gray-400">{ticket.category}</TableCell>
-                  <TableCell className="text-[#ffd700] font-semibold">₦{ticket.requestedAmount.toLocaleString()}</TableCell>
-                  <TableCell>
-                    <span className={`text-xs px-2 py-1 rounded ${
-                      ticket.status === 'Awaiting Financial Audit' || ticket.status === 'Pending' ? 'bg-yellow-500/20 text-yellow-500' :
-                      ticket.status === 'Awaiting Disbursement' ? 'bg-blue-500/20 text-blue-500' :
-                      'bg-green-500/20 text-green-500'
-                    }`}>
-                      {ticket.status}
-                    </span>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {activeTickets.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-gray-400 py-8">
-                    No active welfare tickets
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-sans">
+          {(['Wisdom', 'Honour', 'Integrity', 'Talent'] as const).map((family) => {
+            const borderColors = {
+              Wisdom: 'border-blue-500/30 hover:border-blue-400 hover:shadow-blue-500/10',
+              Honour: 'border-yellow-500/30 hover:border-yellow-400 hover:shadow-yellow-500/10',
+              Integrity: 'border-green-500/30 hover:border-green-400 hover:shadow-green-500/10',
+              Talent: 'border-purple-500/30 hover:border-purple-400 hover:shadow-purple-500/10'
+            };
+            const textColors = {
+              Wisdom: 'text-blue-300',
+              Honour: 'text-yellow-300',
+              Integrity: 'text-green-300',
+              Talent: 'text-purple-300'
+            };
+            const bgGradients = {
+              Wisdom: 'bg-gradient-to-br from-[#002520] to-blue-950/20',
+              Honour: 'bg-gradient-to-br from-[#002520] to-yellow-950/20',
+              Integrity: 'bg-gradient-to-br from-[#002520] to-green-950/20',
+              Talent: 'bg-gradient-to-br from-[#002520] to-purple-950/20'
+            };
+            const descriptions = {
+              Wisdom: 'Focuses on stewardship, professional mentorship, and financial discipline across all family members.',
+              Honour: 'Builds community trust, sets standards of honor, and provides exemplary leadership in active service.',
+              Integrity: 'Champions clear financial accountability, full transparency, and strong family unit cohesion.',
+              Talent: 'Activates fellowship, coordinates event support, and drives creative planning within the organization.'
+            };
+            return (
+              <Card
+                key={family}
+                onClick={() => setCurrentPage(`family/${family.toLowerCase()}` as any)}
+                className={`${bgGradients[family]} border-2 ${borderColors[family]} p-6 cursor-pointer transform hover:-translate-y-1 transition-all duration-300 shadow-lg hover:shadow-xl rounded-xl`}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className={`text-xl font-bold ${textColors[family]}`}>{family} Family</h4>
+                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center border border-[#ffd700]/20 text-[#ffd700]">
+                    <span className="text-xs">➔</span>
+                  </div>
+                </div>
+                <p className="text-gray-300 text-sm leading-relaxed mb-4">
+                  {descriptions[family]}
+                </p>
+                <span className="text-xs font-semibold text-[#ffd700] hover:underline flex items-center gap-1">
+                  Enter Family Portal
+                </span>
+              </Card>
+            );
+          })}
         </div>
-      </Card>
+      </div>
     </div>
   );
 };

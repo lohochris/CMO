@@ -3,7 +3,7 @@ import type { WeddingStatus, Family } from '../../types';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
-import { CheckCircle, FileText, Settings, X } from 'lucide-react';
+import { CheckCircle, FileText, Settings, X, Users } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { formatCurrency, formatDateTime } from '../../utils/helpers';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
@@ -25,7 +25,7 @@ export const MemberDashboard = () => {
   const [editNumberOfChildren, setEditNumberOfChildren] = useState(currentUser?.numberOfChildren || 0);
   const [editWifeName, setEditWifeName] = useState(currentUser?.wifeName || '');
   const [editWifePhone, setEditWifePhone] = useState(currentUser?.wifePhone || '');
-  const [formCmoFamily, setFormCmoFamily] = useState<Family>(currentUser?.family || 'Wisdom');
+  const [formCmoFamily, setFormCmoFamily] = useState<Family | ''>(currentUser?.family || '');
 
   const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
     if (!currentUser) return;
@@ -56,7 +56,7 @@ export const MemberDashboard = () => {
       setEditNumberOfChildren(currentUser.numberOfChildren || 0);
       setEditWifeName(currentUser.wifeName || '');
       setEditWifePhone(currentUser.wifePhone || '');
-      setFormCmoFamily(currentUser.family || 'Wisdom');
+      setFormCmoFamily(currentUser.family || '');
       setIsSettingsOpen(true);
     }
   };
@@ -139,6 +139,11 @@ export const MemberDashboard = () => {
 
     if (!currentUser) return;
 
+    if (!formCmoFamily) {
+      setError('Please select your CMO Family Division');
+      return;
+    }
+
     setSettingsLoading(true);
     try {
       const updatePayload = {
@@ -157,10 +162,10 @@ export const MemberDashboard = () => {
         wifes_phone: editWifePhone,
         church_position: editPostHeld,
         post_held: editPostHeld,
-        cmo_family: formCmoFamily
+        cmo_family: formCmoFamily || null
       };
 
-      // A. Update the Active Profiles Table ('members')
+      // A. Update the Active Profiles Table ('members') in Supabase
       const { error: membersErr } = await supabase
         .from('members')
         .update(updatePayload)
@@ -168,16 +173,6 @@ export const MemberDashboard = () => {
 
       if (membersErr) {
         throw new Error(`Failed to update members table: ${membersErr.message}`);
-      }
-
-      // B. Update the Source of Record Table ('master_roster')
-      const { error: rosterErr } = await supabase
-        .from('master_roster')
-        .update(updatePayload)
-        .eq('official_member_id', currentUser.id);
-
-      if (rosterErr) {
-        throw new Error(`Failed to update master_roster table: ${rosterErr.message}`);
       }
 
       const updatedMembers = members.map(m =>
@@ -195,12 +190,12 @@ export const MemberDashboard = () => {
           numberOfChildren: editNumberOfChildren,
           wifeName: editWifeName,
           wifePhone: editWifePhone,
-          family: formCmoFamily
+          family: formCmoFamily || undefined
         } : m
       );
 
-      // setMembers updates AppContext state and triggers asynchronous sync for other profile metadata fields
-      await setMembers(updatedMembers);
+      // setMembers updates AppContext state
+      setMembers(updatedMembers);
 
       setCurrentUser({
         ...currentUser,
@@ -216,7 +211,7 @@ export const MemberDashboard = () => {
         numberOfChildren: editNumberOfChildren,
         wifeName: editWifeName,
         wifePhone: editWifePhone,
-        family: formCmoFamily
+        family: formCmoFamily || undefined
       });
 
       setSuccess('✓ Profile updated successfully across active profile and master roster!');
@@ -264,21 +259,20 @@ export const MemberDashboard = () => {
           memberName={currentUser.name}
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-          {(['Wisdom', 'Honour', 'Integrity', 'Talent'] as const).map((family) => {
-            const familyMembers = members.filter(m => m.family === family);
-            return (
-              <button
-                key={family}
-                type="button"
-                onClick={() => setCurrentPage('familyHub')}
-                className="bg-[#001a16] border border-[#ffd700] rounded p-4 text-left hover:bg-[#002520] transition-all"
-              >
-                <p className="text-gray-400 text-sm">{family} Family</p>
-                <p className="text-white text-xl font-semibold">{familyMembers.length} members</p>
-              </button>
-            );
-          })}
+        <div className="mb-6">
+          {currentUser.family ? (
+            <Button
+              onClick={() => setCurrentPage(`family/${currentUser.family?.toLowerCase()}` as any)}
+              className="w-full bg-gradient-to-r from-[#ffd700] to-[#ffd700]/80 text-[#001a16] font-bold py-3 px-6 rounded-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg"
+            >
+              <Users className="w-5 h-5" />
+              Enter My {currentUser.family} Family Portal
+            </Button>
+          ) : (
+            <div className="bg-[#001a16] border border-yellow-500/30 p-4 rounded text-center text-sm text-gray-300">
+              You do not have an assigned family yet. Please edit your Profile Settings below to join a family.
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
@@ -412,7 +406,7 @@ export const MemberDashboard = () => {
                   </div>
                 </div>
 
-                <div className="mt-4">
+                <div className="mt-4 font-sans">
                   <label htmlFor="edit-family" className="text-gray-300 text-sm block mb-2">
                     CMO Family Division *
                   </label>
@@ -421,14 +415,20 @@ export const MemberDashboard = () => {
                     title="Select Family"
                     value={formCmoFamily}
                     onChange={(e) => setFormCmoFamily(e.target.value as Family)}
-                    className="w-full bg-[#001a16] border border-[#ffd700] text-white p-2 rounded"
-                    disabled={settingsLoading}
+                    className="w-full bg-[#001a16] border border-[#ffd700] text-white p-2 rounded disabled:opacity-60 cursor-pointer"
+                    disabled={settingsLoading || Boolean(currentUser?.family)}
                   >
+                    {!currentUser?.family && <option value="">Select a family</option>}
                     <option value="Wisdom">Wisdom Family</option>
                     <option value="Honour">Honour Family</option>
                     <option value="Integrity">Integrity Family</option>
                     <option value="Talent">Talent Family</option>
                   </select>
+                  {Boolean(currentUser?.family) && (
+                    <p className="text-gray-400 text-xs mt-1">
+                      Family assigned. To change your group, please contact the Financial Secretary or Chairman.
+                    </p>
+                  )}
                 </div>
               </div>
 

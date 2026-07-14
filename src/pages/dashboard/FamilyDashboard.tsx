@@ -857,3 +857,118 @@ export const FamilyIntegrityChairmanDashboard = () => <FamilyDashboardBase mode=
 export const FamilyIntegritySecretaryDashboard = () => <FamilyDashboardBase mode="secretary" family="Integrity" />;
 export const FamilyTalentChairmanDashboard = () => <FamilyDashboardBase mode="chairman" family="Talent" />;
 export const FamilyTalentSecretaryDashboard = () => <FamilyDashboardBase mode="secretary" family="Talent" />;
+
+export const FamilyPortal = ({ family }: { family: Family }) => {
+  const { members, familyAnnouncements } = useApp();
+  
+  const familyMembers = members.filter(m => m.family === family);
+  const announcements = familyAnnouncements.filter(ann => ann.family === family);
+  
+  const badgeColors = {
+    Wisdom: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+    Honour: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
+    Integrity: 'text-green-400 bg-green-500/10 border-green-500/20',
+    Talent: 'text-purple-400 bg-purple-500/10 border-purple-500/20'
+  };
+
+  return (
+    <div className="p-4 md:p-8 max-w-6xl mx-auto font-sans">
+      {/* Premium Glassmorphic Welcome Card */}
+      <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 md:p-8 mb-8 relative overflow-hidden shadow-2xl rounded-xl">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-[#ffd700]/10 to-transparent rounded-full blur-3xl pointer-events-none"></div>
+        <div className="relative z-10">
+          <div className="flex items-center gap-3 mb-3">
+            <Trophy className={`w-8 h-8 ${family === 'Honour' ? 'text-yellow-300' : family === 'Wisdom' ? 'text-blue-300' : family === 'Integrity' ? 'text-green-300' : 'text-purple-300'}`} />
+            <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${badgeColors[family]}`}>
+              Official Subunit Portal
+            </span>
+          </div>
+          <h2 className="text-2xl md:text-4xl font-black text-white tracking-tight mb-2">
+            Welcome to the <span className="text-[#ffd700]">{family} Family</span> Portal
+          </h2>
+          <p className="text-gray-300 max-w-2xl text-sm md:text-base leading-relaxed">
+            Stewardship, accountability, and strong brotherhood. Engage with your family members, stay updated with announcements, and follow unit activities.
+          </p>
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Members Directory Card */}
+        <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 shadow-xl lg:col-span-2 rounded-xl">
+          <h3 className="text-xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
+            <Users className="w-5 h-5" />
+            Family Members Directory
+          </h3>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-[#ffd700]/30 hover:bg-[#001a16]">
+                  <TableHead className="text-[#ffd700]">Name</TableHead>
+                  <TableHead className="text-[#ffd700]">Member ID</TableHead>
+                  <TableHead className="text-[#ffd700]">Role</TableHead>
+                  <TableHead className="text-[#ffd700]">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {familyMembers.map((member) => (
+                  <TableRow key={member.id} className="border-[#ffd700]/10 hover:bg-[#001a16]/60 transition-colors">
+                    <TableCell className="text-white font-semibold py-4">{member.name}</TableCell>
+                    <TableCell className="text-gray-400 text-sm py-4">{member.id}</TableCell>
+                    <TableCell className="text-gray-300 text-sm py-4">
+                      {member.role === 'family_chairman' ? (
+                        <span className="text-yellow-400 font-bold">Chairman</span>
+                      ) : member.role === 'family_secretary' ? (
+                        <span className="text-yellow-400 font-bold">Secretary</span>
+                      ) : (
+                        <span>Member</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${
+                        member.status === 'Active' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                      }`}>
+                        {member.status}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {familyMembers.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-gray-400 py-8">
+                      No members registered in this family yet.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+
+        {/* Local Announcements Card */}
+        <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 shadow-xl rounded-xl">
+          <h3 className="text-xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
+            <Megaphone className="w-5 h-5" />
+            Family Announcements
+          </h3>
+          <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
+            {announcements.map((ann) => (
+              <div key={ann.id} className="bg-[#001a16] border border-[#ffd700]/30 hover:border-[#ffd700]/50 p-4 rounded-xl transition-all duration-200 shadow-md">
+                <h4 className="text-white font-bold mb-1 text-sm tracking-tight">{ann.title}</h4>
+                <p className="text-gray-300 text-xs leading-relaxed mb-3">{ann.content}</p>
+                <div className="flex justify-between items-center text-[10px] text-gray-400 border-t border-[#ffd700]/10 pt-2">
+                  <span className="font-medium">By: {ann.author}</span>
+                  <span>{formatDate(ann.timestamp)}</span>
+                </div>
+              </div>
+            ))}
+            {announcements.length === 0 && (
+              <div className="bg-[#001a16] border border-[#ffd700]/10 p-6 rounded-xl text-center">
+                <p className="text-gray-400 text-sm">No announcements for the {family} family yet.</p>
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+};

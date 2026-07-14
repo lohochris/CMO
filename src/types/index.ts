@@ -27,7 +27,11 @@ export type Page =
   | 'familyIntegrityChairman'
   | 'familyIntegritySecretary'
   | 'familyTalentChairman'
-  | 'familyTalentSecretary';
+  | 'familyTalentSecretary'
+  | 'family/wisdom'
+  | 'family/honour'
+  | 'family/integrity'
+  | 'family/talent';
 
 export interface Member {
   id: string;
