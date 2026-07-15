@@ -35,13 +35,11 @@ export default function FamilySecDashboard() {
   const [saveLoading, setSaveLoading] = useState(false);
 
   const rawFamily = currentUser?.cmo_family || currentUser?.family || '';
-  const cleanFamilyName = rawFamily.replace(' Family', '');
+  const cleanFamilyName = rawFamily.replace(/\s*Family\s*/gi, '').trim();
   const familyOptions = [cleanFamilyName, `${cleanFamilyName} Family`];
   
   // Dynamic header display cleanup
-  const familyDisplayName = rawFamily.toLowerCase().includes('family') 
-    ? rawFamily 
-    : `${rawFamily} Family`;
+  const familyDisplayName = `${cleanFamilyName} Family`;
 
   const fetchData = async () => {
     if (!rawFamily) return;

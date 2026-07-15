@@ -266,7 +266,7 @@ export const MemberDashboard = () => {
               className="w-full bg-gradient-to-r from-[#ffd700] to-[#ffd700]/80 text-[#001a16] font-bold py-3 px-6 rounded-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg"
             >
               <Users className="w-5 h-5" />
-              Enter My {currentUser.family} Family Portal
+              Enter My {currentUser.family?.replace(/\s*Family\s*/gi, '').trim()} Family Portal
             </Button>
           ) : (
             <div className="bg-[#001a16] border border-yellow-500/30 p-4 rounded text-center text-sm text-gray-300">

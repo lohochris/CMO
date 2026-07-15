@@ -1,6 +1,6 @@
 export type MemberStatus = 'Active' | 'Inactive' | 'Active (Cleared)' | 'Pending Validation' | 'Deceased' | 'Pending';
 export type Family = 'Wisdom' | 'Honour' | 'Integrity' | 'Talent';
-export type MemberRole = 'member' | 'fin_sec' | 'welfare' | 'treasurer' | 'gen_sec' | 'pro' | 'family_chairman' | 'family_head' | 'family_secretary' | 'chairman' | 'cmo_chairman';
+export type MemberRole = 'member' | 'fin_sec' | 'welfare' | 'treasurer' | 'gen_sec' | 'pro' | 'family_chairman' | 'family_head' | 'family_secretary' | 'chairman' | 'cmo_chairman' | 'provost' | 'liturgist';
 export type MaritalStatus = 'Married' | 'Divorced' | 'Widowed';
 export type WeddingStatus = 'Wedded' | 'Not Wedded';
 export type TicketStatus = 'Pending' | 'Approved' | 'Completed' | 'Declined' | 'Awaiting Financial Audit' | 'Awaiting Disbursement' | 'Settled & Cleared';
@@ -17,6 +17,8 @@ export type Page =
   | 'pro'
   | 'chairman'
   | 'fin_sec'
+  | 'provost'
+  | 'liturgist'
   | 'familyHub'
   | 'familyChairman'
   | 'familySecretary'

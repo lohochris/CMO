@@ -35,6 +35,8 @@ export const Login = () => {
       'TREAS-2026':     'TREASURER-2026',    // → treasurer role
       'SECRETARY-2026': 'SECRETARY-2026',    // → gen_sec role
       'PRO-2026':       'PRO-2026',          // → pro role
+      'PROVOST-2026':   'PROVOST-2026',      // → provost role
+      'LITURGIST-2026': 'LITURGIST-2026',    // → liturgist role
     };
     let resolvedId = EXEC_ALIAS_MAP[inputMemberId] ?? inputMemberId;
 
@@ -68,6 +70,8 @@ export const Login = () => {
       'TREASURER-2026':    { id: 'TREASURER-2026', name: 'FRANCIS IDIKU', full_name: 'FRANCIS IDIKU', official_member_id: 'TREASURER-2026', status: 'Active (Cleared)', balance: 0, role: 'treasurer', profilePic: null },
       'SECRETARY-2026':    { id: 'SECRETARY-2026', name: 'PETER ALLEH', full_name: 'PETER ALLEH', official_member_id: 'SECRETARY-2026', status: 'Active (Cleared)', balance: 0, role: 'gen_sec', profilePic: null },
       'PRO-2026':          { id: 'PRO-2026', name: 'RAPHAEL, GODWIN', full_name: 'RAPHAEL, GODWIN', official_member_id: 'PRO-2026', status: 'Active (Cleared)', balance: 0, role: 'pro', profilePic: null },
+      'PROVOST-2026':      { id: 'PROVOST-2026', name: 'PROVOST OFFICERS', full_name: 'PROVOST OFFICERS', official_member_id: 'PROVOST-2026', status: 'Active (Cleared)', balance: 0, role: 'provost', profilePic: null },
+      'LITURGIST-2026':    { id: 'LITURGIST-2026', name: 'LITURGICAL TEAM', full_name: 'LITURGICAL TEAM', official_member_id: 'LITURGIST-2026', status: 'Active (Cleared)', balance: 0, role: 'liturgist', profilePic: null },
     };
 
     setLoading(true);
@@ -221,6 +225,8 @@ export const Login = () => {
       else if (member.role === 'treasurer') setCurrentPage('treasurer');
       else if (member.role === 'gen_sec') setCurrentPage('secretary');
       else if (member.role === 'pro') setCurrentPage('pro');
+      else if (member.role === 'provost') setCurrentPage('provost');
+      else if (member.role === 'liturgist') setCurrentPage('liturgist');
       else if (member.role === 'cmo_chairman' || member.role === 'chairman') setCurrentPage('chairman');
       else if ((member.role === 'family_chairman' || member.role === 'family_head' || member.role === 'family_secretary') && member.family) {
         setCurrentPage('dashboard');

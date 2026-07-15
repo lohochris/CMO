@@ -271,28 +271,33 @@ export const ChairmanDashboard = () => {
       </div>
 
       {currentUser && (
-        <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-            <div className="flex flex-col items-center justify-center">
-              <h3 className="text-xl font-bold text-[#ffd700] mb-4">Official Seal & Profile</h3>
+        <Card className="bg-[#002520] border border-[#ffd700]/20 p-4 mb-6 rounded-xl shadow-lg">
+          <div className="flex flex-col md:flex-row items-center gap-6">
+            <div className="flex-shrink-0">
               <ProfilePictureUploader
                 currentImage={currentUser.profilePic}
                 onSave={handleProfilePictureSave}
                 memberName={currentUser.name}
+                size="sm"
               />
             </div>
-            <div className="md:col-span-2">
-              <h4 className="text-lg font-semibold text-white mb-3">Executive Summary</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="bg-[#001a16] border border-[#ffd700]/30 rounded p-4">
-                  <p className="text-gray-400 text-sm">Designation</p>
-                  <p className="text-[#ffd700] font-bold text-lg">{currentUser.name}</p>
-                  <p className="text-gray-400 text-xs">Holy Cross CMO Executive Chairman</p>
+            <div className="flex-grow w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-center">
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Name</p>
+                  <p className="text-white font-bold text-sm truncate">{currentUser.name}</p>
                 </div>
-                <div className="bg-[#001a16] border border-[#ffd700]/30 rounded p-4">
-                  <p className="text-gray-400 text-sm">Security Level</p>
-                  <p className="text-emerald-400 font-semibold text-lg">Level 1 (Highest Command)</p>
-                  <p className="text-gray-400 text-xs">Official Administrative ID: {currentUser.official_member_id || currentUser.id}</p>
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Designation</p>
+                  <p className="text-[#ffd700] font-bold text-sm">EXECUTIVE CHAIRMAN</p>
+                </div>
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Security Clearances</p>
+                  <p className="text-emerald-400 font-bold text-sm">Level 1 Admin</p>
+                </div>
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Total Registered</p>
+                  <p className="text-white font-bold text-sm">{members.length} Members</p>
                 </div>
               </div>
             </div>

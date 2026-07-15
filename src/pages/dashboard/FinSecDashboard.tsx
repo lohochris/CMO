@@ -952,18 +952,41 @@ export const FinSecDashboard = () => {
         <p className="text-gray-400">Financial Secretary Control Panel</p>
       </div>
 
-      {/* Profile Management */}
-      <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 md:p-6 mb-6 no-print">
-        <h3 className="text-xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
-          <Camera className="w-5 h-5" />
-          Profile Management
-        </h3>
-        <ProfilePictureUploader
-          currentImage={currentUser?.profilePic}
-          onSave={handleProfilePictureSave}
-          memberName={currentUser?.name || 'Member'}
-        />
-      </Card>
+      {/* Profile Management & Summary */}
+      {currentUser && (
+        <Card className="bg-[#002520] border border-[#ffd700]/20 p-4 mb-6 rounded-xl shadow-lg no-print">
+          <div className="flex flex-col md:flex-row items-center gap-6">
+            <div className="flex-shrink-0">
+              <ProfilePictureUploader
+                currentImage={currentUser.profilePic}
+                onSave={handleProfilePictureSave}
+                memberName={currentUser.name}
+                size="sm"
+              />
+            </div>
+            <div className="flex-grow w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-center">
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Name</p>
+                  <p className="text-white font-bold text-sm truncate">{currentUser.name}</p>
+                </div>
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Role</p>
+                  <p className="text-[#ffd700] font-bold text-sm">FINANCIAL SECRETARY</p>
+                </div>
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Total Members</p>
+                  <p className="text-white font-bold text-sm">{totalMembersCount} Registered</p>
+                </div>
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Pending Welfare</p>
+                  <p className="text-white font-bold text-sm">{pendingTickets.length} Tickets</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 no-print">

@@ -64,29 +64,33 @@ export const PRODashboard = () => {
       <h2 className="text-2xl md:text-3xl font-bold text-[#ffd700] mb-6">PRO Office Dashboard</h2>
 
       {currentUser && (
-        <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-            <div>
-              <h3 className="text-xl font-bold text-[#ffd700] mb-4">Profile Picture</h3>
+        <Card className="bg-[#002520] border border-[#ffd700]/20 p-4 mb-6 rounded-xl shadow-lg">
+          <div className="flex flex-col md:flex-row items-center gap-6">
+            <div className="flex-shrink-0">
               <ProfilePictureUploader
                 currentImage={currentUser.profilePic}
                 onSave={handleProfilePictureSave}
                 memberName={currentUser.name}
+                size="sm"
               />
             </div>
-            <div className="md:col-span-2">
-              <div className="space-y-3">
-                <div className="bg-[#001a16] border border-[#ffd700] rounded p-4">
-                  <p className="text-gray-400 text-sm">Name</p>
-                  <p className="text-white font-semibold">{currentUser.name}</p>
+            <div className="flex-grow w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-center">
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Name</p>
+                  <p className="text-white font-bold text-sm truncate">{currentUser.name}</p>
                 </div>
-                <div className="bg-[#001a16] border border-[#ffd700] rounded p-4">
-                  <p className="text-gray-400 text-sm">Role</p>
-                  <p className="text-[#ffd700] font-semibold">PRO Officer</p>
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Role</p>
+                  <p className="text-[#ffd700] font-bold text-sm">PRO OFFICER</p>
                 </div>
-                <div className="bg-[#001a16] border border-[#ffd700] rounded p-4">
-                  <p className="text-gray-400 text-sm">Member Count</p>
-                  <p className="text-white font-semibold">{members.length}</p>
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Total Members</p>
+                  <p className="text-white font-bold text-sm">{members.length}</p>
+                </div>
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Announcements</p>
+                  <p className="text-white font-bold text-sm">{announcements.length} Published</p>
                 </div>
               </div>
             </div>
