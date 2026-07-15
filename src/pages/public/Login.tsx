@@ -161,7 +161,7 @@ export const Login = () => {
         } else {
           // Force standard member role configuration, retaining family officers
           const rawRole = (member.role || '').toLowerCase();
-          if (rawRole !== 'family_chairman' && rawRole !== 'family_secretary') {
+          if (rawRole !== 'family_chairman' && rawRole !== 'family_head' && rawRole !== 'family_secretary') {
             member.role = 'member';
           }
         }
@@ -202,12 +202,8 @@ export const Login = () => {
           return;
         }
 
-        if (member.role === 'family_chairman') {
-          const page = `family${member.family}Chairman` as const;
-          setCurrentPage(page);
-        } else if (member.role === 'family_secretary') {
-          const page = `family${member.family}Secretary` as const;
-          setCurrentPage(page);
+        if (member.role === 'family_chairman' || member.role === 'family_head' || member.role === 'family_secretary') {
+          setCurrentPage('dashboard');
         } else {
           setCurrentPage('dashboard');
         }
@@ -226,12 +222,8 @@ export const Login = () => {
       else if (member.role === 'gen_sec') setCurrentPage('secretary');
       else if (member.role === 'pro') setCurrentPage('pro');
       else if (member.role === 'cmo_chairman' || member.role === 'chairman') setCurrentPage('chairman');
-      else if (member.role === 'family_chairman' && member.family) {
-        const page = `family${member.family}Chairman` as const;
-        setCurrentPage(page);
-      } else if (member.role === 'family_secretary' && member.family) {
-        const page = `family${member.family}Secretary` as const;
-        setCurrentPage(page);
+      else if ((member.role === 'family_chairman' || member.role === 'family_head' || member.role === 'family_secretary') && member.family) {
+        setCurrentPage('dashboard');
       } else {
         setCurrentPage('dashboard');
       }
