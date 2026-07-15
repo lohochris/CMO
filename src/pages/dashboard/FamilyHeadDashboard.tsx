@@ -24,13 +24,11 @@ export default function FamilyHeadDashboard() {
   const [submittingWelfare, setSubmittingWelfare] = useState(false);
 
   const rawFamily = currentUser?.cmo_family || currentUser?.family || '';
-  const cleanFamilyName = rawFamily.replace(' Family', '');
+  const cleanFamilyName = rawFamily.replace(/\s*Family\s*/gi, '').trim();
   const familyOptions = [cleanFamilyName, `${cleanFamilyName} Family`];
   
   // Dynamic header cleanup (ensures "Family" isn't duplicated)
-  const familyDisplayName = rawFamily.toLowerCase().includes('family') 
-    ? rawFamily 
-    : `${rawFamily} Family`;
+  const familyDisplayName = `${cleanFamilyName} Family`;
 
   const fetchData = async () => {
     if (!rawFamily) return;
@@ -366,6 +364,11 @@ export default function FamilyHeadDashboard() {
                           }`}>
                             {ticket.status}
                           </span>
+                          {ticket.status === 'Declined' && (
+                            <span className="text-red-500 text-xs italic mt-1 block">
+                              Reason: {ticket.decline_reason || ticket.declineReason || ticket.rejection_reason || ticket.reason || 'No reason provided'}
+                            </span>
+                          )}
                         </td>
                         <td className="py-4 px-4 text-gray-400 text-xs">
                           {new Date(ticket.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}

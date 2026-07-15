@@ -176,13 +176,37 @@ export const WelfareDashboard = () => {
       <h2 className="text-2xl md:text-3xl font-bold text-[#ffd700] mb-6">Welfare Department</h2>
 
       {currentUser && (
-        <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 mb-6">
-          <h3 className="text-xl font-bold text-[#ffd700] mb-4">Profile Picture</h3>
-          <ProfilePictureUploader
-            currentImage={currentUser.profilePic}
-            onSave={handleProfilePictureSave}
-            memberName={currentUser.name}
-          />
+        <Card className="bg-[#002520] border border-[#ffd700]/20 p-4 mb-6 rounded-xl shadow-lg">
+          <div className="flex flex-col md:flex-row items-center gap-6">
+            <div className="flex-shrink-0">
+              <ProfilePictureUploader
+                currentImage={currentUser.profilePic}
+                onSave={handleProfilePictureSave}
+                memberName={currentUser.name}
+                size="sm"
+              />
+            </div>
+            <div className="flex-grow w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-center">
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Name</p>
+                  <p className="text-white font-bold text-sm truncate">{currentUser.name}</p>
+                </div>
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Role</p>
+                  <p className="text-[#ffd700] font-bold text-sm">WELFARE OFFICER</p>
+                </div>
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Pending Tickets</p>
+                  <p className="text-white font-bold text-sm">{welfareTickets.filter(t => t.status === 'Pending').length} Tickets</p>
+                </div>
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Settled & Completed</p>
+                  <p className="text-white font-bold text-sm">{welfareTickets.filter(t => t.status === 'Settled & Cleared' || t.status === 'Completed').length} Tickets</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </Card>
       )}
 

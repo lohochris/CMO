@@ -377,11 +377,13 @@ const FamilyDashboardBase = ({ mode, family: dashboardFamily }: { mode: 'chairma
     );
   }
 
+  const cleanFamilyName = (family || '').replace(/\s*Family\s*/gi, '').trim();
+
   return (
     <div className="p-4 md:p-8">
       <div className="mb-6">
-        <h2 className="text-2xl md:text-3xl font-bold text-[#ffd700] mb-2">{family} Family {mode === 'chairman' ? 'Chairman' : 'Secretary'} Dashboard</h2>
-        <p className="text-gray-400">Manage subgroup finance, welfare, and communications for the {family} Family.</p>
+        <h2 className="text-2xl md:text-3xl font-bold text-[#ffd700] mb-2">{cleanFamilyName} Family {mode === 'chairman' ? 'Chairman' : 'Secretary'} Dashboard</h2>
+        <p className="text-gray-400">Manage subgroup finance, welfare, and communications for the {cleanFamilyName} Family.</p>
         <p className="text-gray-400 mt-1">{familyDescriptions[family]}</p>
         {/* Role tiles for quick actions */}
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
@@ -860,6 +862,7 @@ export const FamilyTalentSecretaryDashboard = () => <FamilyDashboardBase mode="s
 
 export const FamilyPortal = ({ family }: { family: Family }) => {
   const { members, familyAnnouncements } = useApp();
+  const cleanFamilyName = (family || '').replace(/\s*Family\s*/gi, '').trim();
   
   const familyMembers = members.filter(m => m.family === family);
   const announcements = familyAnnouncements.filter(ann => ann.family === family);
@@ -884,7 +887,7 @@ export const FamilyPortal = ({ family }: { family: Family }) => {
             </span>
           </div>
           <h2 className="text-2xl md:text-4xl font-black text-white tracking-tight mb-2">
-            Welcome to the <span className="text-[#ffd700]">{family} Family</span> Portal
+            Welcome to the <span className="text-[#ffd700]">{cleanFamilyName} Family</span> Portal
           </h2>
           <p className="text-gray-300 max-w-2xl text-sm md:text-base leading-relaxed">
             Stewardship, accountability, and strong brotherhood. Engage with your family members, stay updated with announcements, and follow unit activities.
@@ -963,7 +966,7 @@ export const FamilyPortal = ({ family }: { family: Family }) => {
             ))}
             {announcements.length === 0 && (
               <div className="bg-[#001a16] border border-[#ffd700]/10 p-6 rounded-xl text-center">
-                <p className="text-gray-400 text-sm">No announcements for the {family} family yet.</p>
+                <p className="text-gray-400 text-sm">No announcements for the {cleanFamilyName} family yet.</p>
               </div>
             )}
           </div>

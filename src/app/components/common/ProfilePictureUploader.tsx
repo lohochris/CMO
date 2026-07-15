@@ -7,9 +7,10 @@ interface ProfilePictureUploaderProps {
   currentImage: string | null | undefined;
   onSave: (imageDataUrl: string, imageFile: Blob) => void;
   memberName: string;
+  size?: 'sm' | 'md';
 }
 
-export const ProfilePictureUploader = ({ currentImage, onSave, memberName }: ProfilePictureUploaderProps) => {
+export const ProfilePictureUploader = ({ currentImage, onSave, memberName, size = 'md' }: ProfilePictureUploaderProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -166,12 +167,12 @@ export const ProfilePictureUploader = ({ currentImage, onSave, memberName }: Pro
   return (
     <>
       {/* Profile Picture Display */}
-      <div className="flex flex-col items-center gap-4 mb-6">
+      <div className={`flex flex-col items-center text-center ${size === 'sm' ? 'gap-1 mb-2' : 'gap-4 mb-6'}`}>
         <div className="relative group">
           <img
             src={currentImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(memberName)}&background=ffd700&color=001a16&size=200`}
             alt={memberName}
-            className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-[#ffd700] object-cover"
+            className={`${size === 'sm' ? 'w-20 h-20 md:w-24 md:h-24' : 'w-32 h-32 md:w-40 md:h-40'} rounded-full border-4 border-[#ffd700] object-cover`}
           />
           <button
             type="button"
@@ -180,10 +181,10 @@ export const ProfilePictureUploader = ({ currentImage, onSave, memberName }: Pro
             aria-label="Edit profile picture"
             className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
           >
-            <Camera className="w-8 h-8 text-[#ffd700]" />
+            <Camera className="w-6 h-6 text-[#ffd700]" />
           </button>
         </div>
-        <p className="text-gray-300 text-sm text-center">Click photo to change</p>
+        <p className="text-gray-400 text-xs">Click photo to change</p>
       </div>
 
       {/* Modal */}
