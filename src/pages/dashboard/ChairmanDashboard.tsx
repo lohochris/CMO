@@ -107,7 +107,7 @@ export const ChairmanDashboard = () => {
   const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
     if (!currentUser) return;
 
-    const storageUrl = await uploadProfilePicture(currentUser.id, imageFile);
+    const storageUrl = await uploadProfilePicture(currentUser.id, imageFile, imageDataUrl);
     const finalImageUrl = storageUrl || imageDataUrl;
 
     const updatedMembers = members.map(m =>
@@ -663,7 +663,7 @@ export const ChairmanDashboard = () => {
                 />
               </div>
               <div>
-                <label className="block text-gray-300 text-sm mb-1">CMO Family Division</label>
+                <label className="block text-gray-300 text-sm mb-1">CMO Family</label>
                 <select
                   value={editMemberFamily}
                   onChange={(e) => setEditMemberFamily(e.target.value as Family)}

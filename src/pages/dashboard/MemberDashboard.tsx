@@ -30,7 +30,7 @@ export const MemberDashboard = () => {
   const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
     if (!currentUser) return;
 
-    const storageUrl = await uploadProfilePicture(currentUser.id, imageFile);
+    const storageUrl = await uploadProfilePicture(currentUser.id, imageFile, imageDataUrl);
     const finalImageUrl = storageUrl || imageDataUrl;
 
     const updatedMembers = members.map(m =>
@@ -140,7 +140,7 @@ export const MemberDashboard = () => {
     if (!currentUser) return;
 
     if (!formCmoFamily) {
-      setError('Please select your CMO Family Division');
+      setError('Please select your CMO Family');
       return;
     }
 
@@ -228,7 +228,7 @@ export const MemberDashboard = () => {
   if (!currentUser) return null;
 
   const userTransactions = transactions.filter(t => t.memberId === currentUser.id);
-  const profileNeedsUpdate = !currentUser.phone || !currentUser.homeTownAddress || !currentUser.residentialAddress || !currentUser.weddingStatus || (currentUser.weddingStatus === 'Wedded' && !currentUser.maritalStatus);
+  const profileNeedsUpdate = !currentUser.full_name?.trim() || !currentUser.phone_number?.trim() || !currentUser.family;
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto">
@@ -408,7 +408,7 @@ export const MemberDashboard = () => {
 
                 <div className="mt-4 font-sans">
                   <label htmlFor="edit-family" className="text-gray-300 text-sm block mb-2">
-                    CMO Family Division *
+                    CMO Family *
                   </label>
                   <select
                     id="edit-family"

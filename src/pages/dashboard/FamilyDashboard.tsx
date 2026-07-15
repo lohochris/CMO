@@ -904,7 +904,7 @@ export const FamilyPortal = ({ family }: { family: Family }) => {
               <TableHeader>
                 <TableRow className="border-[#ffd700]/30 hover:bg-[#001a16]">
                   <TableHead className="text-[#ffd700]">Name</TableHead>
-                  <TableHead className="text-[#ffd700]">Member ID</TableHead>
+                  <TableHead className="text-[#ffd700]">Phone Number</TableHead>
                   <TableHead className="text-[#ffd700]">Role</TableHead>
                   <TableHead className="text-[#ffd700]">Status</TableHead>
                 </TableRow>
@@ -913,7 +913,7 @@ export const FamilyPortal = ({ family }: { family: Family }) => {
                 {familyMembers.map((member) => (
                   <TableRow key={member.id} className="border-[#ffd700]/10 hover:bg-[#001a16]/60 transition-colors">
                     <TableCell className="text-white font-semibold py-4">{member.name}</TableCell>
-                    <TableCell className="text-gray-400 text-sm py-4">{member.id}</TableCell>
+                    <TableCell className="text-gray-400 text-sm py-4">{member.phone_number || 'N/A'}</TableCell>
                     <TableCell className="text-gray-300 text-sm py-4">
                       {member.role === 'family_chairman' ? (
                         <span className="text-yellow-400 font-bold">Chairman</span>

@@ -51,10 +51,10 @@ const dbToMember = (m: any): Member => {
   else if (mappedStatus === 'Pending Validation') mappedStatus = 'Inactive';
 
   return {
-    id: m.official_member_id || m.id,
+    id: m.official_member || m.official_member_id || m.id,
     name: m.full_name || m.name,
     full_name: m.full_name || m.name,
-    official_member_id: m.official_member_id || undefined,
+    official_member_id: m.official_member || m.official_member_id || undefined,
     phone_number: m.phone_number || m.phone || undefined,
     status: mappedStatus as any,
     balance: Number(m.balance),
@@ -71,7 +71,7 @@ const dbToMember = (m: any): Member => {
     numberOfChildren: m.number_of_children !== null ? Number(m.number_of_children) : undefined,
     wifeName: m.wife_name || undefined,
     wifePhone: m.wife_phone || undefined,
-    profilePic: m.profile_picture_url || null,
+    profilePic: m.avatar_url || m.profile_picture_url || null,
     createdAt: m.created_at || m.createdAt || undefined,
     updatedAt: m.updated_at || m.updatedAt || undefined
   };
@@ -96,7 +96,7 @@ const memberToDb = (m: Member): any => ({
   number_of_children: m.numberOfChildren !== undefined ? m.numberOfChildren : null,
   wife_name: m.wifeName || null,
   wife_phone: m.wifePhone || null,
-  profile_picture_url: m.profilePic || null,
+  avatar_url: m.profilePic || null,
   created_at: m.createdAt || null,
   updated_at: m.updatedAt || null
 });
@@ -281,14 +281,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       // Fetch the global members list immediately to unblock the UI dropdown
-      const { data, error } = await supabase.from('members').select('*');
+      const { data } = await supabase.from('members').select('*');
       if (data) {
+        const sessionKey = localStorage.getItem('cmo_member_session') || localStorage.getItem('cmo_admin_id');
         const loadedMembers = data.map((m: any) => ({
           ...dbToMember(m),
           name: m.full_name || m.name,
           phone: m.phone_number || m.phone
         }));
         setMembersState(loadedMembers);
+
+        // Sync local current user state with latest database details on page refresh
+        if (sessionKey) {
+          const freshUser = loadedMembers.find((m: any) => m.id === sessionKey);
+          if (freshUser) {
+            setCurrentUser(freshUser);
+          }
+        }
 
         // Also fetch welfare tickets and map them with loadedMembers context
         try {

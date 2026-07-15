@@ -43,7 +43,7 @@ export const TreasurerDashboard = () => {
   const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
     if (!currentUser) return;
 
-    const storageUrl = await uploadProfilePicture(currentUser.id, imageFile);
+    const storageUrl = await uploadProfilePicture(currentUser.id, imageFile, imageDataUrl);
     const finalImageUrl = storageUrl || imageDataUrl;
 
     const updatedMembers = members.map(m =>

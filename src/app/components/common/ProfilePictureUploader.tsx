@@ -36,25 +36,10 @@ export const ProfilePictureUploader = ({ currentImage, onSave, memberName }: Pro
 
   // Start camera
   const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' }
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-        setIsCameraActive(true);
-        setVideoReady(false);
-        setPreviewImage(null);
-        setRotation(0);
-        videoRef.current.onloadedmetadata = () => {
-          setVideoReady(true);
-        };
-      }
-    } catch (err) {
-      console.error('Error accessing camera:', err);
-      alert('Unable to access camera. Please check permissions.');
-    }
+    setIsCameraActive(true);
+    setVideoReady(false);
+    setPreviewImage(null);
+    setRotation(0);
   };
 
   // Stop camera
@@ -64,7 +49,42 @@ export const ProfilePictureUploader = ({ currentImage, onSave, memberName }: Pro
       streamRef.current = null;
     }
     setIsCameraActive(false);
+    setVideoReady(false);
   };
+
+  // Bind camera stream when camera is active and video element mounts
+  useEffect(() => {
+    let activeStream: MediaStream | null = null;
+
+    const initCamera = async () => {
+      if (isCameraActive && videoRef.current) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user' }
+          });
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            streamRef.current = stream;
+            activeStream = stream;
+            videoRef.current.onloadedmetadata = () => {
+              setVideoReady(true);
+            };
+          }
+        } catch (err) {
+          alert('Unable to access camera. Please check permissions.');
+          setIsCameraActive(false);
+        }
+      }
+    };
+
+    initCamera();
+
+    return () => {
+      if (activeStream) {
+        activeStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [isCameraActive]);
 
   // Capture photo from camera
   const capturePhoto = () => {
@@ -87,9 +107,13 @@ export const ProfilePictureUploader = ({ currentImage, onSave, memberName }: Pro
         context.drawImage(video, 0, 0, width, height);
         context.restore();
 
-        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.95);
-        setPreviewImage(imageDataUrl);
-        stopCamera();
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const localUrl = URL.createObjectURL(blob);
+            setPreviewImage(localUrl);
+            stopCamera();
+          }
+        }, 'image/jpeg', 0.85);
       }
     }
   };
@@ -100,18 +124,6 @@ export const ProfilePictureUploader = ({ currentImage, onSave, memberName }: Pro
   };
 
   // Save and crop image
-  const saveBlobFromCanvas = (canvas: HTMLCanvasElement): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (blob) {
-          resolve(blob);
-        } else {
-          reject(new Error('Unable to create image blob'));
-        }
-      }, 'image/jpeg', 0.95);
-    });
-  };
-
   const saveImage = async () => {
     if (previewImage) {
       const img = new Image();
@@ -128,12 +140,15 @@ export const ProfilePictureUploader = ({ currentImage, onSave, memberName }: Pro
           const context = canvas.getContext('2d');
           if (context) {
             context.drawImage(img, x, y, size, size, 0, 0, 400, 400);
-            const croppedImageUrl = canvas.toDataURL('image/jpeg', 0.95);
-            const croppedBlob = await saveBlobFromCanvas(canvas);
-            onSave(croppedImageUrl, croppedBlob);
-            setIsOpen(false);
-            setPreviewImage(null);
-            setRotation(0);
+            canvas.toBlob((blob) => {
+              if (blob) {
+                const localUrl = URL.createObjectURL(blob);
+                onSave(localUrl, blob);
+                setIsOpen(false);
+                setPreviewImage(null);
+                setRotation(0);
+              }
+            }, 'image/jpeg', 0.85);
           }
         }
       };

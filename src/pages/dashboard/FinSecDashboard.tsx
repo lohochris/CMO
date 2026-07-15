@@ -9,6 +9,7 @@ import { useApp } from '../../contexts/AppContext';
 import { generateMemberId, generateExpenseId } from '../../utils/idGenerators';
 import { formatCurrency, formatDate, getCombinedTransactions, calculateTotal, isAdministrativeId } from '../../utils/helpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
+import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { supabase } from '../../lib/supabaseClient';
 import logoImage from '../../imports/CMO.png';
 import { Member, Family, MemberStatus } from '../../types';
@@ -904,13 +905,16 @@ export const FinSecDashboard = () => {
     reader.readAsText(csvFile);
   };
 
-  const handleProfilePictureSave = (imageDataUrl: string) => {
+  const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
     if (!currentUser) return;
+    const storageUrl = await uploadProfilePicture(currentUser.id, imageFile, imageDataUrl);
+    const finalImageUrl = storageUrl || imageDataUrl;
+
     const updatedMembers = members.map(m =>
-      m.id === currentUser.id ? { ...m, profilePic: imageDataUrl } : m
+      m.id === currentUser.id ? { ...m, profilePic: finalImageUrl } : m
     );
     setMembers(updatedMembers);
-    setCurrentUser({ ...currentUser, profilePic: imageDataUrl });
+    setCurrentUser({ ...currentUser, profilePic: finalImageUrl });
     setSuccess('Profile picture updated successfully!');
     setTimeout(() => setSuccess(''), 3000);
   };
@@ -2067,7 +2071,7 @@ export const FinSecDashboard = () => {
                 />
               </div>
               <div>
-                <label className="block text-gray-300 text-sm mb-1">CMO Family Division</label>
+                <label className="block text-gray-300 text-sm mb-1">CMO Family</label>
                 <select
                   value={editMemberFamily}
                   onChange={(e) => setEditMemberFamily(e.target.value as Family)}
