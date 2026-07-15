@@ -66,7 +66,7 @@ export const Register = () => {
         balance: 0,
         role: 'member',
         family: registerFamily,
-        profilePic: insertedData.profile_picture_url || null
+        profilePic: insertedData.avatar_url || insertedData.profile_picture_url || null
       };
 
       // Add to local state (non-blocking)

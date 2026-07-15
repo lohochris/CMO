@@ -97,7 +97,7 @@ export const Login = () => {
             phone: rosterUser.phone_number,
             phone_number: rosterUser.phone_number,
             email: rosterUser.email,
-            profilePic: rosterUser.profile_picture_url || null
+            profilePic: rosterUser.avatar_url || rosterUser.profile_picture_url || null
           };
           await setMembers([...members, newMember]);
           member = newMember;
@@ -126,7 +126,7 @@ export const Login = () => {
             phone: dbMember.phone_number || undefined,
             phone_number: dbMember.phone_number || undefined,
             email: dbMember.email || undefined,
-            profilePic: dbMember.profile_picture_url || null
+            profilePic: dbMember.avatar_url || dbMember.profile_picture_url || null
           };
         }
       }
