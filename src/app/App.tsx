@@ -16,6 +16,8 @@ import { TreasurerDashboard } from '../pages/dashboard/TreasurerDashboard';
 import { SecretaryDashboard } from '../pages/dashboard/SecretaryDashboard';
 import { PRODashboard } from '../pages/dashboard/PRODashboard';
 import { ChairmanDashboard } from '../pages/dashboard/ChairmanDashboard';
+import FamilyHeadDashboard from '../pages/dashboard/FamilyHeadDashboard';
+import FamilySecDashboard from '../pages/dashboard/FamilySecDashboard';
 import { Megaphone, ShieldCheck } from 'lucide-react';
 import { Card } from './components/ui/card';
 import { Button } from './components/ui/button';
@@ -243,8 +245,11 @@ function AppContent() {
       }
       if (userRole === 'pro')              return <PRODashboard />;
       if (userRole === 'gen_sec' || userRole === 'secretary') return <SecretaryDashboard />;
-      if (userRole === 'family_chairman' || userRole === 'family_secretary') {
-        return familyLandingPage() || <FamilyHub />;
+      if (userRole === 'family_chairman' || userRole === 'family_head') {
+        return <FamilyHeadDashboard />;
+      }
+      if (userRole === 'family_secretary') {
+        return <FamilySecDashboard />;
       }
 
       // Fallback for standard organization members

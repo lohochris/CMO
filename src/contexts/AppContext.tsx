@@ -60,6 +60,7 @@ const dbToMember = (m: any): Member => {
     balance: Number(m.balance),
     role: m.role as any,
     family: m.cmo_family || m.family as any,
+    cmo_family: m.cmo_family || m.family || undefined,
     phone: m.phone_number || m.phone || undefined,
     email: m.email || undefined,
     homeTownAddress: m.home_town_address || undefined,

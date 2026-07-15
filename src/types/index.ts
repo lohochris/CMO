@@ -1,6 +1,6 @@
 export type MemberStatus = 'Active' | 'Inactive' | 'Active (Cleared)' | 'Pending Validation' | 'Deceased' | 'Pending';
 export type Family = 'Wisdom' | 'Honour' | 'Integrity' | 'Talent';
-export type MemberRole = 'member' | 'fin_sec' | 'welfare' | 'treasurer' | 'gen_sec' | 'pro' | 'family_chairman' | 'family_secretary' | 'chairman' | 'cmo_chairman';
+export type MemberRole = 'member' | 'fin_sec' | 'welfare' | 'treasurer' | 'gen_sec' | 'pro' | 'family_chairman' | 'family_head' | 'family_secretary' | 'chairman' | 'cmo_chairman';
 export type MaritalStatus = 'Married' | 'Divorced' | 'Widowed';
 export type WeddingStatus = 'Wedded' | 'Not Wedded';
 export type TicketStatus = 'Pending' | 'Approved' | 'Completed' | 'Declined' | 'Awaiting Financial Audit' | 'Awaiting Disbursement' | 'Settled & Cleared';
@@ -43,6 +43,7 @@ export interface Member {
   balance: number;
   role: MemberRole;
   family?: Family;
+  cmo_family?: string;
   phone?: string;
   profilePic?: string | null;
   email?: string;
