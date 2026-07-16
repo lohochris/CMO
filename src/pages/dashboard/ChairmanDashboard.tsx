@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { Users, CheckCircle, CheckCheck, AlertCircle, DollarSign, Megaphone, FileText, Shield, Heart, ShieldCheck } from 'lucide-react';
+import { Users, CheckCircle, CheckCheck, AlertCircle, DollarSign, Megaphone, FileText, Shield, Heart, ShieldCheck, BookOpen } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
@@ -32,6 +32,181 @@ export const ChairmanDashboard = () => {
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementContent, setAnnouncementContent] = useState('');
   const [registrySearch, setRegistrySearch] = useState('');
+
+  const [spiritualCalendar, setSpiritualCalendar] = useState<any[]>([]);
+  const [spiritualLoading, setSpiritualLoading] = useState(false);
+
+  const [lastFellowshipAttendance, setLastFellowshipAttendance] = useState<{
+    present: number;
+    absent: number;
+    date: string | null;
+    wisdomCount: number;
+    talentCount: number;
+    honourCount: number;
+    integrityCount: number;
+  }>({
+    present: 0,
+    absent: 0,
+    date: null,
+    wisdomCount: 0,
+    talentCount: 0,
+    honourCount: 0,
+    integrityCount: 0
+  });
+  const [fellowshipLoading, setFellowshipLoading] = useState(false);
+
+  const fetchLastFellowshipAttendance = async () => {
+    setFellowshipLoading(true);
+    try {
+      const { data: latestMeetings, error: meetErr } = await supabase
+        .from('fellowship_meetings')
+        .select('*')
+        .order('meeting_date', { ascending: false })
+        .limit(1);
+
+      if (meetErr) throw meetErr;
+
+      if (latestMeetings && latestMeetings.length > 0) {
+        const lastMeeting = latestMeetings[0];
+        const lastMeetingId = lastMeeting.id;
+        const lastMeetingDate = lastMeeting.meeting_date || lastMeeting.date;
+
+        const { data: attendanceData, error: attErr } = await supabase
+          .from('fellowship_attendance')
+          .select('*')
+          .eq('meeting_id', lastMeetingId);
+
+        if (attErr) throw attErr;
+
+        if (attendanceData) {
+          const present = attendanceData.filter(a => a.status === 'Present').length;
+          const absent = attendanceData.filter(a => a.status === 'Absent').length;
+          
+          let wisdomCount = 0;
+          let talentCount = 0;
+          let honourCount = 0;
+          let integrityCount = 0;
+
+          attendanceData.forEach(row => {
+            if (row.status === 'Present') {
+              const memberProfile = members.find(m => {
+                const masterId = m.official_member_id || m.id;
+                const rowId = row.official_member_id || row.member_id;
+                return masterId && rowId && masterId === rowId;
+              });
+
+              const mFamily = memberProfile
+                ? (memberProfile.family || memberProfile.cmo_family || '')
+                : (row.family || '');
+              
+              const famLower = mFamily.toLowerCase();
+              if (famLower.includes('wisdom')) wisdomCount++;
+              else if (famLower.includes('talent')) talentCount++;
+              else if (famLower.includes('honour')) honourCount++;
+              else if (famLower.includes('integrity')) integrityCount++;
+            }
+          });
+
+          setLastFellowshipAttendance({
+            present,
+            absent,
+            date: lastMeetingDate,
+            wisdomCount,
+            talentCount,
+            honourCount,
+            integrityCount
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching last fellowship attendance:', err);
+    } finally {
+      setFellowshipLoading(false);
+    }
+  };
+
+  const fetchSpiritualCalendar = async () => {
+    setSpiritualLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('liturgical_assignments')
+        .select('*')
+        .order('activity_date', { ascending: true });
+      if (error) throw error;
+      setSpiritualCalendar(data || []);
+    } catch (err) {
+      console.error("Error fetching spiritual calendar:", err);
+    } finally {
+      setSpiritualLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSpiritualCalendar();
+    
+    // Subscribe to real-time updates
+    const channel = supabase
+      .channel('chairman-spiritual-calendar')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'liturgical_assignments' },
+        () => {
+          fetchSpiritualCalendar();
+        }
+      )
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  useEffect(() => {
+    fetchLastFellowshipAttendance();
+    
+    const channel = supabase
+      .channel('chairman-fellowship-channel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'fellowship_meetings' },
+        () => {
+          fetchLastFellowshipAttendance();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'fellowship_attendance' },
+        () => {
+          fetchLastFellowshipAttendance();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const getStatusBadge = (status: string) => {
+    const statusVal = status || 'Assigned';
+    if (statusVal === 'Completed') {
+      return (
+        <span className="bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded text-xs font-semibold">
+          Completed
+        </span>
+      );
+    }
+    if (statusVal === 'Pending') {
+      return (
+        <span className="bg-orange-950/60 text-orange-400 border border-orange-500/30 px-2.5 py-0.5 rounded text-xs font-semibold">
+          Pending
+        </span>
+      );
+    }
+    return (
+      <span className="bg-blue-950/60 text-[#ffd700] border border-blue-500/30 px-2.5 py-0.5 rounded text-xs font-semibold">
+        Assigned
+      </span>
+    );
+  };
 
   // Member editing states
   const [editingMember, setEditingMember] = useState<Member | null>(null);
@@ -355,9 +530,56 @@ export const ChairmanDashboard = () => {
           <TabsTrigger value="roster" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
             CMO Roster
           </TabsTrigger>
+          <TabsTrigger value="spiritual" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+            Spiritual Calendar
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
+          {/* Fellowship Attendance Macro Metric Widget */}
+          <Card className="bg-[#002520] border border-[#ffd700]/20 p-6 mb-6 rounded-xl shadow-lg relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-2 h-full bg-[#ffd700]" />
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-teal-500/10 rounded-lg text-teal-400 border border-teal-500/20">
+                  <BookOpen className="w-6 h-6 animate-pulse" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Overall Last Thursday Fellowship Attendance Rate</p>
+                  <h3 className="text-3xl font-extrabold text-white mt-1">
+                    {lastFellowshipAttendance.date ? (
+                      `${Math.round((lastFellowshipAttendance.present / (lastFellowshipAttendance.present + lastFellowshipAttendance.absent || 1)) * 100)}% Attendance`
+                    ) : (
+                      'N/A'
+                    )}
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {lastFellowshipAttendance.date 
+                      ? `${lastFellowshipAttendance.present} Members Present / ${lastFellowshipAttendance.absent} Absent on ${new Date(lastFellowshipAttendance.date).toLocaleDateString()}`
+                      : 'No attendance history fetched yet'}
+                  </p>
+                </div>
+              </div>
+
+              {lastFellowshipAttendance.date && (
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2 border-l border-[#ffd700]/20 pl-6 text-xs w-full md:w-auto">
+                  <div className="text-gray-300">
+                    <span className="text-[#ffd700] font-bold">Wisdom Family:</span> {lastFellowshipAttendance.wisdomCount} Present
+                  </div>
+                  <div className="text-gray-300">
+                    <span className="text-[#ffd700] font-bold">Talent Family:</span> {lastFellowshipAttendance.talentCount} Present
+                  </div>
+                  <div className="text-gray-300">
+                    <span className="text-[#ffd700] font-bold">Honour Family:</span> {lastFellowshipAttendance.honourCount} Present
+                  </div>
+                  <div className="text-gray-300">
+                    <span className="text-[#ffd700] font-bold">Integrity Family:</span> {lastFellowshipAttendance.integrityCount} Present
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="bg-[#002520] border border-[#ffd700]/20 p-6">
               <h3 className="text-xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
@@ -630,6 +852,65 @@ export const ChairmanDashboard = () => {
                   )}
                 </TableBody>
               </Table>
+            </div>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="spiritual">
+          <Card className="bg-[#002520] border border-[#ffd700]/20 p-6">
+            <h3 className="text-xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
+              <BookOpen className="w-5 h-5" />
+              Liturgical Office Spiritual Assignments
+            </h3>
+            <p className="text-gray-300 text-sm mb-6">
+              This read-only calendar lists all active spiritual assignments generated by the Liturgist Office.
+            </p>
+            <div className="bg-[#001a16] border border-[#ffd700]/10 rounded p-4">
+              {spiritualLoading ? (
+                <p className="text-gray-400 text-center py-4 font-semibold animate-pulse">Loading spiritual assignments...</p>
+              ) : spiritualCalendar.length === 0 ? (
+                <p className="text-gray-400 text-center py-4">No active assignments found.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b border-[#ffd700]/25 hover:bg-[#001a16]/50">
+                        <TableHead className="text-[#ffd700]">Activity Date</TableHead>
+                        <TableHead className="text-[#ffd700]">Activity Name</TableHead>
+                        <TableHead className="text-[#ffd700]">Duty Role</TableHead>
+                        <TableHead className="text-[#ffd700]">Assignee</TableHead>
+                        <TableHead className="text-[#ffd700]">Status</TableHead>
+                        <TableHead className="text-[#ffd700]">Notes</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {spiritualCalendar.map((assignment) => {
+                        const dateStr = new Date(assignment.activity_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                        const assignee = assignment.assigned_family 
+                          ? `${assignment.assigned_family} Family` 
+                          : members.find(m => m.official_member_id === assignment.assigned_member_id || m.id === assignment.assigned_member_id)?.name || assignment.assigned_member_id;
+
+                        return (
+                          <TableRow key={assignment.id} className="border-b border-[#ffd700]/10 hover:bg-[#001a16]/50">
+                            <TableCell className="text-white text-xs font-mono">{dateStr}</TableCell>
+                            <TableCell className="text-white font-bold text-xs uppercase">{assignment.activity_name}</TableCell>
+                            <TableCell className="text-white text-xs">
+                              <span className="bg-[#ffd700]/15 text-[#ffd700] border border-[#ffd700]/25 px-2 py-0.5 rounded text-xs font-semibold">
+                                {assignment.duty_role}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-white font-bold text-xs uppercase">{assignee}</TableCell>
+                            <TableCell className="text-white text-xs">
+                              {getStatusBadge(assignment.status)}
+                            </TableCell>
+                            <TableCell className="text-gray-300 text-xs italic font-mono">{assignment.notes || 'N/A'}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </div>
           </Card>
         </TabsContent>
