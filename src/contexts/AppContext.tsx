@@ -501,6 +501,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
   }, [currentUser, members]);
 
+  // Real-time Supabase Postgres changes subscription to announcements
+  useEffect(() => {
+    const channel = supabase
+      .channel('announcements-real-time')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'announcements' },
+        (payload) => {
+          console.log('Real-time announcements payload received:', payload);
+          if (payload.eventType === 'INSERT') {
+            const newAnn = dbToAnnouncement(payload.new);
+            setAnnouncementsState(prev => {
+              if (prev.some(a => a.id === newAnn.id)) return prev;
+              return [newAnn, ...prev];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedAnn = dbToAnnouncement(payload.new);
+            setAnnouncementsState(prev => prev.map(a => a.id === updatedAnn.id ? updatedAnn : a));
+          } else if (payload.eventType === 'DELETE') {
+            const annId = payload.old.id;
+            setAnnouncementsState(prev => prev.filter(a => a.id !== annId));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   // Intercepting State Setters to sync to Supabase asynchronously
   const setMembers = async (newMembers: Member[] | ((prev: Member[]) => Member[])) => {
     const next = typeof newMembers === 'function' ? newMembers(members) : newMembers;

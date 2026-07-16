@@ -5,16 +5,232 @@ import { Member } from '../../types';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { toast } from 'sonner';
-import { Users, CalendarCheck, HeartPulse, Send, MessageSquare, Shield, PhoneCall, HeartHandshake, ClipboardList } from 'lucide-react';
+import { Users, CalendarCheck, HeartPulse, Send, MessageSquare, Shield, PhoneCall, HeartHandshake, ClipboardList, BookOpen } from 'lucide-react';
+import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
+import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 
 export default function FamilyHeadDashboard() {
-  const { currentUser } = useApp();
+  const { currentUser, members, setMembers, setCurrentUser } = useApp();
+  const rawFamily = currentUser?.cmo_family || currentUser?.family || '';
+  const cleanFamilyName = rawFamily.replace(/\s*Family\s*/gi, '').trim();
+  const familyOptions = [cleanFamilyName, `${cleanFamilyName} Family`];
+  const familyDisplayName = `${cleanFamilyName} Family`;
+
   const [familyMembers, setFamilyMembers] = useState<Member[]>([]);
   const [meetings, setMeetings] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<any[]>([]);
   const [welfareTickets, setWelfareTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Avatar upload hook
+  const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
+    if (!currentUser) return;
+    try {
+      const storageUrl = await uploadProfilePicture(currentUser.id, imageFile, imageDataUrl);
+      const finalImageUrl = storageUrl || imageDataUrl;
+
+      const updatedMembers = members.map(m =>
+        m.id === currentUser.id ? { ...m, profilePic: finalImageUrl } : m
+      );
+      setMembers(updatedMembers);
+      setCurrentUser({ ...currentUser, profilePic: finalImageUrl });
+      toast.success('✓ Profile picture updated successfully!');
+    } catch (err: any) {
+      console.error('Failed to upload avatar:', err);
+      toast.error('Failed to update profile picture.');
+    }
+  };
+
+  // Family Liturgical duties state & fetch
+  const [familyAssignments, setFamilyAssignments] = useState<any[]>([]);
+  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
+
+  const [lastFellowshipAttendance, setLastFellowshipAttendance] = useState<{
+    present: number;
+    absent: number;
+    date: string | null;
+    wisdomCount: number;
+    talentCount: number;
+    honourCount: number;
+    integrityCount: number;
+  }>({
+    present: 0,
+    absent: 0,
+    date: null,
+    wisdomCount: 0,
+    talentCount: 0,
+    honourCount: 0,
+    integrityCount: 0
+  });
+  const [fellowshipLoading, setFellowshipLoading] = useState(false);
+
+  const fetchLastFellowshipAttendance = async () => {
+    if (!cleanFamilyName) return;
+    setFellowshipLoading(true);
+    try {
+      const { data: latestMeetings, error: meetErr } = await supabase
+        .from('fellowship_meetings')
+        .select('*')
+        .order('meeting_date', { ascending: false })
+        .limit(1);
+
+      if (meetErr) throw meetErr;
+
+      if (latestMeetings && latestMeetings.length > 0) {
+        const lastMeeting = latestMeetings[0];
+        const lastMeetingId = lastMeeting.id;
+        const lastMeetingDate = lastMeeting.meeting_date || lastMeeting.date;
+
+        const { data: attendanceData, error: attErr } = await supabase
+          .from('fellowship_attendance')
+          .select('*')
+          .eq('meeting_id', lastMeetingId);
+
+        if (attErr) throw attErr;
+
+        if (attendanceData) {
+          let present = 0;
+          let absent = 0;
+          let wisdomCount = 0;
+          let talentCount = 0;
+          let honourCount = 0;
+          let integrityCount = 0;
+
+          attendanceData.forEach(row => {
+            const memberProfile = members.find(m => {
+              const masterId = m.official_member_id || m.id;
+              const rowId = row.official_member_id || row.member_id;
+              return masterId && rowId && masterId === rowId;
+            });
+
+            const mFamily = memberProfile
+              ? (memberProfile.family || memberProfile.cmo_family || '')
+              : (row.family || '');
+            
+            const isMyFamily = mFamily.toLowerCase().includes(cleanFamilyName.toLowerCase());
+
+            if (isMyFamily) {
+              if (row.status === 'Present') present++;
+              else if (row.status === 'Absent') absent++;
+            }
+
+            if (row.status === 'Present') {
+              const famLower = mFamily.toLowerCase();
+              if (famLower.includes('wisdom')) wisdomCount++;
+              else if (famLower.includes('talent')) talentCount++;
+              else if (famLower.includes('honour')) honourCount++;
+              else if (famLower.includes('integrity')) integrityCount++;
+            }
+          });
+
+          setLastFellowshipAttendance({
+            present,
+            absent,
+            date: lastMeetingDate,
+            wisdomCount,
+            talentCount,
+            honourCount,
+            integrityCount
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching last fellowship attendance:', err);
+    } finally {
+      setFellowshipLoading(false);
+    }
+  };
+
+  const fetchFamilyAssignments = async () => {
+    if (!cleanFamilyName) return;
+    setAssignmentsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('liturgical_assignments')
+        .select('*')
+        .eq('assigned_family', cleanFamilyName)
+        .order('activity_date', { ascending: true });
+      if (error) throw error;
+      setFamilyAssignments(data || []);
+    } catch (err) {
+      console.error("Error fetching family spiritual duties:", err);
+    } finally {
+      setAssignmentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchFamilyAssignments();
+    
+    // Subscribe to real-time changes
+    const channel = supabase
+      .channel(`family-head-spiritual-${cleanFamilyName}`)
+      .on(
+        'postgres_changes',
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'liturgical_assignments', 
+          filter: `assigned_family=eq.${cleanFamilyName}` 
+        },
+        () => {
+          fetchFamilyAssignments();
+        }
+      )
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [cleanFamilyName]);
+
+  useEffect(() => {
+    fetchLastFellowshipAttendance();
+    
+    const meetingsChannel = supabase
+      .channel(`family-head-meetings-${cleanFamilyName}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'fellowship_meetings' },
+        () => {
+          fetchLastFellowshipAttendance();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'fellowship_attendance' },
+        () => {
+          fetchLastFellowshipAttendance();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(meetingsChannel);
+    };
+  }, [cleanFamilyName]);
+
+  const getStatusBadge = (status: string) => {
+    const statusVal = status || 'Assigned';
+    if (statusVal === 'Completed') {
+      return (
+        <span className="bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded text-xs font-semibold">
+          Completed
+        </span>
+      );
+    }
+    if (statusVal === 'Pending') {
+      return (
+        <span className="bg-orange-950/60 text-orange-400 border border-orange-500/30 px-2.5 py-0.5 rounded text-xs font-semibold">
+          Pending
+        </span>
+      );
+    }
+    return (
+      <span className="bg-blue-950/60 text-[#ffd700] border border-blue-500/30 px-2.5 py-0.5 rounded text-xs font-semibold">
+        Assigned
+      </span>
+    );
+  };
 
   // Welfare Form States
   const [welfareMemberId, setWelfareMemberId] = useState('');
@@ -23,12 +239,7 @@ export default function FamilyHeadDashboard() {
   const [welfareReason, setWelfareReason] = useState('');
   const [submittingWelfare, setSubmittingWelfare] = useState(false);
 
-  const rawFamily = currentUser?.cmo_family || currentUser?.family || '';
-  const cleanFamilyName = rawFamily.replace(/\s*Family\s*/gi, '').trim();
-  const familyOptions = [cleanFamilyName, `${cleanFamilyName} Family`];
-  
-  // Dynamic header cleanup (ensures "Family" isn't duplicated)
-  const familyDisplayName = `${cleanFamilyName} Family`;
+
 
   const fetchData = async () => {
     if (!rawFamily) return;
@@ -231,8 +442,44 @@ export default function FamilyHeadDashboard() {
           </Button>
         </div>
 
+        {/* Compact Horizontal Profile Card (Sleek Horizontal Space-Saver) */}
+        {currentUser && (
+          <Card className="bg-[#002520] border border-[#ffd700]/20 p-4 mb-6 rounded-xl shadow-lg">
+            <div className="flex flex-col md:flex-row items-center gap-6">
+              <div className="flex-shrink-0">
+                <ProfilePictureUploader
+                  currentImage={currentUser.profilePic}
+                  onSave={handleProfilePictureSave}
+                  memberName={currentUser.name}
+                  size="sm"
+                />
+              </div>
+              <div className="flex-grow w-full">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-center">
+                  <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                    <p className="text-gray-400 text-xs uppercase tracking-wider">Name</p>
+                    <p className="text-white font-bold text-sm truncate">{currentUser.name}</p>
+                  </div>
+                  <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                    <p className="text-gray-400 text-xs uppercase tracking-wider">Designation</p>
+                    <p className="text-[#ffd700] font-bold text-sm">FAMILY HEAD</p>
+                  </div>
+                  <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                    <p className="text-gray-400 text-xs uppercase tracking-wider">Family Unit</p>
+                    <p className="text-white font-bold text-sm truncate">{familyDisplayName}</p>
+                  </div>
+                  <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                    <p className="text-gray-400 text-xs uppercase tracking-wider">Phone</p>
+                    <p className="text-white font-bold text-sm truncate">{currentUser.phone || 'Not provided'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Dashboard Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {/* Card 1: Total Members */}
           <Card className="bg-[#002520] border border-[#ffd700]/10 p-6 rounded-xl hover:scale-102 transition-transform duration-300">
             <div className="flex justify-between items-start">
@@ -276,7 +523,84 @@ export default function FamilyHeadDashboard() {
               </div>
             </div>
           </Card>
+
+          {/* Card 4: Thursday Fellowship Attendance Summary */}
+          <Card className="bg-[#002520] border border-[#ffd700]/10 p-6 rounded-xl hover:scale-102 transition-transform duration-300 col-span-1 sm:col-span-2 lg:col-span-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 w-full">
+              <div>
+                <p className="text-gray-400 text-sm font-semibold uppercase tracking-wider">Fellowship Attendance ({familyDisplayName})</p>
+                <h3 className="text-4xl font-extrabold text-[#ffd700] mt-2">
+                  {lastFellowshipAttendance.date ? (
+                    `${Math.round((lastFellowshipAttendance.present / (lastFellowshipAttendance.present + lastFellowshipAttendance.absent || 1)) * 100)}%`
+                  ) : (
+                    'N/A'
+                  )}
+                </h3>
+                <p className="text-xs text-gray-400 mt-2">
+                  {lastFellowshipAttendance.date 
+                    ? `Date: ${new Date(lastFellowshipAttendance.date).toLocaleDateString()} (${lastFellowshipAttendance.present} / ${lastFellowshipAttendance.present + lastFellowshipAttendance.absent} Present)`
+                    : 'No sessions recorded yet'}
+                </p>
+              </div>
+
+              {lastFellowshipAttendance.date && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 border-t md:border-t-0 md:border-l border-[#ffd700]/20 pt-4 md:pt-0 md:pl-6 text-xs w-full md:w-auto flex-grow justify-around">
+                  <div className="text-gray-300">
+                    <span className="text-[#ffd700] font-bold">Wisdom Family:</span> {lastFellowshipAttendance.wisdomCount} Present
+                  </div>
+                  <div className="text-gray-300">
+                    <span className="text-[#ffd700] font-bold">Talent Family:</span> {lastFellowshipAttendance.talentCount} Present
+                  </div>
+                  <div className="text-gray-300">
+                    <span className="text-[#ffd700] font-bold">Honour Family:</span> {lastFellowshipAttendance.honourCount} Present
+                  </div>
+                  <div className="text-gray-300">
+                    <span className="text-[#ffd700] font-bold">Integrity Family:</span> {lastFellowshipAttendance.integrityCount} Present
+                  </div>
+                </div>
+              )}
+
+              <div className="p-3 bg-teal-500/10 rounded-lg text-teal-400 border border-teal-500/20 self-start md:self-center">
+                <BookOpen className="w-6 h-6" />
+              </div>
+            </div>
+          </Card>
         </div>
+
+        {/* Family Liturgical Duties Schedule */}
+        <Card className="bg-[#002520] border border-[#ffd700]/25 p-6 rounded-xl mb-8 shadow-lg">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-4">
+            <BookOpen className="w-5 h-5 text-[#ffd700]" />
+            Family Liturgical Duties Schedule
+          </h2>
+          <div className="bg-[#001a16] border border-[#ffd700]/10 rounded p-4">
+            {assignmentsLoading ? (
+              <p className="text-gray-400 text-center py-4 font-semibold animate-pulse">Loading family duties...</p>
+            ) : familyAssignments.length === 0 ? (
+              <p className="text-gray-400 text-center py-4">No upcoming liturgical duties scheduled for the {familyDisplayName}.</p>
+            ) : (
+              <div className="space-y-3">
+                {familyAssignments.map((assignment) => (
+                  <div key={assignment.id} className="p-3 bg-[#002520]/60 rounded border border-[#ffd700]/15 flex flex-col md:flex-row md:items-center justify-between gap-2 hover:scale-[1.01] transition-transform">
+                    <div>
+                      <h4 className="text-white font-bold text-sm uppercase">{assignment.activity_name}</h4>
+                      <p className="text-gray-400 text-xs mt-0.5">
+                        Duty Role: <span className="text-[#ffd700] font-semibold">{assignment.duty_role}</span>
+                      </p>
+                      {assignment.notes && <p className="text-gray-400 text-xs italic mt-1 font-mono">Instruction: {assignment.notes}</p>}
+                    </div>
+                    <div className="text-right flex flex-col md:items-end gap-1.5">
+                      <span className="bg-[#ffd700]/15 text-[#ffd700] px-2.5 py-0.5 rounded text-xs font-mono font-bold">
+                        {new Date(assignment.activity_date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                      </span>
+                      {getStatusBadge(assignment.status)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
 
         {/* Welfare Alert Section */}
         {flaggedMembers.length > 0 && (

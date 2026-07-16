@@ -3,7 +3,7 @@ import type { WeddingStatus, Family } from '../../types';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
-import { CheckCircle, FileText, Settings, X, Users } from 'lucide-react';
+import { CheckCircle, FileText, Settings, X, Users, BookOpen, Sparkles } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { formatCurrency, formatDateTime } from '../../utils/helpers';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
@@ -70,9 +70,46 @@ export const MemberDashboard = () => {
 
   const [liveTransactions, setLiveTransactions] = useState<any[]>([]);
   const [txLoading, setTxLoading] = useState(false);
+  const [pastoralMessages, setPastoralMessages] = useState<any[]>([]);
+  const [pastoralLoading, setPastoralLoading] = useState(false);
+
+  const fetchPastoralMessages = async () => {
+    if (!currentUser) return;
+    setPastoralLoading(true);
+    try {
+      const memberId = currentUser.official_member_id || currentUser.id;
+      const { data, error } = await supabase
+        .from('pastoral_messages')
+        .select('*')
+        .eq('official_member_id', memberId)
+        .eq('is_read', false)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setPastoralMessages(data || []);
+    } catch (err) {
+      console.error('Error fetching pastoral messages:', err);
+    } finally {
+      setPastoralLoading(false);
+    }
+  };
+
+  const handleAcknowledgeMessage = async (msgId: string) => {
+    try {
+      const { error } = await supabase
+        .from('pastoral_messages')
+        .update({ is_read: true, read: true })
+        .eq('id', msgId);
+      if (error) throw error;
+      toast.success('Message acknowledged!');
+      fetchPastoralMessages();
+    } catch (err: any) {
+      console.error('Failed to acknowledge message:', err);
+    }
+  };
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser?.id) return;
 
     const fetchTransactions = async () => {
       setTxLoading(true);
@@ -115,6 +152,131 @@ export const MemberDashboard = () => {
       supabase.removeChannel(txChannel);
     };
   }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    fetchPastoralMessages();
+
+    const pastoralChannel = supabase
+      .channel(`member-pastoral-${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'pastoral_messages',
+          filter: `official_member_id=eq.${currentUser.official_member_id || currentUser.id}`
+        },
+        () => {
+          fetchPastoralMessages();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(pastoralChannel);
+    };
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    
+    const fellowshipChannel = supabase
+      .channel(`member-fellowship-${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'fellowship_meetings' },
+        () => {
+          fetchPastoralMessages();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'fellowship_attendance' },
+        () => {
+          fetchPastoralMessages();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(fellowshipChannel);
+    };
+  }, [currentUser?.id]);
+
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
+
+  const fetchSpiritualAssignments = async () => {
+    if (!currentUser) return;
+    setAssignmentsLoading(true);
+    try {
+      const userFamily = (currentUser.cmo_family || currentUser.family || '').replace(/\s*Family\s*/gi, '').trim();
+      const memberId = currentUser.official_member_id || currentUser.id;
+      
+      let query = supabase
+        .from('liturgical_assignments')
+        .select('*');
+      
+      if (userFamily) {
+        query = query.or(`assigned_member_id.eq.${memberId},assigned_family.eq.${userFamily}`);
+      } else {
+        query = query.eq('assigned_member_id', memberId);
+      }
+      
+      const { data, error } = await query.order('activity_date', { ascending: true });
+      if (error) throw error;
+      setAssignments(data || []);
+    } catch (err) {
+      console.error("Error fetching assignments:", err);
+    } finally {
+      setAssignmentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    fetchSpiritualAssignments();
+    
+    // Subscribe to changes on liturgical_assignments table to dynamic sync
+    const spiritualChannel = supabase
+      .channel(`member-spiritual-${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'liturgical_assignments' },
+        () => {
+          fetchSpiritualAssignments();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(spiritualChannel);
+    };
+  }, [currentUser?.id]);
+
+  const getStatusBadge = (status: string) => {
+    const statusVal = status || 'Assigned';
+    if (statusVal === 'Completed') {
+      return (
+        <span className="bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded text-xs font-semibold">
+          Completed
+        </span>
+      );
+    }
+    if (statusVal === 'Pending') {
+      return (
+        <span className="bg-orange-950/60 text-orange-400 border border-orange-500/30 px-2.5 py-0.5 rounded text-xs font-semibold">
+          Pending
+        </span>
+      );
+    }
+    return (
+      <span className="bg-blue-950/60 text-[#ffd700] border border-blue-500/30 px-2.5 py-0.5 rounded text-xs font-semibold">
+        Assigned
+      </span>
+    );
+  };
 
   const handleProfileUpdate = async () => {
     setError('');
@@ -252,12 +414,77 @@ export const MemberDashboard = () => {
           </button>
         </div>
 
-        {/* Profile Picture Uploader */}
-        <ProfilePictureUploader
-          currentImage={currentUser.profilePic}
-          onSave={handleProfilePictureSave}
-          memberName={currentUser.name}
-        />
+        {/* Pastoral Messages Card */}
+        {pastoralMessages.length > 0 && (
+          <Card className="bg-[#002520] border-2 border-[#ffd700] p-5 mb-6 rounded-xl shadow-lg relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-2 h-full bg-[#ffd700]" />
+            <div className="flex items-start gap-4 pl-2">
+              <div className="p-2.5 bg-[#ffd700]/10 rounded-lg text-[#ffd700] border border-[#ffd700]/25">
+                <Sparkles className="w-5 h-5 text-[#ffd700]" />
+              </div>
+              <div className="flex-grow">
+                <h4 className="text-sm font-extrabold text-[#ffd700] uppercase tracking-wider mb-2">Pastoral Office Message</h4>
+                <div className="space-y-4">
+                  {pastoralMessages.map((msg) => (
+                    <div key={msg.id} className="border-b border-[#ffd700]/10 pb-3 last:border-0 last:pb-0">
+                      <p className="text-white text-xs leading-relaxed italic">
+                        "{msg.message || msg.content}"
+                      </p>
+                      <div className="flex justify-between items-center mt-2.5">
+                        <span className="text-[10px] text-gray-400 font-mono">
+                          Received: {new Date(msg.created_at || msg.timestamp || new Date()).toLocaleDateString()}
+                        </span>
+                        <Button
+                          onClick={() => handleAcknowledgeMessage(msg.id)}
+                          className="bg-[#ffd700]/15 hover:bg-[#ffd700] hover:text-[#001a16] text-[#ffd700] text-[10px] font-bold px-3 py-1 h-auto"
+                        >
+                          Mark as Read
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Compact Horizontal Profile Card (Sleek Horizontal Space-Saver) */}
+        <Card className="bg-[#002520] border border-[#ffd700]/20 p-4 mb-6 rounded-xl shadow-lg">
+          <div className="flex flex-col md:flex-row items-center gap-6">
+            <div className="flex-shrink-0">
+              <ProfilePictureUploader
+                currentImage={currentUser.profilePic}
+                onSave={handleProfilePictureSave}
+                memberName={currentUser.name}
+                size="sm"
+              />
+            </div>
+            <div className="flex-grow w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-center">
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Name</p>
+                  <p className="text-white font-bold text-sm truncate">{currentUser.name}</p>
+                </div>
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Member ID</p>
+                  <p className="text-white font-bold text-sm truncate">{currentUser.id}</p>
+                </div>
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Status</p>
+                  <p className="text-green-500 font-bold text-sm flex items-center gap-1.5">
+                    <CheckCircle className="w-4 h-4" />
+                    {currentUser.status}
+                  </p>
+                </div>
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">Phone</p>
+                  <p className="text-white font-bold text-sm truncate">{currentUser.phone || 'Not provided'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
 
         <div className="mb-6">
           {currentUser.family ? (
@@ -273,24 +500,6 @@ export const MemberDashboard = () => {
               You do not have an assigned family yet. Please edit your Profile Settings below to join a family.
             </div>
           )}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-          <div className="bg-[#001a16] border border-[#ffd700] p-4 md:p-6 rounded hover:scale-105 transition-all">
-            <p className="text-gray-400 text-sm mb-1">Member ID</p>
-            <p className="text-white font-semibold text-lg">{currentUser.id}</p>
-          </div>
-          <div className="bg-[#001a16] border border-[#ffd700] p-4 md:p-6 rounded hover:scale-105 transition-all">
-            <p className="text-gray-400 text-sm mb-1">Status</p>
-            <p className="text-green-500 flex items-center gap-2">
-              <CheckCircle className="w-5 h-5" />
-              {currentUser.status}
-            </p>
-          </div>
-          <div className="bg-[#001a16] border border-[#ffd700] p-4 md:p-6 rounded hover:scale-105 transition-all">
-            <p className="text-gray-400 text-sm mb-1">Phone</p>
-            <p className="text-white">{currentUser.phone || 'Not provided'}</p>
-          </div>
         </div>
 
         <div className="mt-8">
@@ -332,6 +541,41 @@ export const MemberDashboard = () => {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Upcoming Spiritual Assignments Card */}
+        <div className="mt-8 border-t border-[#ffd700]/20 pt-6">
+          <h3 className="text-xl text-[#ffd700] mb-4 flex items-center gap-2">
+            <BookOpen className="w-5 h-5" />
+            Upcoming Spiritual Assignments
+          </h3>
+          <div className="bg-[#001a16] border border-[#ffd700] rounded p-4">
+            {assignmentsLoading ? (
+              <p className="text-gray-400 text-center py-4">Loading assignments...</p>
+            ) : assignments.length === 0 ? (
+              <p className="text-gray-400 text-center py-4">No upcoming spiritual assignments scheduled.</p>
+            ) : (
+              <div className="space-y-3">
+                {assignments.map((assignment) => (
+                  <div key={assignment.id} className="p-3 bg-[#002520]/60 rounded border border-[#ffd700]/25 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-white font-bold text-sm uppercase">{assignment.activity_name}</h4>
+                      <p className="text-gray-400 text-xs mt-0.5">
+                        Role: <span className="text-[#ffd700] font-semibold">{assignment.duty_role}</span>
+                      </p>
+                      {assignment.notes && <p className="text-gray-400 text-xs italic mt-1 font-mono">Instruction: {assignment.notes}</p>}
+                    </div>
+                    <div className="text-right flex flex-col md:items-end gap-1.5">
+                      <span className="bg-[#ffd700]/15 text-[#ffd700] px-2.5 py-0.5 rounded text-xs font-mono font-bold">
+                        {new Date(assignment.activity_date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                      </span>
+                      {getStatusBadge(assignment.status)}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
