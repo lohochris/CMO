@@ -4,7 +4,7 @@ import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { Users, CheckCircle, CheckCheck, AlertCircle, DollarSign, Megaphone, FileText, Shield, Heart, ShieldCheck, BookOpen } from 'lucide-react';
+import { Users, CheckCircle, CheckCheck, AlertCircle, DollarSign, Megaphone, FileText, Shield, Heart, ShieldCheck, BookOpen, X } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
@@ -79,31 +79,33 @@ export const ChairmanDashboard = () => {
         if (attErr) throw attErr;
 
         if (attendanceData) {
-          const present = attendanceData.filter(a => a.status === 'Present').length;
-          const absent = attendanceData.filter(a => a.status === 'Absent').length;
-          
+          let present = 0;
+          let absent = 0;
           let wisdomCount = 0;
           let talentCount = 0;
           let honourCount = 0;
           let integrityCount = 0;
 
           attendanceData.forEach(row => {
-            if (row.status === 'Present') {
-              const memberProfile = members.find(m => {
-                const masterId = m.official_member_id || m.id;
-                const rowId = row.official_member_id || row.member_id;
-                return masterId && rowId && masterId === rowId;
-              });
+            const rowId = row.official_member_id || row.official_member;
+            const memberProfile = members.find(m => {
+              const masterId = m.official_member_id || m.id;
+              return masterId && rowId && masterId === rowId;
+            });
 
+            if (row.status === 'Present') {
+              present++;
               const mFamily = memberProfile
                 ? (memberProfile.family || memberProfile.cmo_family || '')
                 : (row.family || '');
               
-              const famLower = mFamily.toLowerCase();
+              const famLower = mFamily.toLowerCase().trim();
               if (famLower.includes('wisdom')) wisdomCount++;
               else if (famLower.includes('talent')) talentCount++;
               else if (famLower.includes('honour')) honourCount++;
               else if (famLower.includes('integrity')) integrityCount++;
+            } else if (row.status === 'Absent') {
+              absent++;
             }
           });
 
@@ -206,6 +208,33 @@ export const ChairmanDashboard = () => {
         Assigned
       </span>
     );
+  };
+
+  // Member details viewer states
+  const [selectedMember, setSelectedMember] = useState<any | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+
+  const handleViewMemberDetails = async (member: any) => {
+    try {
+      setIsLoadingDetails(true);
+      setIsDetailOpen(true);
+      
+      const queryField = member.id.includes('-') && member.id.length === 36 ? 'id' : 'official_member_id';
+
+      const { data, error } = await supabase
+        .from('members')
+        .select('*')
+        .eq(queryField, member.id)
+        .single();
+        
+      if (error) throw error;
+      setSelectedMember(data);
+    } catch (error) {
+      console.error("Error fetching member details:", error);
+    } finally {
+      setIsLoadingDetails(false);
+    }
   };
 
   // Member editing states
@@ -383,6 +412,68 @@ export const ChairmanDashboard = () => {
     }
   };
 
+  const handleMarkTransferred = async (memberId: string) => {
+    const confirmTransfer = window.confirm("Are you sure you want to mark this member as Transferred? This will lock their account status, but keep their historical records intact.");
+    if (!confirmTransfer) return;
+    setError('');
+    try {
+      const queryField = memberId.includes('-') && memberId.length === 36 ? 'id' : 'official_member_id';
+
+      const { error: dbErr } = await supabase
+        .from('members')
+        .update({ status: 'Transferred' })
+        .eq(queryField, memberId);
+
+      if (dbErr) {
+        alert("Failed to process status update: " + dbErr.message);
+        return;
+      }
+
+      // Update local state context
+      const updatedMembers = members.map(m =>
+        (m.official_member_id || m.id) === memberId
+          ? { ...m, status: 'Transferred' as any }
+          : m
+      );
+      setMembers(updatedMembers);
+      setSuccess(`Member ${memberId} marked as Transferred.`);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      console.error("Failed to mark member as transferred:", err);
+      alert("Failed to process status update: " + err.message);
+    }
+  };
+
+  const handleReactivateMember = async (memberId: string) => {
+    const confirmReactivate = window.confirm("Are you sure you want to reactivate this member?");
+    if (!confirmReactivate) return;
+
+    setError('');
+    try {
+      const queryField = memberId.includes('-') && memberId.length === 36 ? 'id' : 'official_member_id';
+
+      const { error } = await supabase
+        .from('members')
+        .update({ status: 'Active' })
+        .eq(queryField, memberId);
+
+      if (error) throw error;
+      
+      // Update local state context
+      const updatedMembers = members.map(m =>
+        (m.official_member_id || m.id) === memberId
+          ? { ...m, status: 'Active' as any }
+          : m
+      );
+      setMembers(updatedMembers);
+      setSuccess(`Member ${memberId} reactivated successfully.`);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      console.error("Failed to reactivate member:", err);
+      alert("Failed to reactivate member: " + err.message);
+    }
+  };
+
   // ══════════════════════════════════════════════════════════════════════════════
   // DUAL-LAYER ADMINISTRATIVE EXCLUSION
   // Layer 1 (role)  — catches all accounts whose 'role' column is correctly set.
@@ -548,15 +639,24 @@ export const ChairmanDashboard = () => {
                   <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Overall Last Thursday Fellowship Attendance Rate</p>
                   <h3 className="text-3xl font-extrabold text-white mt-1">
                     {lastFellowshipAttendance.date ? (
-                      `${Math.round((lastFellowshipAttendance.present / (lastFellowshipAttendance.present + lastFellowshipAttendance.absent || 1)) * 100)}% Attendance`
+                      `${Math.round((lastFellowshipAttendance.present / (activeMembersCount || 1)) * 100)}% Attendance`
                     ) : (
                       'N/A'
                     )}
                   </h3>
                   <p className="text-xs text-gray-400 mt-1">
-                    {lastFellowshipAttendance.date 
-                      ? `${lastFellowshipAttendance.present} Members Present / ${lastFellowshipAttendance.absent} Absent on ${new Date(lastFellowshipAttendance.date).toLocaleDateString()}`
-                      : 'No attendance history fetched yet'}
+                    {lastFellowshipAttendance.date ? (
+                      (() => {
+                        const dateStr = lastFellowshipAttendance.date;
+                        const parsedDate = new Date(dateStr.replace(/-/g, '/'));
+                        const formattedDate = isNaN(parsedDate.getTime()) 
+                          ? dateStr 
+                          : `${parsedDate.getMonth() + 1}/${parsedDate.getDate()}/${parsedDate.getFullYear()}`;
+                        return `${lastFellowshipAttendance.present} Members Present / ${lastFellowshipAttendance.absent} Absent on ${formattedDate}`;
+                      })()
+                    ) : (
+                      'No attendance history fetched yet'
+                    )}
                   </p>
                 </div>
               </div>
@@ -797,7 +897,15 @@ export const ChairmanDashboard = () => {
                   {filteredMembers.map((member) => (
                     <TableRow key={member.id} className="border-b border-[#ffd700]/10 hover:bg-[#001a16]/50">
                       <TableCell className="text-white font-mono text-xs">{member.official_member_id || member.id}</TableCell>
-                      <TableCell className="text-white font-medium">{member.full_name || member.name}</TableCell>
+                      <TableCell className="text-white font-medium">
+                        <button
+                          type="button"
+                          onClick={() => handleViewMemberDetails(member)}
+                          className="text-left font-semibold text-white hover:text-[#ffd700] hover:underline focus:outline-none transition-all cursor-pointer"
+                        >
+                          {member.full_name || member.name}
+                        </button>
+                      </TableCell>
                       <TableCell className="text-gray-300 text-xs">{member.phone_number || member.phone || 'N/A'}</TableCell>
                       <TableCell>
                         <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
@@ -805,6 +913,8 @@ export const ChairmanDashboard = () => {
                             ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/30'
                             : member.status === 'Deceased'
                             ? 'bg-red-950 text-red-400 border border-red-500/30'
+                            : member.status === 'Transferred'
+                            ? 'bg-blue-950 text-blue-400 border border-blue-500/30'
                             : 'bg-amber-950 text-amber-400 border border-amber-500/30'
                         }`}>
                           {member.status}
@@ -814,30 +924,48 @@ export const ChairmanDashboard = () => {
                         {formatCurrency(member.balance)}
                       </TableCell>
                       <TableCell className="text-center">
-                        <div className="flex justify-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingMember(member);
-                              setEditMemberName(member.full_name || member.name);
-                              setEditMemberPhone(member.phone || member.phone_number || '');
-                              setEditMemberFamily(member.family || '');
-                              setEditMemberStatus(member.status);
-                            }}
-                            className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-1 px-2 rounded cursor-pointer"
-                          >
-                            Edit
-                          </button>
-                          {member.status !== 'Deceased' ? (
-                            <button
-                              type="button"
-                              onClick={() => handleMarkDeceased(member.official_member_id || member.id)}
-                              className="bg-red-600 hover:bg-red-500 text-white font-semibold text-xs py-1 px-2 rounded cursor-pointer"
-                            >
-                              Mark Deceased
-                            </button>
+                        <div className="flex justify-center items-center gap-2">
+                          {member.status === 'Transferred' || member.status === 'Deceased' ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500 italic text-sm">{member.status} (Locked)</span>
+                              <button
+                                type="button"
+                                onClick={() => handleReactivateMember(member.official_member_id || member.id)}
+                                className="text-xs bg-[#002a24] hover:bg-[#003d34] text-[#ffd700] border border-[#ffd700]/30 px-2 py-1 rounded transition-colors cursor-pointer"
+                              >
+                                Reactivate
+                              </button>
+                            </div>
                           ) : (
-                            <span className="text-gray-500 text-xs italic">Deceased (Locked)</span>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingMember(member);
+                                  setEditMemberName(member.full_name || member.name);
+                                  setEditMemberPhone(member.phone || member.phone_number || '');
+                                  setEditMemberFamily(member.family || '');
+                                  setEditMemberStatus(member.status);
+                                }}
+                                className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-1 px-2 rounded cursor-pointer animate-all"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMarkDeceased(member.official_member_id || member.id)}
+                                className="bg-red-600 hover:bg-red-500 text-white font-semibold text-xs py-1 px-2 rounded cursor-pointer animate-all"
+                              >
+                                Mark Deceased
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMarkTransferred(member.official_member_id || member.id)}
+                                className="bg-amber-600 hover:bg-amber-700 text-white font-medium px-3 py-1.5 rounded text-sm transition-colors cursor-pointer animate-all"
+                              >
+                                Transfer
+                              </button>
+                            </>
                           )}
                         </div>
                       </TableCell>
@@ -995,6 +1123,113 @@ export const ChairmanDashboard = () => {
               </Button>
             </div>
           </Card>
+        </div>
+      )}
+
+      {/* Slide-over panel */}
+      {isDetailOpen && (
+        <div className="fixed inset-y-0 right-0 w-[450px] bg-[#001411] border-l-2 border-[#ffd700] text-white shadow-2xl z-50 flex flex-col transition-all duration-300">
+          {/* Header with visual close button */}
+          <div className="p-6 border-b border-[#ffd700]/20 flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-bold text-[#ffd700]">
+                {selectedMember ? (selectedMember.full_name || selectedMember.name) : "Loading..."}
+              </h2>
+              <div className="flex items-center gap-2 mt-1">
+                {selectedMember && (
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                    selectedMember.status === 'Active'
+                      ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/30'
+                      : selectedMember.status === 'Deceased'
+                      ? 'bg-red-950 text-red-400 border border-red-500/30'
+                      : selectedMember.status === 'Transferred'
+                      ? 'bg-blue-950 text-blue-400 border border-blue-500/30'
+                      : 'bg-amber-950 text-amber-400 border border-amber-500/30'
+                  }`}>
+                    {selectedMember.status}
+                  </span>
+                )}
+                <span className="text-xs text-gray-400 font-mono">
+                  ID: {selectedMember?.official_member_id}
+                </span>
+              </div>
+            </div>
+            <button 
+              onClick={() => setIsDetailOpen(false)}
+              className="text-[#ffd700] hover:text-white border border-[#ffd700]/40 rounded-md px-3 py-1.5 text-sm transition-colors cursor-pointer"
+            >
+              Close ✕
+            </button>
+          </div>
+
+          {/* Content Area with custom scrollbar */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {isLoadingDetails ? (
+              <div className="flex justify-center items-center h-48 text-[#ffd700]">
+                Loading details...
+              </div>
+            ) : selectedMember ? (
+              <>
+                {/* Group 1: Personal Profile */}
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-[#ffd700] uppercase tracking-wider">Personal Bio</h3>
+                  <div className="bg-[#001f1a] p-3 rounded space-y-1 text-sm">
+                    <p>
+                      <span className="text-gray-400">Date of Birth:</span>{" "}
+                      {selectedMember.date_of_birth 
+                        ? (() => {
+                            const d = new Date(selectedMember.date_of_birth.replace(/-/g, '/'));
+                            return isNaN(d.getTime()) 
+                              ? selectedMember.date_of_birth 
+                              : `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+                          })()
+                        : "Not Provided"}
+                    </p>
+                    <p><span className="text-gray-400">Occupation:</span> {selectedMember.occupation || "Not Provided"}</p>
+                    <p><span className="text-gray-400">Marital Status:</span> {selectedMember.marital_status || selectedMember.marriage_status || "Not Provided"}</p>
+                  </div>
+                </div>
+
+                {/* Group 2: Contact Details */}
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-[#ffd700] uppercase tracking-wider">Contact Details</h3>
+                  <div className="bg-[#001f1a] p-3 rounded space-y-1 text-sm">
+                    <p><span className="text-gray-400">Phone:</span> {selectedMember.phone_number || selectedMember.phone || 'N/A'}</p>
+                    <p><span className="text-gray-400">Email:</span> {selectedMember.email || "N/A"}</p>
+                    <p><span className="text-gray-400">Residential Address:</span> {selectedMember.residential_address || selectedMember.address || "N/A"}</p>
+                    <p><span className="text-gray-400">Home Town Address:</span> {selectedMember.home_town_address || "N/A"}</p>
+                  </div>
+                </div>
+
+                {/* Group 3: CMO Info */}
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-[#ffd700] uppercase tracking-wider">CMO Info</h3>
+                  <div className="bg-[#001f1a] p-3 rounded space-y-1 text-sm">
+                    <p><span className="text-gray-400">CMO Family:</span> {selectedMember.cmo_family || selectedMember.family || "None"}</p>
+                    <p><span className="text-gray-400">Post Held:</span> {selectedMember.post_held || selectedMember.church_position || "Member"}</p>
+                    <p>
+                      <span className="text-gray-400">Ledger Balance:</span>{" "}
+                      <span className="text-[#ffd700] font-bold">
+                        ₦{Number(selectedMember.balance || 0).toLocaleString()}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Group 4: Emergency Contact (Next of Kin) */}
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-[#ffd700] uppercase tracking-wider">Emergency Contact</h3>
+                  <div className="bg-[#001f1a] border border-[#ffd700]/30 p-3 rounded space-y-1 text-sm">
+                    <p><span className="text-gray-400">Next of Kin:</span> {selectedMember.nok_name || "Not Configured"}</p>
+                    <p><span className="text-gray-400">Relationship:</span> {selectedMember.nok_relationship || "N/A"}</p>
+                    <p><span className="text-gray-400">Phone Number:</span> {selectedMember.nok_phone || "N/A"}</p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="text-center text-red-400 py-12">Failed to load profile details.</div>
+            )}
+          </div>
         </div>
       )}
     </div>

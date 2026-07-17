@@ -9,6 +9,8 @@ import { formatCurrency, formatDateTime } from '../../utils/helpers';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { supabase } from '../../lib/supabaseClient';
+import { toast } from 'sonner';
+
 
 export const MemberDashboard = () => {
   const { currentUser, members, transactions, setMembers, setCurrentUser, setSuccess, setError, setCurrentPage } = useApp();
@@ -26,6 +28,11 @@ export const MemberDashboard = () => {
   const [editWifeName, setEditWifeName] = useState(currentUser?.wifeName || '');
   const [editWifePhone, setEditWifePhone] = useState(currentUser?.wifePhone || '');
   const [formCmoFamily, setFormCmoFamily] = useState<Family | ''>(currentUser?.family || '');
+  const [editDateOfBirth, setEditDateOfBirth] = useState(currentUser?.date_of_birth || '');
+  const [editOccupation, setEditOccupation] = useState(currentUser?.occupation || '');
+  const [editNokName, setEditNokName] = useState(currentUser?.nok_name || '');
+  const [editNokRelationship, setEditNokRelationship] = useState(currentUser?.nok_relationship || '');
+  const [editNokPhone, setEditNokPhone] = useState(currentUser?.nok_phone || '');
 
   const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
     if (!currentUser) return;
@@ -57,6 +64,11 @@ export const MemberDashboard = () => {
       setEditWifeName(currentUser.wifeName || '');
       setEditWifePhone(currentUser.wifePhone || '');
       setFormCmoFamily(currentUser.family || '');
+      setEditDateOfBirth(currentUser.date_of_birth || '');
+      setEditOccupation(currentUser.occupation || '');
+      setEditNokName(currentUser.nok_name || '');
+      setEditNokRelationship(currentUser.nok_relationship || '');
+      setEditNokPhone(currentUser.nok_phone || '');
       setIsSettingsOpen(true);
     }
   };
@@ -324,7 +336,12 @@ export const MemberDashboard = () => {
         wifes_phone: editWifePhone,
         church_position: editPostHeld,
         post_held: editPostHeld,
-        cmo_family: formCmoFamily || null
+        cmo_family: formCmoFamily || null,
+        date_of_birth: editDateOfBirth || null,
+        occupation: editOccupation?.trim() || null,
+        nok_name: editNokName?.trim() || null,
+        nok_relationship: editNokRelationship?.trim() || null,
+        nok_phone: editNokPhone?.trim() || null
       };
 
       // A. Update the Active Profiles Table ('members') in Supabase
@@ -352,7 +369,12 @@ export const MemberDashboard = () => {
           numberOfChildren: editNumberOfChildren,
           wifeName: editWifeName,
           wifePhone: editWifePhone,
-          family: formCmoFamily || undefined
+          family: formCmoFamily || undefined,
+          date_of_birth: editDateOfBirth || null,
+          occupation: editOccupation?.trim() || null,
+          nok_name: editNokName?.trim() || null,
+          nok_relationship: editNokRelationship?.trim() || null,
+          nok_phone: editNokPhone?.trim() || null
         } : m
       );
 
@@ -373,7 +395,12 @@ export const MemberDashboard = () => {
         numberOfChildren: editNumberOfChildren,
         wifeName: editWifeName,
         wifePhone: editWifePhone,
-        family: formCmoFamily || undefined
+        family: formCmoFamily || undefined,
+        date_of_birth: editDateOfBirth || null,
+        occupation: editOccupation?.trim() || null,
+        nok_name: editNokName?.trim() || null,
+        nok_relationship: editNokRelationship?.trim() || null,
+        nok_phone: editNokPhone?.trim() || null
       });
 
       setSuccess('✓ Profile updated successfully across active profile and master roster!');
@@ -650,6 +677,34 @@ export const MemberDashboard = () => {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label htmlFor="edit-dob" className="text-gray-300 text-sm block mb-2">
+                      Date of Birth
+                    </label>
+                    <Input
+                      id="edit-dob"
+                      type="date"
+                      value={editDateOfBirth}
+                      onChange={(e) => setEditDateOfBirth(e.target.value)}
+                      className="bg-[#001a16] border-[#ffd700] text-white w-full"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="edit-occupation" className="text-gray-300 text-sm block mb-2">
+                      Occupation
+                    </label>
+                    <Input
+                      id="edit-occupation"
+                      value={editOccupation}
+                      onChange={(e) => setEditOccupation(e.target.value)}
+                      placeholder="e.g. Engineer, Teacher, Doctor"
+                      className="bg-[#001a16] border-[#ffd700] text-white"
+                    />
+                  </div>
+                </div>
+
                 <div className="mt-4 font-sans">
                   <label htmlFor="edit-family" className="text-gray-300 text-sm block mb-2">
                     CMO Family *
@@ -810,6 +865,52 @@ export const MemberDashboard = () => {
                     </div>
                   </>
                 )}
+              </div>
+
+              {/* Emergency Contact */}
+              <div className="border-t border-[#ffd700]/30 pt-4">
+                <h4 className="text-lg font-semibold text-[#ffd700] mb-4">Emergency Contact</h4>
+                
+                <div>
+                  <label htmlFor="edit-nok-name" className="text-gray-300 text-sm block mb-2">
+                    Next of Kin Name
+                  </label>
+                  <Input
+                    id="edit-nok-name"
+                    value={editNokName}
+                    onChange={(e) => setEditNokName(e.target.value)}
+                    placeholder="Enter next of kin name"
+                    className="bg-[#001a16] border-[#ffd700] text-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label htmlFor="edit-nok-relationship" className="text-gray-300 text-sm block mb-2">
+                      Next of Kin Relationship
+                    </label>
+                    <Input
+                      id="edit-nok-relationship"
+                      value={editNokRelationship}
+                      onChange={(e) => setEditNokRelationship(e.target.value)}
+                      placeholder="e.g. Wife, Son, Brother"
+                      className="bg-[#001a16] border-[#ffd700] text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="edit-nok-phone" className="text-gray-300 text-sm block mb-2">
+                      Next of Kin Phone Number
+                    </label>
+                    <Input
+                      id="edit-nok-phone"
+                      value={editNokPhone}
+                      onChange={(e) => setEditNokPhone(e.target.value)}
+                      placeholder="08012345678"
+                      className="bg-[#001a16] border-[#ffd700] text-white"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Church & Position */}
