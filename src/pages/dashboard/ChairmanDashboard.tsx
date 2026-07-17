@@ -215,6 +215,23 @@ export const ChairmanDashboard = () => {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
+  const [isExecutiveUnlocked, setIsExecutiveUnlocked] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('executive_session_unlocked') === 'true';
+    }
+    return false;
+  });
+  const [pinInput, setPinInput] = useState<string>("");
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
+
+  const [isChangingPin, setIsChangingPin] = useState(false);
+  const [currentPin, setCurrentPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [pinChangeError, setPinChangeError] = useState<string | null>(null);
+  const [pinChangeSuccess, setPinChangeSuccess] = useState(false);
+  const [isSubmittingPinChange, setIsSubmittingPinChange] = useState(false);
+
   const handleViewMemberDetails = async (member: any) => {
     try {
       setIsLoadingDetails(true);
@@ -234,6 +251,74 @@ export const ChairmanDashboard = () => {
       console.error("Error fetching member details:", error);
     } finally {
       setIsLoadingDetails(false);
+    }
+  };
+
+  const handleVerifyPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinError(null);
+    setIsVerifyingPin(true);
+
+    try {
+      const { data: isValid, error } = await supabase.rpc('verify_executive_pin', {
+        input_role: 'Chairman',
+        input_pin: pinInput
+      });
+
+      if (error) throw error;
+
+      if (isValid) {
+        setIsExecutiveUnlocked(true);
+        sessionStorage.setItem('executive_session_unlocked', 'true');
+        setPinInput("");
+      } else {
+        setPinError("Invalid Executive Security PIN. Access Denied.");
+      }
+    } catch (error: any) {
+      console.error("Security Verification Error:", error.message);
+      setPinError("Verification system encountered an error.");
+    } finally {
+      setIsVerifyingPin(false);
+    }
+  };
+
+  const handleLockDashboard = () => {
+    setIsExecutiveUnlocked(false);
+    sessionStorage.removeItem('executive_session_unlocked');
+  };
+
+  const handleUpdateExecutivePin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinChangeError(null);
+    setPinChangeSuccess(false);
+    setIsSubmittingPinChange(true);
+
+    try {
+      const { data: isSuccess, error } = await supabase.rpc('change_executive_pin', {
+        target_role: 'Chairman',
+        old_pin: currentPin,
+        new_pin: newPin
+      });
+
+      if (error) throw error;
+
+      if (isSuccess) {
+        setPinChangeSuccess(true);
+        setCurrentPin("");
+        setNewPin("");
+        // Automatically collapse the form after a successful update
+        setTimeout(() => {
+          setIsChangingPin(false);
+          setPinChangeSuccess(false);
+        }, 2000);
+      } else {
+        setPinChangeError("Current Security PIN is incorrect.");
+      }
+    } catch (error: any) {
+      console.error("PIN Update Error:", error.message);
+      setPinChangeError("Failed to update security PIN.");
+    } finally {
+      setIsSubmittingPinChange(false);
     }
   };
 
@@ -545,10 +630,67 @@ export const ChairmanDashboard = () => {
                 onSave={handleProfilePictureSave}
                 memberName={currentUser.name}
                 size="sm"
+                extraContent={
+                  <>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setIsChangingPin(!isChangingPin);
+                        setPinChangeError(null);
+                        setPinChangeSuccess(false);
+                      }} 
+                      className="text-[10px] text-gray-600 hover:text-[#ffd700] transition-colors block ml-auto focus:outline-none cursor-pointer"
+                    >
+                      Manage Gateway Access
+                    </button>
+                    {isChangingPin && (
+                      <form onSubmit={handleUpdateExecutivePin} className="mt-4 p-4 bg-[#001f1a] rounded border border-[#ffd700]/20 space-y-3 text-left">
+                        <h4 className="text-xs font-semibold text-[#ffd700] uppercase tracking-wider">Modify Gateway Authorization PIN</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-gray-400">Current PIN</label>
+                            <input
+                              type="password"
+                              maxLength={6}
+                              placeholder="••••••"
+                              value={currentPin}
+                              onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ""))}
+                              className="w-full bg-[#001411] border border-gray-700 text-white p-2 rounded text-sm text-center font-mono focus:border-[#ffd700] focus:outline-none"
+                              required
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-gray-400">New Secret PIN</label>
+                            <input
+                              type="password"
+                              maxLength={6}
+                              placeholder="••••••"
+                              value={newPin}
+                              onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ""))}
+                              className="w-full bg-[#001411] border border-gray-700 text-white p-2 rounded text-sm text-center font-mono focus:border-[#ffd700] focus:outline-none"
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        {pinChangeError && <p className="text-red-400 text-xs font-semibold text-center">{pinChangeError}</p>}
+                        {pinChangeSuccess && <p className="text-green-400 text-xs font-semibold text-center">PIN successfully updated!</p>}
+
+                        <button
+                          type="submit"
+                          disabled={isSubmittingPinChange || newPin.length < 4 || currentPin.length < 4}
+                          className="w-full bg-[#ffd700] text-[#001a16] font-bold text-xs py-2 rounded hover:bg-[#e6c200] transition-colors disabled:opacity-40 cursor-pointer"
+                        >
+                          {isSubmittingPinChange ? "Processing Update..." : "Confirm Security Change"}
+                        </button>
+                      </form>
+                    )}
+                  </>
+                }
               />
             </div>
             <div className="flex-grow w-full">
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-center">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
                 <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Name</p>
                   <p className="text-white font-bold text-sm truncate">{currentUser.name}</p>
@@ -560,10 +702,6 @@ export const ChairmanDashboard = () => {
                 <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Security Clearances</p>
                   <p className="text-emerald-400 font-bold text-sm">Level 1 Admin</p>
-                </div>
-                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
-                  <p className="text-gray-400 text-xs uppercase tracking-wider">Total Registered</p>
-                  <p className="text-white font-bold text-sm">{members.length} Members</p>
                 </div>
               </div>
             </div>
@@ -600,7 +738,13 @@ export const ChairmanDashboard = () => {
         <Card className="bg-[#002520] border border-[#ffd700]/20 p-6 flex items-center justify-between">
           <div>
             <p className="text-gray-400 text-sm">CMO Vault Balance</p>
-            <h3 className="text-2xl font-bold text-[#ffd700] mt-1">{formatCurrency(vaultBalance)}</h3>
+            <h3 className="text-2xl font-bold text-[#ffd700] mt-1">
+              {isExecutiveUnlocked ? (
+                formatCurrency(vaultBalance)
+              ) : (
+                <span className="tracking-widest text-[#ffd700]/40">••••••</span>
+              )}
+            </h3>
           </div>
           <DollarSign className="w-8 h-8 text-[#ffd700]" />
         </Card>
@@ -608,25 +752,72 @@ export const ChairmanDashboard = () => {
 
       {/* Content Tabs */}
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="bg-[#002520] border border-[#ffd700]/20 w-full justify-start p-1 mb-6 flex-wrap h-auto gap-1">
-          <TabsTrigger value="overview" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
-            Executive Summary
-          </TabsTrigger>
-          <TabsTrigger value="announcements" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
-            Announcements & Decrees
-          </TabsTrigger>
-          <TabsTrigger value="welfare" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
-            Welfare Review {unreadWelfareCount > 0 ? `(${unreadWelfareCount})` : ''}
-          </TabsTrigger>
-          <TabsTrigger value="roster" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
-            CMO Roster
-          </TabsTrigger>
-          <TabsTrigger value="spiritual" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
-            Spiritual Calendar
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+          <TabsList className="bg-[#002520] border border-[#ffd700]/20 w-full justify-start p-1 flex-wrap h-auto gap-1">
+            <TabsTrigger value="overview" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Executive Summary
+            </TabsTrigger>
+            <TabsTrigger value="announcements" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Announcements & Decrees
+            </TabsTrigger>
+            <TabsTrigger value="welfare" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Welfare Review {unreadWelfareCount > 0 ? `(${unreadWelfareCount})` : ''}
+            </TabsTrigger>
+            <TabsTrigger value="roster" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              CMO Roster
+            </TabsTrigger>
+            <TabsTrigger value="spiritual" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Spiritual Calendar
+            </TabsTrigger>
+          </TabsList>
+          {isExecutiveUnlocked && (
+            <button
+              onClick={handleLockDashboard}
+              className="bg-[#002520] hover:bg-[#ffd700]/10 text-[#ffd700] border border-[#ffd700]/30 px-3 py-2 rounded text-sm font-semibold transition-colors flex items-center gap-2 shrink-0 cursor-pointer self-stretch sm:self-auto justify-center"
+              title="Lock Executive Workspace"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              Lock Dashboard
+            </button>
+          )}
+        </div>
 
-        <TabsContent value="overview">
+        {!isExecutiveUnlocked ? (
+          <div className="flex flex-col items-center justify-center py-16 px-4 bg-[#001411] border border-[#ffd700]/20 rounded-lg max-w-md mx-auto text-center space-y-6 my-8 shadow-xl">
+            <div className="p-3 bg-[#002a24] rounded-full border border-[#ffd700]/30 text-[#ffd700]">
+              {/* Padlock Icon SVG */}
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-[#ffd700]">Executive Security Gateway</h3>
+              <p className="text-sm text-gray-400 mt-1">Please enter your Authorization PIN to unlock administrative features and view the register metrics.</p>
+            </div>
+            <form onSubmit={handleVerifyPin} className="w-full space-y-4">
+              <input
+                type="password"
+                maxLength={6}
+                placeholder="Enter Secret PIN"
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ""))} // Numbers only rule
+                className="w-full text-center tracking-widest bg-[#001f1a] border border-[#ffd700] text-white rounded p-3 focus:outline-none text-xl font-mono"
+              />
+              {pinError && <p className="text-red-400 text-xs font-semibold">{pinError}</p>}
+              <button
+                type="submit"
+                disabled={isVerifyingPin || pinInput.length < 4}
+                className="w-full bg-[#ffd700] hover:bg-[#e6c200] text-[#001a16] font-bold py-2.5 rounded transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                {isVerifyingPin ? "Verifying..." : "Unlock Vault Space"}
+              </button>
+            </form>
+          </div>
+        ) : (
+          <>
+            <TabsContent value="overview">
           {/* Fellowship Attendance Macro Metric Widget */}
           <Card className="bg-[#002520] border border-[#ffd700]/20 p-6 mb-6 rounded-xl shadow-lg relative overflow-hidden">
             <div className="absolute top-0 left-0 w-2 h-full bg-[#ffd700]" />
@@ -1042,6 +1233,8 @@ export const ChairmanDashboard = () => {
             </div>
           </Card>
         </TabsContent>
+          </>
+        )}
       </Tabs>
 
       {/* Administrative Edit Member Modal */}
