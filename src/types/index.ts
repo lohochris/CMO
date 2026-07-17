@@ -1,4 +1,4 @@
-export type MemberStatus = 'Active' | 'Inactive' | 'Active (Cleared)' | 'Pending Validation' | 'Deceased' | 'Pending';
+export type MemberStatus = 'Active' | 'Inactive' | 'Active (Cleared)' | 'Pending Validation' | 'Deceased' | 'Pending' | 'Transferred';
 export type Family = 'Wisdom' | 'Honour' | 'Integrity' | 'Talent';
 export type MemberRole = 'member' | 'fin_sec' | 'welfare' | 'treasurer' | 'gen_sec' | 'pro' | 'family_chairman' | 'family_head' | 'family_secretary' | 'chairman' | 'cmo_chairman' | 'provost' | 'liturgist';
 export type MaritalStatus = 'Married' | 'Divorced' | 'Widowed';
@@ -60,6 +60,11 @@ export interface Member {
   wifePhone?: string;
   createdAt?: string;
   updatedAt?: string;
+  date_of_birth?: string | null;
+  occupation?: string | null;
+  nok_name?: string | null;
+  nok_relationship?: string | null;
+  nok_phone?: string | null;
 }
 
 export interface Transaction {

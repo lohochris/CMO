@@ -96,11 +96,11 @@ export default function FamilyHeadDashboard() {
           let talentCount = 0;
           let honourCount = 0;
           let integrityCount = 0;
-
+          
           attendanceData.forEach(row => {
+            const rowId = row.official_member_id || row.official_member;
             const memberProfile = members.find(m => {
               const masterId = m.official_member_id || m.id;
-              const rowId = row.official_member_id || row.member_id;
               return masterId && rowId && masterId === rowId;
             });
 
@@ -116,7 +116,7 @@ export default function FamilyHeadDashboard() {
             }
 
             if (row.status === 'Present') {
-              const famLower = mFamily.toLowerCase();
+              const famLower = mFamily.toLowerCase().trim();
               if (famLower.includes('wisdom')) wisdomCount++;
               else if (famLower.includes('talent')) talentCount++;
               else if (famLower.includes('honour')) honourCount++;
@@ -325,6 +325,7 @@ export default function FamilyHeadDashboard() {
   // Calculations
   const activeMembers = familyMembers.filter(m => m.status !== 'Deceased');
   const totalMembersCount = activeMembers.length;
+  const activeFamilyCount = familyMembers.filter(m => m.status === 'Active').length;
 
   const totalPresent = attendance.filter(a => a.status === 'Present').length;
   const totalAttendanceRecords = attendance.length;
@@ -531,15 +532,24 @@ export default function FamilyHeadDashboard() {
                 <p className="text-gray-400 text-sm font-semibold uppercase tracking-wider">Fellowship Attendance ({familyDisplayName})</p>
                 <h3 className="text-4xl font-extrabold text-[#ffd700] mt-2">
                   {lastFellowshipAttendance.date ? (
-                    `${Math.round((lastFellowshipAttendance.present / (lastFellowshipAttendance.present + lastFellowshipAttendance.absent || 1)) * 100)}%`
+                    `${Math.round((lastFellowshipAttendance.present / (activeFamilyCount || 1)) * 100)}%`
                   ) : (
                     'N/A'
                   )}
                 </h3>
                 <p className="text-xs text-gray-400 mt-2">
-                  {lastFellowshipAttendance.date 
-                    ? `Date: ${new Date(lastFellowshipAttendance.date).toLocaleDateString()} (${lastFellowshipAttendance.present} / ${lastFellowshipAttendance.present + lastFellowshipAttendance.absent} Present)`
-                    : 'No sessions recorded yet'}
+                  {lastFellowshipAttendance.date ? (
+                    (() => {
+                      const dateStr = lastFellowshipAttendance.date;
+                      const parsedDate = new Date(dateStr.replace(/-/g, '/'));
+                      const formattedDate = isNaN(parsedDate.getTime()) 
+                        ? dateStr 
+                        : `${parsedDate.getMonth() + 1}/${parsedDate.getDate()}/${parsedDate.getFullYear()}`;
+                      return `Date: ${formattedDate} (${lastFellowshipAttendance.present} / ${activeFamilyCount} Present)`;
+                    })()
+                  ) : (
+                    'No sessions recorded yet'
+                  )}
                 </p>
               </div>
 

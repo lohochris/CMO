@@ -4,7 +4,7 @@ import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { Users, Trophy, ShieldCheck, Wallet, Heart, Receipt, Megaphone, TrendingUp, FileText, DollarSign, Printer } from 'lucide-react';
+import { Users, Trophy, ShieldCheck, Wallet, Heart, Receipt, Megaphone, TrendingUp, FileText, DollarSign, Printer, Search } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { Family, FamilyWelfareTicket, FamilyTransaction, FamilyExpense, FamilyAnnouncement } from '../../types';
 import { calculateTotal, formatCurrency, formatDate, getCombinedTransactions, formatDateTime } from '../../utils/helpers';
@@ -864,8 +864,23 @@ export const FamilyPortal = ({ family }: { family: Family }) => {
   const { members, familyAnnouncements } = useApp();
   const cleanFamilyName = (family || '').replace(/\s*Family\s*/gi, '').trim();
   
+  const [searchQuery, setSearchQuery] = useState('');
+  
   const familyMembers = members.filter(m => m.family === family);
   const announcements = familyAnnouncements.filter(ann => ann.family === family);
+
+  const filteredFamilyMembers = familyMembers.filter(member => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      (member.name && member.name.toLowerCase().includes(q)) ||
+      (member.full_name && member.full_name.toLowerCase().includes(q)) ||
+      (member.official_member_id && member.official_member_id.toLowerCase().includes(q)) ||
+      (member.id && member.id.toLowerCase().includes(q)) ||
+      (member.phone && member.phone.toLowerCase().includes(q)) ||
+      (member.phone_number && member.phone_number.toLowerCase().includes(q))
+    );
+  });
   
   const badgeColors = {
     Wisdom: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
@@ -902,6 +917,20 @@ export const FamilyPortal = ({ family }: { family: Family }) => {
             <Users className="w-5 h-5" />
             Family Members Directory
           </h3>
+
+          <div className="relative mb-4">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <Search className="w-5 h-5 text-[#ffd700]" />
+            </span>
+            <Input
+              type="text"
+              placeholder="Search family members by name, ID, or phone..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 bg-[#001a16] border-[#ffd700] text-white focus:ring-[#ffd700] focus:border-[#ffd700] placeholder-gray-500 rounded-lg w-full"
+            />
+          </div>
+
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -913,7 +942,7 @@ export const FamilyPortal = ({ family }: { family: Family }) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {familyMembers.map((member) => (
+                {filteredFamilyMembers.map((member) => (
                   <TableRow key={member.id} className="border-[#ffd700]/10 hover:bg-[#001a16]/60 transition-colors">
                     <TableCell className="text-white font-semibold py-4">{member.name}</TableCell>
                     <TableCell className="text-gray-400 text-sm py-4">{member.phone_number || 'N/A'}</TableCell>
@@ -935,10 +964,10 @@ export const FamilyPortal = ({ family }: { family: Family }) => {
                     </TableCell>
                   </TableRow>
                 ))}
-                {familyMembers.length === 0 && (
+                {filteredFamilyMembers.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center text-gray-400 py-8">
-                      No members registered in this family yet.
+                      No family members found
                     </TableCell>
                   </TableRow>
                 )}
