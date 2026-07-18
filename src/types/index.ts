@@ -1,6 +1,6 @@
 export type MemberStatus = 'Active' | 'Inactive' | 'Active (Cleared)' | 'Pending Validation' | 'Deceased' | 'Pending' | 'Transferred';
 export type Family = 'Wisdom' | 'Honour' | 'Integrity' | 'Talent';
-export type MemberRole = 'member' | 'fin_sec' | 'welfare' | 'treasurer' | 'gen_sec' | 'pro' | 'family_chairman' | 'family_head' | 'family_secretary' | 'chairman' | 'cmo_chairman' | 'provost' | 'liturgist';
+export type MemberRole = 'member' | 'fin_sec' | 'welfare' | 'treasurer' | 'gen_sec' | 'pro' | 'family_chairman' | 'family_head' | 'family_secretary' | 'chairman' | 'cmo_chairman' | 'provost' | 'liturgist' | 'sports_director' | 'coach' | 'athlete' | 'referee' | 'medical_officer' | 'Sports_Director' | 'Treasurer' | 'Medical_Officer' | 'Coach' | 'Referee';
 export type MaritalStatus = 'Married' | 'Divorced' | 'Widowed';
 export type WeddingStatus = 'Wedded' | 'Not Wedded';
 export type TicketStatus = 'Pending' | 'Approved' | 'Completed' | 'Declined' | 'Awaiting Financial Audit' | 'Awaiting Disbursement' | 'Settled & Cleared';
@@ -33,7 +33,15 @@ export type Page =
   | 'family/wisdom'
   | 'family/honour'
   | 'family/integrity'
-  | 'family/talent';
+  | 'family/talent'
+  | 'sports_admin'
+  | 'coach_workspace'
+  | 'athlete_hub'
+  | 'referee_center'
+  | 'standings_board'
+  | 'medical_portal'
+  | 'equipment_ledger'
+  | 'sports_finance';
 
 export interface Member {
   id: string;

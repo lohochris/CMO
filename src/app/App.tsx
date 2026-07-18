@@ -39,6 +39,14 @@ import {
 } from '../pages/dashboard/FamilyDashboard';
 
 import { CmoAngelChat } from './components/ui/CmoAngelChat';
+import { SportsAdminPanel } from '../pages/dashboard/sports/SportsAdminPanel';
+import { CoachRosterWorkspace } from '../pages/dashboard/sports/CoachRosterWorkspace';
+import { AthleteProfileHub } from '../pages/dashboard/sports/AthleteProfileHub';
+import { RefereeMatchCenter } from '../pages/dashboard/sports/RefereeMatchCenter';
+import { TournamentStandingsBoard } from '../pages/dashboard/sports/TournamentStandingsBoard';
+import { SportsMedicalPortal } from '../pages/dashboard/sports/SportsMedicalPortal';
+import { EquipmentInventoryLedger } from '../pages/dashboard/sports/EquipmentInventoryLedger';
+import { SportsFinancialHub } from '../pages/dashboard/sports/SportsFinancialHub';
 
 const matchFamily = (param: string): import('../types').Family | null => {
   const normalized = param.toLowerCase();
@@ -283,6 +291,44 @@ function AppContent() {
 
       // Fallback for standard organization members
       return <MemberDashboard />;
+    }
+
+    // Sports department routing
+    if (currentPage === 'sports_admin') {
+      const uRole = currentUser?.role?.toLowerCase();
+      if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
+      if (uRole === 'sports_director' || uRole === 'chairman' || uRole === 'cmo_chairman') {
+        return <SportsAdminPanel />;
+      }
+      return <MemberDashboard />;
+    }
+    if (currentPage === 'coach_workspace') {
+      if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
+      return <CoachRosterWorkspace />;
+    }
+    if (currentPage === 'athlete_hub') {
+      if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
+      return <AthleteProfileHub />;
+    }
+    if (currentPage === 'referee_center') {
+      if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
+      return <RefereeMatchCenter />;
+    }
+    if (currentPage === 'standings_board') {
+      if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
+      return <TournamentStandingsBoard />;
+    }
+    if (currentPage === 'medical_portal') {
+      if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
+      return <SportsMedicalPortal />;
+    }
+    if (currentPage === 'equipment_ledger') {
+      if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
+      return <EquipmentInventoryLedger />;
+    }
+    if (currentPage === 'sports_finance') {
+      if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
+      return <SportsFinancialHub />;
     }
     if (currentPage === 'familyHub') return <FamilyHub />;
     if (currentPage === 'familyChairman') return <FamilyChairmanDashboard />;

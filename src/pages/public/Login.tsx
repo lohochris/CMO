@@ -163,9 +163,19 @@ export const Login = () => {
           // Force admin role alignment to prevent DB mismatches
           member.role = ADMIN_REGISTRY[resolvedId].role;
         } else {
-          // Force standard member role configuration, retaining family officers
+          // Force standard member role configuration, retaining family officers and sports roles
           const rawRole = (member.role || '').toLowerCase();
-          if (rawRole !== 'family_chairman' && rawRole !== 'family_head' && rawRole !== 'family_secretary') {
+          if (
+            rawRole !== 'family_chairman' &&
+            rawRole !== 'family_head' &&
+            rawRole !== 'family_secretary' &&
+            rawRole !== 'sports_director' &&
+            rawRole !== 'treasurer' &&
+            rawRole !== 'medical_officer' &&
+            rawRole !== 'coach' &&
+            rawRole !== 'referee' &&
+            rawRole !== 'athlete'
+          ) {
             member.role = 'member';
           }
         }
@@ -222,7 +232,13 @@ export const Login = () => {
       // 6. Default page routing — ordered from most-specific to least-specific
       if (member.role === 'fin_sec') setCurrentPage('fin_sec');
       else if (member.role === 'welfare') setCurrentPage('welfare');
+      else if (member.role === 'Treasurer' && member.official_member_id === 'HCC-CMO-SPRT-TR') setCurrentPage('sports_finance');
       else if (member.role === 'treasurer') setCurrentPage('treasurer');
+      else if (member.role === 'Sports_Director' || member.role === 'sports_director') setCurrentPage('sports_admin');
+      else if (member.role === 'Medical_Officer' || member.role === 'medical_officer') setCurrentPage('medical_portal');
+      else if (member.role === 'Coach' || member.role === 'coach') setCurrentPage('coach_workspace');
+      else if (member.role === 'Referee' || member.role === 'referee') setCurrentPage('referee_center');
+      else if (member.role === 'athlete') setCurrentPage('athlete_hub');
       else if (member.role === 'gen_sec') setCurrentPage('secretary');
       else if (member.role === 'pro') setCurrentPage('pro');
       else if (member.role === 'provost') setCurrentPage('provost');
