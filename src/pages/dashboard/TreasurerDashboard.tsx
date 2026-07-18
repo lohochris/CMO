@@ -13,6 +13,24 @@ import { ProfilePictureUploader } from '../../app/components/common/ProfilePictu
 import { supabase } from '../../lib/supabaseClient';
 
 export const TreasurerDashboard = () => {
+  const [isExecutiveUnlocked, setIsExecutiveUnlocked] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('treasurer_session_unlocked') === 'true';
+    }
+    return false;
+  });
+  const [pinInput, setPinInput] = useState<string>("");
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
+
+  // Hidden PIN Management State (Inside Profile Picture Modal)
+  const [isChangingPin, setIsChangingPin] = useState(false);
+  const [currentPin, setCurrentPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [pinChangeError, setPinChangeError] = useState<string | null>(null);
+  const [pinChangeSuccess, setPinChangeSuccess] = useState(false);
+  const [isSubmittingPinChange, setIsSubmittingPinChange] = useState(false);
+
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expensePurpose, setExpensePurpose] = useState('');
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
@@ -53,6 +71,70 @@ export const TreasurerDashboard = () => {
     setCurrentUser({ ...currentUser, profilePic: finalImageUrl });
     setSuccess('Profile picture updated successfully!');
     setTimeout(() => setSuccess(''), 3000);
+  };
+
+  const handleVerifyPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinError(null);
+    setIsVerifyingPin(true);
+
+    try {
+      const { data: isValid, error } = await supabase.rpc('verify_executive_pin', {
+        input_role: 'TREASURER',
+        input_pin: pinInput
+      });
+
+      if (error) throw error;
+
+      if (isValid) {
+        setIsExecutiveUnlocked(true);
+        sessionStorage.setItem('treasurer_session_unlocked', 'true');
+        setPinInput("");
+      } else {
+        setPinError("Invalid Executive Security PIN. Access Denied.");
+      }
+    } catch (error: any) {
+      console.error("Security Verification Error:", error.message);
+      setPinError("Verification system encountered an error.");
+    } finally {
+      setIsVerifyingPin(false);
+    }
+  };
+
+  const handleLockDashboard = () => {
+    setIsExecutiveUnlocked(false);
+    sessionStorage.removeItem('treasurer_session_unlocked');
+  };
+
+  const handleUpdateExecutivePin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinChangeError(null);
+    setPinChangeSuccess(false);
+    setIsSubmittingPinChange(true);
+    try {
+      const { data: isSuccess, error } = await supabase.rpc('change_executive_pin', {
+        target_role: 'TREASURER',
+        old_pin: currentPin,
+        new_pin: newPin
+      });
+      if (error) throw error;
+      if (isSuccess) {
+        setPinChangeSuccess(true);
+        setCurrentPin("");
+        setNewPin("");
+        setTimeout(() => {
+          setIsChangingPin(false);
+          setPinChangeSuccess(false);
+        }, 2000);
+      } else {
+        setPinChangeError("Current Security PIN is incorrect.");
+      }
+    } catch (error: any) {
+      console.error("PIN Update Error:", error.message);
+      setPinChangeError("Failed to update security PIN.");
+    } finally {
+      setIsSubmittingPinChange(false);
+    }
   };
   const combinedTransactions = getCombinedTransactions(transactions, expenses);
 
@@ -265,6 +347,63 @@ export const TreasurerDashboard = () => {
                 onSave={handleProfilePictureSave}
                 memberName={currentUser.name}
                 size="sm"
+                extraContent={
+                  <>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setIsChangingPin(!isChangingPin);
+                        setPinChangeError(null);
+                        setPinChangeSuccess(false);
+                      }} 
+                      className="text-[10px] text-gray-600 hover:text-[#ffd700] transition-colors block ml-auto focus:outline-none cursor-pointer"
+                    >
+                      Manage Gateway Access
+                    </button>
+                    {isChangingPin && (
+                      <form onSubmit={handleUpdateExecutivePin} className="mt-4 p-4 bg-[#001f1a] rounded border border-[#ffd700]/20 space-y-3 text-left">
+                        <h4 className="text-xs font-semibold text-[#ffd700] uppercase tracking-wider">Modify Gateway Authorization PIN</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-gray-400">Current PIN</label>
+                            <input
+                              type="password"
+                              maxLength={6}
+                              placeholder="••••••"
+                              value={currentPin}
+                              onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ""))}
+                              className="w-full bg-[#001411] border border-gray-700 text-white p-2 rounded text-sm text-center font-mono focus:border-[#ffd700] focus:outline-none"
+                              required
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-gray-400">New Secret PIN</label>
+                            <input
+                              type="password"
+                              maxLength={6}
+                              placeholder="••••••"
+                              value={newPin}
+                              onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ""))}
+                              className="w-full bg-[#001411] border border-gray-700 text-white p-2 rounded text-sm text-center font-mono focus:border-[#ffd700] focus:outline-none"
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        {pinChangeError && <p className="text-red-400 text-xs font-semibold text-center">{pinChangeError}</p>}
+                        {pinChangeSuccess && <p className="text-green-400 text-xs font-semibold text-center">PIN successfully updated!</p>}
+
+                        <button
+                          type="submit"
+                          disabled={isSubmittingPinChange || newPin.length < 4 || currentPin.length < 4}
+                          className="w-full bg-[#ffd700] text-[#001a16] font-bold text-xs py-2 rounded hover:bg-[#e6c200] transition-colors disabled:opacity-40 cursor-pointer"
+                        >
+                          {isSubmittingPinChange ? "Processing Update..." : "Confirm Security Change"}
+                        </button>
+                      </form>
+                    )}
+                  </>
+                }
               />
             </div>
             <div className="flex-grow w-full">
@@ -279,7 +418,13 @@ export const TreasurerDashboard = () => {
                 </div>
                 <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Vault Balance</p>
-                  <p className="text-white font-bold text-sm">{formatCurrency(totalIncome - totalExpenses)}</p>
+                  <p className="text-white font-bold text-sm">
+                    {isExecutiveUnlocked ? (
+                      formatCurrency(totalIncome - totalExpenses)
+                    ) : (
+                      <span className="tracking-widest text-[#ffd700]/40">••••••</span>
+                    )}
+                  </p>
                 </div>
                 <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Awaiting Disbursement</p>
@@ -300,32 +445,86 @@ export const TreasurerDashboard = () => {
         <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 hover:scale-105 transition-all">
           <TrendingUp className="w-8 h-8 text-green-500 mb-2" />
           <p className="text-gray-400 text-sm">Total Income</p>
-          <p className="text-xl md:text-2xl font-bold text-white">{formatCurrency(totalIncome)}</p>
+          <p className="text-xl md:text-2xl font-bold text-white">
+            {isExecutiveUnlocked ? (
+              formatCurrency(totalIncome)
+            ) : (
+              <span className="text-xl md:text-2xl font-bold tracking-widest text-[#ffd700]/40">••••••</span>
+            )}
+          </p>
         </Card>
         <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 hover:scale-105 transition-all">
           <Receipt className="w-8 h-8 text-red-500 mb-2" />
           <p className="text-gray-400 text-sm">Total Expenses</p>
-          <p className="text-xl md:text-2xl font-bold text-white">{formatCurrency(totalExpenses)}</p>
+          <p className="text-xl md:text-2xl font-bold text-white">
+            {isExecutiveUnlocked ? (
+              formatCurrency(totalExpenses)
+            ) : (
+              <span className="text-xl md:text-2xl font-bold tracking-widest text-[#ffd700]/40">••••••</span>
+            )}
+          </p>
         </Card>
       </div>
 
       <Tabs defaultValue="disbursement" className="w-full">
-        <TabsList className="bg-[#002520] border border-[#ffd700]">
-          <TabsTrigger value="disbursement" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16]">
-            Disbursement Queue
-          </TabsTrigger>
-          <TabsTrigger value="expenses" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16]">
-            Record Expense
-          </TabsTrigger>
-          <TabsTrigger value="income" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16]">
-            Record Income
-          </TabsTrigger>
-          <TabsTrigger value="ledger" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16]">
-            Financial Timeline
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="disbursement">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+          <TabsList className="bg-[#002520] border border-[#ffd700] mb-0">
+            <TabsTrigger value="disbursement" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16]">
+              Disbursement Queue
+            </TabsTrigger>
+            <TabsTrigger value="expenses" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16]">
+              Record Expense
+            </TabsTrigger>
+            <TabsTrigger value="income" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16]">
+              Record Income
+            </TabsTrigger>
+            <TabsTrigger value="ledger" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16]">
+              Financial Timeline
+            </TabsTrigger>
+          </TabsList>
+          {isExecutiveUnlocked && (
+            <button
+              onClick={handleLockDashboard}
+              className="bg-[#002520] hover:bg-[#ffd700]/10 text-[#ffd700] border border-[#ffd700]/30 px-3 py-2 rounded text-sm font-semibold transition-colors flex items-center gap-2 shrink-0 cursor-pointer self-stretch sm:self-auto justify-center"
+              title="Lock Executive Workspace"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              Lock Dashboard
+            </button>
+          )}
+        </div>
+        {!isExecutiveUnlocked ? (
+          <div className="flex flex-col items-center justify-center py-16 px-4 bg-[#001411] border border-[#ffd700]/20 rounded-lg max-w-md mx-auto text-center space-y-6 my-8 shadow-xl">
+            <div className="p-3 bg-[#002a24] rounded-full border border-[#ffd700]/30 text-[#ffd700]">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-[#ffd700]">Executive Security Gateway</h3>
+              <p className="text-sm text-gray-400 mt-1">Please enter your Authorization PIN to unlock administrative features and view treasury metrics.</p>
+            </div>
+            <form onSubmit={handleVerifyPin} className="w-full space-y-4">
+              <input
+                type="password"
+                maxLength={6}
+                placeholder="Enter Secret PIN"
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ""))}
+                className="w-full text-center tracking-widest bg-[#001f1a] border border-[#ffd700] text-white rounded p-3 focus:outline-none text-xl font-mono"
+              />
+              {pinError && <p className="text-red-400 text-xs font-semibold">{pinError}</p>}
+              <button type="submit" disabled={isVerifyingPin || pinInput.length < 4} className="w-full bg-[#ffd700] hover:bg-[#e6c200] text-[#001a16] font-bold py-2.5 rounded transition-colors disabled:opacity-50 cursor-pointer">
+                {isVerifyingPin ? "Verifying..." : "Unlock Vault Space"}
+              </button>
+            </form>
+          </div>
+        ) : (
+          <>
+            {/* Disbursement Queue */}
+            <TabsContent value="disbursement">
           <Card className="bg-[#002520] border-2 border-[#ffd700] p-6">
             <h3 className="text-xl font-bold text-[#ffd700] mb-4">Tickets Awaiting Disbursement</h3>
             <div className="overflow-x-auto">
@@ -548,6 +747,8 @@ export const TreasurerDashboard = () => {
             </div>
           </Card>
         </TabsContent>
+          </>
+        )}
       </Tabs>
     </div>
   );

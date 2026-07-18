@@ -41,6 +41,25 @@ export default function FamilySecDashboard() {
   const [loading, setLoading] = useState(true);
   const [saveLoading, setSaveLoading] = useState(false);
 
+  // Lock Engine States
+  const [isExecutiveUnlocked, setIsExecutiveUnlocked] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('family_secretary_session_unlocked') === 'true';
+    }
+    return false;
+  });
+  const [pinInput, setPinInput] = useState<string>("");
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
+
+  // Hidden PIN Configuration States (Inside Update Profile Photo Modal)
+  const [isChangingPin, setIsChangingPin] = useState(false);
+  const [currentPin, setCurrentPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [pinChangeError, setPinChangeError] = useState<string | null>(null);
+  const [pinChangeSuccess, setPinChangeSuccess] = useState(false);
+  const [isSubmittingPinChange, setIsSubmittingPinChange] = useState(false);
+
   // Avatar upload hook
   const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
     if (!currentUser) return;
@@ -57,6 +76,69 @@ export default function FamilySecDashboard() {
     } catch (err: any) {
       console.error('Failed to upload avatar:', err);
       toast.error('Failed to update profile picture.');
+    }
+  };
+
+  // Handler A: Verify Input Credentials
+  const handleVerifyPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinError(null);
+    setIsVerifyingPin(true);
+    try {
+      const { data: isValid, error } = await supabase.rpc('verify_executive_pin', {
+        input_role: 'FAMILY_SECRETARY',
+        input_pin: pinInput
+      });
+      if (error) throw error;
+      if (isValid) {
+        setIsExecutiveUnlocked(true);
+        sessionStorage.setItem('family_secretary_session_unlocked', 'true');
+        setPinInput("");
+      } else {
+        setPinError("Invalid Executive Security PIN. Access Denied.");
+      }
+    } catch (error: any) {
+      console.error("Security Gateway Exception:", error.message);
+      setPinError("Verification gateway encountered an error.");
+    } finally {
+      setIsVerifyingPin(false);
+    }
+  };
+
+  const handleLockDashboard = () => {
+    setIsExecutiveUnlocked(false);
+    sessionStorage.removeItem('family_secretary_session_unlocked');
+  };
+
+  // Handler B: PIN Mutation API
+  const handleUpdateExecutivePin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinChangeError(null);
+    setPinChangeSuccess(false);
+    setIsSubmittingPinChange(true);
+    try {
+      const { data: isSuccess, error } = await supabase.rpc('change_executive_pin', {
+        target_role: 'FAMILY_SECRETARY',
+        old_pin: currentPin,
+        new_pin: newPin
+      });
+      if (error) throw error;
+      if (isSuccess) {
+        setPinChangeSuccess(true);
+        setCurrentPin("");
+        setNewPin("");
+        setTimeout(() => {
+          setIsChangingPin(false);
+          setPinChangeSuccess(false);
+        }, 2000);
+      } else {
+        setPinChangeError("Current Gateway PIN is invalid.");
+      }
+    } catch (error: any) {
+      console.error("PIN Update Error:", error.message);
+      setPinChangeError("Failed to persist security token update.");
+    } finally {
+      setIsSubmittingPinChange(false);
     }
   };
 
@@ -605,13 +687,27 @@ export default function FamilySecDashboard() {
               <Plus className="w-4 h-4" />
               New Meeting
             </Button>
-            <Button 
-              onClick={fetchData} 
-              variant="outline" 
-              className="border-[#ffd700] text-[#ffd700]"
-            >
-              Refresh
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                onClick={fetchData} 
+                variant="outline" 
+                className="border-[#ffd700] text-[#ffd700]"
+              >
+                Refresh
+              </Button>
+              {isExecutiveUnlocked && (
+                <button
+                  onClick={handleLockDashboard}
+                  className="bg-[#002520] hover:bg-[#ffd700]/10 text-[#ffd700] border border-[#ffd700]/30 px-3 py-2 rounded text-sm font-semibold transition-colors flex items-center gap-2 cursor-pointer"
+                  title="Lock Executive Workspace"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  Lock
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -625,6 +721,42 @@ export default function FamilySecDashboard() {
                   onSave={handleProfilePictureSave}
                   memberName={currentUser.name}
                   size="sm"
+                  extraContent={
+                    <>
+                      <div className="border-t border-white/10 my-4" />
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          setIsChangingPin(!isChangingPin);
+                          setPinChangeError(null);
+                          setPinChangeSuccess(false);
+                        }} 
+                        className="text-[10px] text-gray-600 hover:text-[#ffd700] transition-colors block ml-auto focus:outline-none cursor-pointer"
+                      >
+                        Manage Gateway Access
+                      </button>
+                      {isChangingPin && (
+                        <form onSubmit={handleUpdateExecutivePin} className="mt-4 p-4 bg-[#001f1a] rounded border border-[#ffd700]/20 space-y-3 text-left">
+                          <h4 className="text-xs font-semibold text-[#ffd700] uppercase tracking-wider">Modify Gateway Authorization PIN</h4>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[11px] text-gray-400">Current PIN</label>
+                              <input type="password" maxLength={6} placeholder="••••••" value={currentPin} onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ""))} className="w-full bg-[#001411] border border-gray-700 text-white p-2 rounded text-sm text-center font-mono focus:border-[#ffd700] focus:outline-none" required />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[11px] text-gray-400">New Secret PIN</label>
+                              <input type="password" maxLength={6} placeholder="••••••" value={newPin} onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ""))} className="w-full bg-[#001411] border border-gray-700 text-white p-2 rounded text-sm text-center font-mono focus:border-[#ffd700] focus:outline-none" required />
+                            </div>
+                          </div>
+                          {pinChangeError && <p className="text-red-400 text-xs font-semibold text-center">{pinChangeError}</p>}
+                          {pinChangeSuccess && <p className="text-green-400 text-xs font-semibold text-center">PIN successfully updated!</p>}
+                          <button type="submit" disabled={isSubmittingPinChange || newPin.length < 4 || currentPin.length < 4} className="w-full bg-[#ffd700] text-[#001a16] font-bold text-xs py-2 rounded hover:bg-[#e6c200] transition-colors disabled:opacity-40 cursor-pointer">
+                            {isSubmittingPinChange ? "Processing Update..." : "Confirm Security Change"}
+                          </button>
+                        </form>
+                      )}
+                    </>
+                  }
                 />
               </div>
               <div className="flex-grow w-full">
@@ -750,8 +882,29 @@ export default function FamilySecDashboard() {
           </div>
         </Card>
 
-        {/* Family Liturgical Duties Schedule */}
-        <Card className="bg-[#002520] border border-[#ffd700]/25 p-6 rounded-xl mb-8 shadow-lg">
+        {!isExecutiveUnlocked ? (
+          <div className="flex flex-col items-center justify-center py-16 px-4 bg-[#001411] border border-[#ffd700]/20 rounded-lg max-w-md mx-auto text-center space-y-6 my-8 shadow-xl">
+            <div className="p-3 bg-[#002a24] rounded-full border border-[#ffd700]/30 text-[#ffd700]">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-[#ffd700]">Executive Security Gateway</h3>
+              <p className="text-sm text-gray-400 mt-1">Please enter your Authorization PIN to access Family Secretary administrative features.</p>
+            </div>
+            <form onSubmit={handleVerifyPin} className="w-full space-y-4">
+              <input type="password" maxLength={6} placeholder="Enter Secret PIN" value={pinInput} onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ""))} className="w-full text-center tracking-widest bg-[#001f1a] border border-[#ffd700] text-white rounded p-3 focus:outline-none text-xl font-mono" />
+              {pinError && <p className="text-red-400 text-xs font-semibold">{pinError}</p>}
+              <button type="submit" disabled={isVerifyingPin || pinInput.length < 4} className="w-full bg-[#ffd700] hover:bg-[#e6c200] text-[#001a16] font-bold py-2.5 rounded transition-colors disabled:opacity-50 cursor-pointer">
+                {isVerifyingPin ? "Verifying..." : "Unlock Family Secretary Portal"}
+              </button>
+            </form>
+          </div>
+        ) : (
+          <>
+            {/* Family Liturgical Duties Schedule */}
+            <Card className="bg-[#002520] border border-[#ffd700]/25 p-6 rounded-xl mb-8 shadow-lg">
           <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-4">
             <BookOpen className="w-5 h-5 text-[#ffd700]" />
             Family Liturgical Duties Schedule
@@ -1085,6 +1238,8 @@ export default function FamilySecDashboard() {
             </form>
           </Card>
         </div>
+          </>
+        )}
 
       </div>
     </div>

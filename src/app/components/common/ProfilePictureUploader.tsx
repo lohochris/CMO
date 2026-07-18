@@ -8,9 +8,10 @@ interface ProfilePictureUploaderProps {
   onSave: (imageDataUrl: string, imageFile: Blob) => void;
   memberName: string;
   size?: 'sm' | 'md';
+  extraContent?: React.ReactNode;
 }
 
-export const ProfilePictureUploader = ({ currentImage, onSave, memberName, size = 'md' }: ProfilePictureUploaderProps) => {
+export const ProfilePictureUploader = ({ currentImage, onSave, memberName, size = 'md', extraContent }: ProfilePictureUploaderProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -209,26 +210,33 @@ export const ProfilePictureUploader = ({ currentImage, onSave, memberName, size 
               </button>
             </div>
 
-            {/* Upload/Camera Options */}
             {!previewImage && !isCameraActive && (
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="bg-[#001a16] border-2 border-[#ffd700] hover:bg-[#ffd700] hover:text-[#001a16] text-[#ffd700] font-semibold py-4 rounded transition-all flex flex-col items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Upload className="w-8 h-8" />
-                  Upload Photo
-                </button>
-                <button
-                  type="button"
-                  onClick={startCamera}
-                  className="bg-[#001a16] border-2 border-[#ffd700] hover:bg-[#ffd700] hover:text-[#001a16] text-[#ffd700] font-semibold py-4 rounded transition-all flex flex-col items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Camera className="w-8 h-8" />
-                  Take Photo
-                </button>
-              </div>
+              <>
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="bg-[#001a16] border-2 border-[#ffd700] hover:bg-[#ffd700] hover:text-[#001a16] text-[#ffd700] font-semibold py-4 rounded transition-all flex flex-col items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Upload className="w-8 h-8" />
+                    Upload Photo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={startCamera}
+                    className="bg-[#001a16] border-2 border-[#ffd700] hover:bg-[#ffd700] hover:text-[#001a16] text-[#ffd700] font-semibold py-4 rounded transition-all flex flex-col items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Camera className="w-8 h-8" />
+                    Take Photo
+                  </button>
+                </div>
+                {extraContent && (
+                  <>
+                    <div className="border-t border-white/10 my-4" />
+                    {extraContent}
+                  </>
+                )}
+              </>
             )}
 
             {/* Camera Stream */}
