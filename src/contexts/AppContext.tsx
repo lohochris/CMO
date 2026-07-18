@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef, useCallback } from 'react';
 import { Member, Transaction, WelfareTicket, Expense, Announcement, Page, FamilyTransaction, FamilyExpense, FamilyWelfareTicket, FamilyAnnouncement } from '../types';
 import { seedAnnouncements } from '../data/seedData';
 import { supabase } from '../lib/supabaseClient';
@@ -253,85 +253,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [currentUser]);
 
-  // Ensure data hydrates even if native Supabase Auth is anonymous
-  useEffect(() => {
-    const hydrateData = async () => {
-      // Recover administrative session if present in local storage
-      try {
-        if (typeof window !== 'undefined') {
-          const savedUser = localStorage.getItem('cmo_current_user');
-          const sessionKey = localStorage.getItem('cmo_member_session') || localStorage.getItem('cmo_admin_id');
-          
-          if ((sessionKey === 'WEL-OFF-2026' || sessionKey === 'TREAS-2026' || savedUser) && !currentUser) {
-            if (savedUser) {
-              setCurrentUser(JSON.parse(savedUser));
-            } else if (sessionKey) {
-              const fallbackAdmin: Member = {
-                id: sessionKey,
-                name: sessionKey === 'WEL-OFF-2026' ? 'Welfare Officer' : 'Treasurer',
-                status: 'Active',
-                balance: 0,
-                role: sessionKey === 'WEL-OFF-2026' ? 'welfare' : 'treasurer'
-              };
-              setCurrentUser(fallbackAdmin);
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Administrative session recovery failed:", e);
-      }
-
-      // Fetch the global members list immediately to unblock the UI dropdown
-      const { data } = await supabase.from('members').select('*');
-      if (data) {
-        const sessionKey = localStorage.getItem('cmo_member_session') || localStorage.getItem('cmo_admin_id');
-        const loadedMembers = data.map((m: any) => ({
-          ...dbToMember(m),
-          name: m.full_name || m.name,
-          phone: m.phone_number || m.phone
-        }));
-        setMembersState(loadedMembers);
-
-        // Sync local current user state with latest database details on page refresh
-        if (sessionKey) {
-          const freshUser = loadedMembers.find((m: any) => m.id === sessionKey);
-          if (freshUser) {
-            setCurrentUser(freshUser);
-          }
-        }
-
-        // Also fetch welfare tickets and map them with loadedMembers context
-        try {
-          const { data: dbWelfare } = await supabase.from('welfare_tickets').select('*');
-          if (dbWelfare) {
-            setWelfareTicketsState(dbWelfare.map((t: any) => dbToWelfareTicket(t, loadedMembers)));
-          }
-        } catch (welfareErr) {
-          console.error("Immediate welfare tickets hydration error:", welfareErr);
-        }
-
-        // Fetch master_roster count
-        try {
-          const { count, error: rosterErr } = await supabase
-            .from('master_roster')
-            .select('*', { count: 'exact', head: true });
-          if (!rosterErr && count !== null) {
-            setRosterCount(count);
-          }
-        } catch (rosterErr) {
-          console.error("Immediate roster count hydration error:", rosterErr);
-        }
-      }
-    };
-    hydrateData();
-  }, [currentUser]);
   const [selectedFamily, setSelectedFamily] = useState<import('../types').Family | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(true);
   const [dbError, setDbError] = useState<string | null>(null);
 
-  const refreshDatabase = async () => {
+  // References to keep mutable states fresh in asynchronous callbacks
+  const membersRef = useRef<Member[]>(members);
+  const transactionsRef = useRef<Transaction[]>(transactions);
+  const welfareTicketsRef = useRef<WelfareTicket[]>(welfareTickets);
+  const expensesRef = useRef<Expense[]>(expenses);
+  const announcementsRef = useRef<Announcement[]>(announcements);
+  const dbErrorRef = useRef<string | null>(dbError);
+  const currentUserRef = useRef<Member | null>(currentUser);
+
+  // Synchronize references on every render
+  membersRef.current = members;
+  transactionsRef.current = transactions;
+  welfareTicketsRef.current = welfareTickets;
+  expensesRef.current = expenses;
+  announcementsRef.current = announcements;
+  dbErrorRef.current = dbError;
+  currentUserRef.current = currentUser;
+
+  const refreshDatabase = useCallback(async () => {
     let loadedMembersList: Member[] = [];
 
     // 1. Fetch Members
@@ -357,6 +303,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setDbError(err.message || 'Isolated member connection error');
       setMembersState([]);
       loadedMembersList = [];
+    }
+
+    // Sync local current user state with latest database details on page refresh
+    try {
+      if (typeof window !== 'undefined') {
+        const sessionKey = localStorage.getItem('cmo_member_session') || localStorage.getItem('cmo_admin_id');
+        if (sessionKey && loadedMembersList.length > 0) {
+          const freshUser = loadedMembersList.find((m: Member) => m.id === sessionKey);
+          if (freshUser) {
+            setCurrentUser(freshUser);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Error syncing current user with database details:", e);
     }
 
     // 2. Fetch Transactions
@@ -424,19 +385,45 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } catch (err) {
       console.error("AppContext roster count fetch error:", err);
     }
-  };
+  }, []);
 
-  // Initial fetch from Supabase
+  // Initial fetch from Supabase on mount
   useEffect(() => {
-    const fetchData = async () => {
+    const initializeData = async () => {
       setLoading(true);
       setDbError(null);
+
+      // Recover administrative session if present in local storage
+      try {
+        if (typeof window !== 'undefined') {
+          const savedUser = localStorage.getItem('cmo_current_user');
+          const sessionKey = localStorage.getItem('cmo_member_session') || localStorage.getItem('cmo_admin_id');
+          
+          if (sessionKey === 'WEL-OFF-2026' || sessionKey === 'TREAS-2026' || savedUser) {
+            if (savedUser) {
+              setCurrentUser(JSON.parse(savedUser));
+            } else if (sessionKey) {
+              const fallbackAdmin: Member = {
+                id: sessionKey,
+                name: sessionKey === 'WEL-OFF-2026' ? 'Welfare Officer' : 'Treasurer',
+                status: 'Active',
+                balance: 0,
+                role: sessionKey === 'WEL-OFF-2026' ? 'welfare' : 'treasurer'
+              };
+              setCurrentUser(fallbackAdmin);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Administrative session recovery failed:", e);
+      }
+
       await refreshDatabase();
       setLoading(false);
     };
 
-    fetchData();
-  }, []);
+    initializeData();
+  }, [refreshDatabase]);
 
   // Real-time Supabase Postgres changes subscription to welfare_tickets
   useEffect(() => {
@@ -448,20 +435,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         (payload) => {
           console.log('Real-time database payload received:', payload);
           if (payload.eventType === 'INSERT') {
-            const newTicket = dbToWelfareTicket(payload.new, members);
+            const newTicket = dbToWelfareTicket(payload.new, membersRef.current);
             setWelfareTicketsState(prev => {
               if (prev.some(t => t.ticketId === newTicket.ticketId)) return prev;
               return [...prev, newTicket];
             });
           } else if (payload.eventType === 'UPDATE') {
-            const updatedTicket = dbToWelfareTicket(payload.new, members);
+            const updatedTicket = dbToWelfareTicket(payload.new, membersRef.current);
             
             // Check status change to trigger toast notification
             setWelfareTicketsState(prev => {
               const oldTicket = prev.find(t => t.ticketId === updatedTicket.ticketId);
               if (oldTicket && oldTicket.status !== updatedTicket.status) {
                 const memberName = updatedTicket.memberName;
-                const roleLower = currentUser?.role?.toLowerCase();
+                const roleLower = currentUserRef.current?.role?.toLowerCase();
                 
                 if (roleLower === 'welfare' || roleLower === 'treasurer') {
                   if (updatedTicket.status === 'Approved' || updatedTicket.status === 'Declined') {
@@ -499,7 +486,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser, members]);
+  }, []);
 
   // Real-time Supabase Postgres changes subscription to announcements
   useEffect(() => {
@@ -533,11 +520,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   // Intercepting State Setters to sync to Supabase asynchronously
-  const setMembers = async (newMembers: Member[] | ((prev: Member[]) => Member[])) => {
-    const next = typeof newMembers === 'function' ? newMembers(members) : newMembers;
+  const setMembers = useCallback(async (newMembers: Member[] | ((prev: Member[]) => Member[])) => {
+    const next = typeof newMembers === 'function' ? newMembers(membersRef.current) : newMembers;
     setMembersState(next);
 
-    if (dbError) {
+    if (dbErrorRef.current) {
       console.warn('Supabase initialization failed or is in error state. Skipping members sync to prevent loops.');
       return;
     }
@@ -591,14 +578,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (syncErr) console.error('Failed to sync member change to Supabase (insert):', syncErr);
       }
     }
-  };
+  }, []);
 
-  const setTransactions = async (newTx: Transaction[] | ((prev: Transaction[]) => Transaction[])) => {
-    const next = typeof newTx === 'function' ? newTx(transactions) : newTx;
+  const setTransactions = useCallback(async (newTx: Transaction[] | ((prev: Transaction[]) => Transaction[])) => {
+    const next = typeof newTx === 'function' ? newTx(transactionsRef.current) : newTx;
     setTransactionsState(next);
 
     // Sync only newly added transactions by comparing key hashes
-    const currentHashes = new Set(transactions.map(t => `${t.memberId}-${t.timestamp}`));
+    const currentHashes = new Set(transactionsRef.current.map(t => `${t.memberId}-${t.timestamp}`));
     const toInsert = next.filter(t => !currentHashes.has(`${t.memberId}-${t.timestamp}`));
 
     if (toInsert.length > 0) {
@@ -634,37 +621,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         console.error('Transaction sync exception:', err);
       }
     }
-  };
+  }, []);
 
-  const setWelfareTickets = async (newTickets: WelfareTicket[] | ((prev: WelfareTicket[]) => WelfareTicket[])) => {
-    const next = typeof newTickets === 'function' ? newTickets(welfareTickets) : newTickets;
+  const setWelfareTickets = useCallback(async (newTickets: WelfareTicket[] | ((prev: WelfareTicket[]) => WelfareTicket[])) => {
+    const next = typeof newTickets === 'function' ? newTickets(welfareTicketsRef.current) : newTickets;
     setWelfareTicketsState(next);
 
     for (const t of next) {
       const { error: syncErr } = await supabase.from('welfare_tickets').upsert(welfareTicketToDb(t));
       if (syncErr) console.error('Failed to sync welfare ticket to Supabase:', syncErr);
     }
-  };
+  }, []);
 
-  const setExpenses = async (newExpenses: Expense[] | ((prev: Expense[]) => Expense[])) => {
-    const next = typeof newExpenses === 'function' ? newExpenses(expenses) : newExpenses;
+  const setExpenses = useCallback(async (newExpenses: Expense[] | ((prev: Expense[]) => Expense[])) => {
+    const next = typeof newExpenses === 'function' ? newExpenses(expensesRef.current) : newExpenses;
     setExpensesState(next);
 
     for (const e of next) {
       const { error: syncErr } = await supabase.from('expenses').upsert(expenseToDb(e));
       if (syncErr) console.error('Failed to sync expense to Supabase:', syncErr);
     }
-  };
+  }, []);
 
-  const setAnnouncements = async (newAnnouncements: Announcement[] | ((prev: Announcement[]) => Announcement[])) => {
-    const next = typeof newAnnouncements === 'function' ? newAnnouncements(announcements) : newAnnouncements;
+  const setAnnouncements = useCallback(async (newAnnouncements: Announcement[] | ((prev: Announcement[]) => Announcement[])) => {
+    const next = typeof newAnnouncements === 'function' ? newAnnouncements(announcementsRef.current) : newAnnouncements;
     setAnnouncementsState(next);
 
     for (const a of next) {
       const { error: syncErr } = await supabase.from('announcements').upsert(announcementToDb(a));
       if (syncErr) console.error('Failed to sync announcement to Supabase:', syncErr);
     }
-  };
+  }, []);
 
   // Fixed Announcement Expiry logic using useMemo to calculate on-the-fly and prevent the state update loop
   const activeAnnouncements = useMemo(() => {
@@ -694,29 +681,73 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return totalIncome - totalExpenses;
   }, [totalIncome, totalExpenses]);
 
+  const contextValue = useMemo(() => ({
+    members,
+    setMembers,
+    transactions,
+    setTransactions,
+    welfareTickets,
+    setWelfareTickets,
+    expenses,
+    setExpenses,
+    announcements: activeAnnouncements,
+    setAnnouncements,
+    familyTransactions,
+    setFamilyTransactions,
+    familyExpenses,
+    setFamilyExpenses,
+    familyWelfareTickets,
+    setFamilyWelfareTickets,
+    familyAnnouncements,
+    setFamilyAnnouncements,
+    currentPage,
+    setCurrentPage,
+    selectedFamily,
+    setSelectedFamily,
+    currentUser,
+    setCurrentUser,
+    error,
+    setError,
+    success,
+    setSuccess,
+    loading,
+    dbError,
+    rosterCount,
+    totalIncome,
+    totalExpenses,
+    vaultBalance,
+    refreshDatabase
+  }), [
+    members,
+    setMembers,
+    transactions,
+    setTransactions,
+    welfareTickets,
+    setWelfareTickets,
+    expenses,
+    setExpenses,
+    activeAnnouncements,
+    setAnnouncements,
+    familyTransactions,
+    familyExpenses,
+    familyWelfareTickets,
+    familyAnnouncements,
+    currentPage,
+    selectedFamily,
+    currentUser,
+    error,
+    success,
+    loading,
+    dbError,
+    rosterCount,
+    totalIncome,
+    totalExpenses,
+    vaultBalance,
+    refreshDatabase
+  ]);
+
   return (
-    <AppContext.Provider value={{
-      members, setMembers,
-      transactions, setTransactions,
-      welfareTickets, setWelfareTickets,
-      expenses, setExpenses,
-      announcements: activeAnnouncements, setAnnouncements,
-      familyTransactions, setFamilyTransactions,
-      familyExpenses, setFamilyExpenses,
-      familyWelfareTickets, setFamilyWelfareTickets,
-      familyAnnouncements, setFamilyAnnouncements,
-      currentPage, setCurrentPage,
-      selectedFamily, setSelectedFamily,
-      currentUser, setCurrentUser,
-      error, setError,
-      success, setSuccess,
-      loading, dbError,
-      rosterCount,
-      totalIncome,
-      totalExpenses,
-      vaultBalance,
-      refreshDatabase
-    }}>
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );

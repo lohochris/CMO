@@ -20,6 +20,9 @@ import {
   Trophy,
   Timer,
   ZapOff,
+  Camera,
+  Upload,
+  Image,
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
 import { useApp } from '../../../contexts/AppContext';
@@ -226,6 +229,11 @@ export const RefereeMatchCenter = () => {
   const [selectedFixture, setSelectedFixture] = useState<Fixture | null>(null);
   const [fixturesLoading, setFixturesLoading] = useState(false);
 
+  // ── Gallery State ──────────────────────────────────────────────────────────
+  const [galleryItems, setGalleryItems] = useState<{ id: string; media_url: string }[]>([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
   // ── Lineups ────────────────────────────────────────────────────────────────
   const [homeLineup, setHomeLineup] = useState<LineupAthlete[]>([]);
   const [awayLineup, setAwayLineup] = useState<LineupAthlete[]>([]);
@@ -386,17 +394,124 @@ export const RefereeMatchCenter = () => {
     }
   }, []);
 
+  // ── Fetch gallery items ────────────────────────────────────────────────────
+  const fetchGallery = useCallback(async (fixtureId: string) => {
+    setGalleryLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('cmo_match_gallery')
+        .select('id, media_url')
+        .eq('fixture_id', fixtureId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setGalleryItems(data || []);
+    } catch (err: any) {
+      console.error('Error fetching gallery:', err);
+    } finally {
+      setGalleryLoading(false);
+    }
+  }, []);
+
+  // ── Upload media to gallery ────────────────────────────────────────────────
+  const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !selectedFixture) return;
+    setUploading(true);
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${selectedFixture.id}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('cmo-gallery')
+          .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (uploadError) throw uploadError;
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('cmo-gallery')
+          .getPublicUrl(fileName);
+
+        // Insert into cmo_match_gallery
+        const { error: dbError } = await supabase
+          .from('cmo_match_gallery')
+          .insert([{
+            fixture_id: selectedFixture.id,
+            media_url: publicUrl
+          }]);
+
+        if (dbError) throw dbError;
+      }
+
+      toast.success('Media uploaded successfully to match gallery!', {
+        style: { background: '#002520', border: '1px solid rgba(255,215,0,0.3)', color: '#ffd700' },
+      });
+      
+      await fetchGallery(selectedFixture.id);
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      toast.error(err?.message || 'Failed to upload media.', {
+        style: { background: '#002520', border: '1px solid #ef4444', color: '#ef4444' },
+      });
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  }, [selectedFixture, fetchGallery]);
+
+  // ── Delete media from gallery ──────────────────────────────────────────────
+  const handleDelete = useCallback(async (id: string, mediaUrl: string) => {
+    try {
+      const { error: dbError } = await supabase
+        .from('cmo_match_gallery')
+        .delete()
+        .eq('id', id);
+      if (dbError) throw dbError;
+
+      // Extract filepath from url
+      const urlParts = mediaUrl.split('/cmo-gallery/');
+      if (urlParts.length > 1) {
+        const filePath = urlParts[1];
+        const { error: storageError } = await supabase.storage
+          .from('cmo-gallery')
+          .remove([filePath]);
+        if (storageError) {
+          console.warn("Storage deletion warning:", storageError);
+        }
+      }
+
+      toast.success('Media removed from gallery.', {
+        style: { background: '#002520', border: '1px solid rgba(255,215,0,0.3)', color: '#ffd700' },
+      });
+
+      if (selectedFixture) {
+        await fetchGallery(selectedFixture.id);
+      }
+    } catch (err: any) {
+      console.error("Delete error:", err);
+      toast.error(err?.message || 'Failed to remove media.');
+    }
+  }, [selectedFixture, fetchGallery]);
+
   // When a fixture is selected
   useEffect(() => {
     if (selectedFixture) {
       fetchLineups(selectedFixture);
       fetchEvents(selectedFixture.id);
+      fetchGallery(selectedFixture.id);
     } else {
       setHomeLineup([]);
       setAwayLineup([]);
       setEvents([]);
+      setGalleryItems([]);
     }
-  }, [selectedFixture, fetchLineups, fetchEvents]);
+  }, [selectedFixture, fetchLineups, fetchEvents, fetchGallery]);
 
   // ── Real-time subscription: events ────────────────────────────────────────
   useEffect(() => {
@@ -694,6 +809,91 @@ export const RefereeMatchCenter = () => {
 
       {selectedFixture && (
         <>
+          {/* ── Match Gallery Section ── */}
+          <Card className="bg-[#001a16] border border-[#ffd700]/20 rounded-2xl p-5 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                <Camera className="w-4 h-4 text-[#ffd700]" />
+                Match Media Gallery
+                {galleryLoading && <Loader2 className="w-4 h-4 animate-spin text-gray-500 ml-auto" />}
+              </h2>
+              <span className="text-xs text-gray-400">{galleryItems.length} items</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Upload Area */}
+              <div className="md:col-span-1">
+                <div className="border-2 border-dashed border-[#ffd700]/20 hover:border-[#ffd700]/50 bg-[#002520]/30 hover:bg-[#002520]/50 transition-all rounded-xl p-5 text-center cursor-pointer flex flex-col items-center justify-center min-h-[140px] relative group">
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*,video/*"
+                    onChange={handleUpload}
+                    disabled={uploading}
+                    className="opacity-0 absolute inset-0 cursor-pointer disabled:cursor-not-allowed"
+                  />
+                  {uploading ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <Loader2 className="w-6 h-6 animate-spin text-[#ffd700]" />
+                      <span className="text-xs text-[#ffd700] font-medium">Uploading...</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-[#ffd700]/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Upload className="w-4 h-4 text-[#ffd700]" />
+                      </div>
+                      <span className="text-xs text-gray-300 font-medium">Upload Match Media</span>
+                      <span className="text-[10px] text-gray-500">Drag & drop or click</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Photo Strip / Gallery */}
+              <div className="md:col-span-3">
+                {galleryItems.length === 0 ? (
+                  <div className="h-[140px] border border-[#ffd700]/10 bg-[#002520]/10 rounded-xl flex flex-col items-center justify-center text-gray-500 text-sm">
+                    <Image className="w-6 h-6 mb-1 opacity-20 text-[#ffd700]" />
+                    <span>No media uploaded for this match yet.</span>
+                  </div>
+                ) : (
+                  <div className="flex gap-3 overflow-x-auto py-2 pr-2 scrollbar-thin h-[140px] items-center">
+                    {galleryItems.map(item => (
+                      <div
+                        key={item.id}
+                        className="w-24 h-24 rounded-lg overflow-hidden border border-[#ffd700]/10 hover:border-[#ffd700]/45 relative group shrink-0 shadow-md transition-all duration-200"
+                      >
+                        <img
+                          src={item.media_url}
+                          alt="Match Media"
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-[#001a16]/80 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2">
+                          <a
+                            href={item.media_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-1.5 rounded-md bg-[#ffd700]/10 text-[#ffd700] hover:bg-[#ffd700]/20 transition-colors"
+                            title="View Fullsize"
+                          >
+                            <Image className="w-4 h-4" />
+                          </a>
+                          <button
+                            onClick={() => handleDelete(item.id, item.media_url)}
+                            className="p-1.5 rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+                            title="Delete Media"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+
           {/* ── Live Scoreboard ── */}
           <Card className="bg-[#001a16] border border-[#ffd700]/20 rounded-2xl p-6 shadow-xl">
             <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
