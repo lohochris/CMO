@@ -9,6 +9,10 @@ import {
   ArrowUpDown,
   Shield,
   Swords,
+  Camera,
+  Image,
+  Eye,
+  X,
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
 import { Card } from '../../../app/components/ui/card';
@@ -322,7 +326,17 @@ const LeagueTable = ({ rows, loading }: { rows: LeagueRow[]; loading: boolean })
 // Sub-Component: Knockout Bracket Visualizer
 // ─────────────────────────────────────────────────────────────────────────────
 
-const BracketVisualizer = ({ rounds, loading }: { rounds: BracketRound[]; loading: boolean }) => {
+const BracketVisualizer = ({
+  rounds,
+  loading,
+  selectedFixtureId,
+  onSelectFixture,
+}: {
+  rounds: BracketRound[];
+  loading: boolean;
+  selectedFixtureId: string | null;
+  onSelectFixture: (id: string) => void;
+}) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-gray-500">
@@ -364,10 +378,18 @@ const BracketVisualizer = ({ rounds, loading }: { rounds: BracketRound[]; loadin
                 const awayWon = match.winnerTeamId === match.awayTeamId;
                 const isTBD = !match.homeTeamId && !match.awayTeamId;
 
+                const isSelected = selectedFixtureId === match.id;
+
                 return (
-                  <div
+                  <button
                     key={match.id}
-                    className="w-52 rounded-xl border border-[#ffd700]/15 bg-[#002520] overflow-hidden shadow-lg"
+                    onClick={() => !isTBD && onSelectFixture(match.id)}
+                    disabled={isTBD}
+                    className={`w-52 rounded-xl border text-left overflow-hidden shadow-lg transition-all duration-200 ${
+                      isSelected
+                        ? 'border-[#ffd700] ring-1 ring-[#ffd700]'
+                        : 'border-[#ffd700]/15 bg-[#002520] hover:border-[#ffd700]/30'
+                    } ${isTBD ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
                   >
                     {/* Home */}
                     <div className={`flex items-center justify-between px-3 py-2.5 border-b border-[#ffd700]/10 ${homeWon ? 'bg-[#ffd700]/10' : ''}`}>
@@ -424,7 +446,7 @@ const BracketVisualizer = ({ rounds, loading }: { rounds: BracketRound[]; loadin
                         Awaiting result
                       </div>
                     )}
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -433,6 +455,74 @@ const BracketVisualizer = ({ rounds, loading }: { rounds: BracketRound[]; loadin
             {/* Handled by flex gap layout — CSS border approach for clean joins */}
           </div>
         ))}
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sub-Component: Fixture & Results List
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface FixtureListProps {
+  fixtures: CompletedFixture[];
+  selectedFixtureId: string | null;
+  onSelectFixture: (id: string) => void;
+}
+
+const FixtureList = ({ fixtures, selectedFixtureId, onSelectFixture }: FixtureListProps) => {
+  if (!fixtures.length) return null;
+
+  return (
+    <div className="mt-6 border-t border-[#ffd700]/10 pt-5">
+      <h3 className="text-sm font-semibold text-[#ffd700] mb-3 flex items-center gap-2">
+        <Swords className="w-4 h-4" />
+        Matches & Fixtures
+      </h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-80 overflow-y-auto pr-1">
+        {fixtures.map(f => {
+          const isSelected = selectedFixtureId === f.id;
+          const homeName = f.home_team?.team_name ?? 'Home';
+          const awayName = f.away_team?.team_name ?? 'Away';
+          const matchDate = f.match_date
+            ? new Date(f.match_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+            : '';
+          const isCompleted = f.status === 'Completed';
+
+          return (
+            <button
+              key={f.id}
+              onClick={() => onSelectFixture(f.id)}
+              className={`flex flex-col justify-between p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                isSelected
+                  ? 'bg-[#ffd700]/10 border-[#ffd700]/50 shadow-md shadow-[#ffd700]/5'
+                  : 'bg-[#002520] border-[#ffd700]/10 hover:border-[#ffd700]/30 hover:bg-[#002520]/80'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full mb-2">
+                <span className="text-[10px] font-mono text-gray-500 uppercase">
+                  Round {f.round_number} {matchDate ? `· ${matchDate}` : ''}
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                  isCompleted 
+                    ? 'bg-gray-500/10 text-gray-400 border border-gray-500/20' 
+                    : f.status === 'Ongoing'
+                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 animate-pulse'
+                      : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                }`}>
+                  {f.status}
+                </span>
+              </div>
+              <div className="flex justify-between items-center w-full">
+                <span className="text-xs font-semibold text-white truncate max-w-[120px]">{homeName}</span>
+                <span className="text-xs font-bold text-[#ffd700] tabular-nums mx-2">
+                  {isCompleted || f.status === 'Ongoing' ? `${f.home_score} - ${f.away_score}` : 'vs'}
+                </span>
+                <span className="text-xs font-semibold text-white truncate max-w-[120px] text-right">{awayName}</span>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -453,6 +543,39 @@ export const TournamentStandingsBoard = () => {
   const [leagueRows, setLeagueRows] = useState<LeagueRow[]>([]);
   const [bracketRounds, setBracketRounds] = useState<BracketRound[]>([]);
   const [displayMode, setDisplayMode] = useState<'standings' | 'bracket'>('standings');
+
+  // ── Gallery State ──────────────────────────────────────────────────────────
+  const [selectedFixtureId, setSelectedFixtureId] = useState<string | null>(null);
+  const [galleryItems, setGalleryItems] = useState<{ id: string; media_url: string }[]>([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+
+  // ── Fetch match media gallery ──────────────────────────────────────────────
+  const fetchMatchGallery = useCallback(async (fixtureId: string) => {
+    setGalleryLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('cmo_match_gallery')
+        .select('id, media_url')
+        .eq('fixture_id', fixtureId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setGalleryItems(data || []);
+    } catch (err: any) {
+      console.error('Error fetching match gallery:', err);
+    } finally {
+      setGalleryLoading(false);
+    }
+  }, []);
+
+  // Sync gallery when selected fixture changes
+  useEffect(() => {
+    if (selectedFixtureId) {
+      fetchMatchGallery(selectedFixtureId);
+    } else {
+      setGalleryItems([]);
+    }
+  }, [selectedFixtureId, fetchMatchGallery]);
 
   // ── Fetch tournaments ──────────────────────────────────────────────────────
   const fetchTournaments = useCallback(async () => {
@@ -503,6 +626,7 @@ export const TournamentStandingsBoard = () => {
   }, []);
 
   useEffect(() => {
+    setSelectedFixtureId(null);
     if (selectedTournamentId) fetchFixtures(selectedTournamentId);
     else { setFixtures([]); setLeagueRows([]); setBracketRounds([]); }
   }, [selectedTournamentId, fetchFixtures]);
@@ -659,6 +783,18 @@ export const TournamentStandingsBoard = () => {
               </div>
             </div>
             <LeagueTable rows={leagueRows} loading={fixturesLoading} />
+            
+            {/* Inject Match Fixtures List for league selection */}
+            {!fixturesLoading && fixtures.length > 0 && (
+              <div className="px-6 pb-6">
+                <FixtureList
+                  fixtures={fixtures}
+                  selectedFixtureId={selectedFixtureId}
+                  onSelectFixture={setSelectedFixtureId}
+                />
+              </div>
+            )}
+
             {!fixturesLoading && leagueRows.length > 0 && (
               <div className="px-6 py-3 border-t border-[#ffd700]/10 bg-[#002520]/30 text-xs text-gray-600 flex gap-4 flex-wrap">
                 <span>P = Played</span>
@@ -685,7 +821,12 @@ export const TournamentStandingsBoard = () => {
                 </span>
               )}
             </div>
-            <BracketVisualizer rounds={bracketRounds} loading={fixturesLoading} />
+            <BracketVisualizer
+              rounds={bracketRounds}
+              loading={fixturesLoading}
+              selectedFixtureId={selectedFixtureId}
+              onSelectFixture={setSelectedFixtureId}
+            />
           </Card>
         )
       ) : (
@@ -695,6 +836,77 @@ export const TournamentStandingsBoard = () => {
             Select a tournament above to view standings and bracket progression.
           </p>
         </Card>
+      )}
+
+      {/* ── Read-only Match Media Gallery ── */}
+      {selectedFixtureId && (
+        <Card className="bg-[#001a16] border border-[#ffd700]/20 rounded-2xl p-5 shadow-xl transition-all duration-300">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <Camera className="w-4 h-4 text-[#ffd700]" />
+              Match Media Gallery
+              {galleryLoading && <Loader2 className="w-4 h-4 animate-spin text-gray-500" />}
+            </h3>
+            <button
+              onClick={() => setSelectedFixtureId(null)}
+              className="p-1 rounded-lg text-gray-500 hover:text-white hover:bg-gray-700/20 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {galleryLoading ? (
+            <div className="flex items-center justify-center py-6 text-gray-500">
+              <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              <span className="text-xs">Loading match photos…</span>
+            </div>
+          ) : galleryItems.length === 0 ? (
+            <div className="py-6 border border-[#ffd700]/10 bg-[#002520]/10 rounded-xl flex flex-col items-center justify-center text-gray-500 text-xs">
+              <Image className="w-5 h-5 mb-1 opacity-20 text-[#ffd700]" />
+              <span>No media uploaded for this match yet.</span>
+            </div>
+          ) : (
+            <div className="flex gap-3 overflow-x-auto py-2 pr-2 scrollbar-thin items-center">
+              {galleryItems.map(item => (
+                <div
+                  key={item.id}
+                  onClick={() => setPreviewImageUrl(item.media_url)}
+                  className="w-20 h-20 rounded-lg overflow-hidden border border-[#ffd700]/10 hover:border-[#ffd700]/40 relative group shrink-0 shadow-md cursor-pointer transition-all duration-200 hover:scale-105"
+                >
+                  <img
+                    src={item.media_url}
+                    alt="Match Media"
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-[#001a16]/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                    <div className="p-1 bg-[#001a16]/80 rounded-md border border-[#ffd700]/20 text-[#ffd700]">
+                      <Eye className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* ── Fullscreen Media Preview Modal ── */}
+      {previewImageUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#001a16]/95 backdrop-blur-sm p-4">
+          <button
+            onClick={() => setPreviewImageUrl(null)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-[#002520] border border-[#ffd700]/20 text-white hover:text-[#ffd700] hover:bg-[#002520]/80 transition-all duration-200 shadow-lg cursor-pointer"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <div className="max-w-4xl max-h-[90vh] w-full flex items-center justify-center relative rounded-2xl overflow-hidden border border-[#ffd700]/10 bg-[#002520]/40 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <img
+              src={previewImageUrl}
+              alt="Match Media Preview"
+              className="max-w-full max-h-[85vh] object-contain"
+            />
+          </div>
+        </div>
       )}
 
       {/* Live indicator */}
