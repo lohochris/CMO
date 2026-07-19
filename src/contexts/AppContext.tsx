@@ -133,7 +133,8 @@ const dbToTransaction = (t: any): Transaction => ({
   purpose: t.purpose,
   notes: t.notes,
   transactionType: t.transaction_type,
-  timestamp: t.created_at || t.timestamp
+  timestamp: t.created_at || t.timestamp,
+  status: t.status
 });
 
 const transactionToDb = (t: Transaction): any => ({
@@ -144,7 +145,8 @@ const transactionToDb = (t: Transaction): any => ({
   purpose: t.purpose,
   notes: t.notes,
   transaction_type: t.transactionType,
-  created_at: t.timestamp
+  created_at: t.timestamp,
+  status: t.status
 });
 
 const dbToWelfareTicket = (t: any, membersList?: Member[]): WelfareTicket => {
@@ -734,13 +736,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // database-driven reactive financial totals
   const totalIncome = useMemo(() => {
     return transactions
-      .filter(t => (t.transactionType ?? '').toLowerCase() === 'income')
+      .filter(t => {
+        const typeLower = (t.transactionType ?? '').toLowerCase();
+        if (typeLower !== 'income' && typeLower !== 'inflow' && typeLower !== 'section_a') return false;
+        
+        // If it's a Provost Fine, count toward realized treasury income when cleared or approved
+        if (t.purpose?.startsWith('Provost Fine:')) {
+          return t.status === 'Cleared' || t.status === 'Approved';
+        }
+        return true;
+      })
       .reduce((sum, t) => sum + (t.amount || 0), 0);
   }, [transactions]);
 
   const totalExpenses = useMemo(() => {
     return transactions
-      .filter(t => (t.transactionType ?? '').toLowerCase() === 'expense')
+      .filter(t => {
+        const typeLower = (t.transactionType ?? '').toLowerCase();
+        if (typeLower !== 'expense' && typeLower !== 'outflow' && typeLower !== 'section_b') return false;
+        
+        // Strictly exclude fine entries from operational expense outflows
+        if (t.purpose?.startsWith('Provost Fine:') || t.purpose?.includes('Fine Commitment')) {
+          return false;
+        }
+        return true;
+      })
       .reduce((sum, t) => sum + (t.amount || 0), 0);
   }, [transactions]);
 

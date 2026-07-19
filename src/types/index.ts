@@ -84,6 +84,7 @@ export interface Transaction {
   notes?: string;
   transactionType?: string;
   timestamp: string;
+  status?: string;
 }
 
 export interface FamilyTransaction extends Transaction {
