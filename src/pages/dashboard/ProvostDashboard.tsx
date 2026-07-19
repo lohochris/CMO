@@ -24,6 +24,8 @@ import {
 import { formatCurrency, formatDateTime } from '../../utils/helpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
+import { GeneralGalleryManager } from '../../app/components/gallery/GeneralGalleryManager';
+
 
 interface DisciplinaryLog {
   id: string;
@@ -756,6 +758,13 @@ export default function ProvostDashboard() {
             </Card>
           </div>
 
+          {/* General Non-Sports Gallery & Video Link Pipeline */}
+          <div className="mt-8">
+            <GeneralGalleryManager
+              currentUserName={currentUser?.name || 'Provost Marshal'}
+              isExecutive={isExecutiveUnlocked}
+            />
+          </div>
         </div>
           </>
         )}

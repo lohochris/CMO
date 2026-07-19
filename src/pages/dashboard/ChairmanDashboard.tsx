@@ -11,6 +11,8 @@ import { ProfilePictureUploader } from '../../app/components/common/ProfilePictu
 import { formatCurrency, formatDate, isAdministrativeId } from '../../utils/helpers';
 import { supabase } from '../../lib/supabaseClient';
 import { Member, Family, MemberStatus } from '../../types';
+import { GeneralGalleryManager } from '../../app/components/gallery/GeneralGalleryManager';
+
 
 export const ChairmanDashboard = () => {
   const {
@@ -769,6 +771,9 @@ export const ChairmanDashboard = () => {
             <TabsTrigger value="spiritual" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
               Spiritual Calendar
             </TabsTrigger>
+            <TabsTrigger value="general_gallery" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              General Gallery & Videos
+            </TabsTrigger>
           </TabsList>
           {isExecutiveUnlocked && (
             <button
@@ -1232,6 +1237,12 @@ export const ChairmanDashboard = () => {
               )}
             </div>
           </Card>
+        </TabsContent>
+        <TabsContent value="general_gallery" className="mt-6">
+          <GeneralGalleryManager
+            currentUserName={currentUser?.name || 'Executive Chairman'}
+            isExecutive={isExecutiveUnlocked}
+          />
         </TabsContent>
           </>
         )}

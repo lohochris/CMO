@@ -133,3 +133,26 @@ export interface Announcement {
 export interface FamilyAnnouncement extends Announcement {
   family: Family;
 }
+
+export type AlbumCategory = 'Meeting' | 'Harvest' | 'FathersDay' | 'Welfare' | 'General';
+
+export interface GeneralAlbum {
+  id: string;
+  name: string;
+  title?: string;
+  category: AlbumCategory;
+  description?: string | null;
+  created_at?: string;
+  created_by?: string | null;
+  item_count?: number;
+}
+
+export interface GeneralGalleryItem {
+  id: string;
+  album_id: string;
+  media_url?: string | null;
+  video_url?: string | null;
+  title?: string | null;
+  uploaded_by?: string | null;
+  created_at?: string;
+}

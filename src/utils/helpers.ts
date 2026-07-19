@@ -44,6 +44,13 @@ export const isAdministrativeId = (rawId: string): boolean => {
     id === 'SECRETARY-2026'       ||
     id === 'PRO-2026'             ||
     id === 'CMO-CHAIRMAN-2026'    ||
-    id === 'CHAIRMAN-2026'
+    id === 'PROVOST-2026'         ||
+    id === 'LITURGIST-2026'
   );
 };
+
+export const isStandardParishMember = (m: { official_member_id?: string; id?: string; role?: string }): boolean => {
+  const memberId = (m.official_member_id || m.id || '').toUpperCase();
+  if (isAdministrativeId(memberId)) return false;
+  return memberId.startsWith('HCC-CMO-26-') || memberId.startsWith('HCC-');
+};

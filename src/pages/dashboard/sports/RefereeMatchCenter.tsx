@@ -861,12 +861,12 @@ export const RefereeMatchCenter = () => {
                     {galleryItems.map(item => (
                       <div
                         key={item.id}
-                        className="w-24 h-24 rounded-lg overflow-hidden border border-[#ffd700]/10 hover:border-[#ffd700]/45 relative group shrink-0 shadow-md transition-all duration-200"
+                        className="w-24 h-24 rounded-lg overflow-hidden bg-slate-950 border border-[#ffd700]/10 hover:border-[#ffd700]/45 relative group shrink-0 shadow-md transition-all duration-200 flex items-center justify-center p-0.5"
                       >
                         <img
                           src={item.media_url}
                           alt="Match Media"
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain"
                         />
                         <div className="absolute inset-0 bg-[#001a16]/80 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2">
                           <a
