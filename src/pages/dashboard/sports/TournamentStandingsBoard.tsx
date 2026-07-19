@@ -871,12 +871,12 @@ export const TournamentStandingsBoard = () => {
                 <div
                   key={item.id}
                   onClick={() => setPreviewImageUrl(item.media_url)}
-                  className="w-20 h-20 rounded-lg overflow-hidden border border-[#ffd700]/10 hover:border-[#ffd700]/40 relative group shrink-0 shadow-md cursor-pointer transition-all duration-200 hover:scale-105"
+                  className="w-24 h-24 rounded-lg overflow-hidden bg-slate-950 border border-[#ffd700]/10 hover:border-[#ffd700]/40 relative group shrink-0 shadow-md cursor-pointer transition-all duration-200 hover:scale-105 flex items-center justify-center p-0.5"
                 >
                   <img
                     src={item.media_url}
                     alt="Match Media"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                   />
                   <div className="absolute inset-0 bg-[#001a16]/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
                     <div className="p-1 bg-[#001a16]/80 rounded-md border border-[#ffd700]/20 text-[#ffd700]">

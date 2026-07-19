@@ -7,6 +7,8 @@ import { useApp } from '../../contexts/AppContext';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { supabase } from '../../lib/supabaseClient';
+import { GeneralGalleryManager } from '../../app/components/gallery/GeneralGalleryManager';
+
 
 export const SecretaryDashboard = () => {
   // Lock Engine States
@@ -358,6 +360,14 @@ Recorded by: ${currentUser?.name}`;
           </Button>
         </div>
       </Card>
+
+      {/* General Non-Sports Gallery & Video Link Pipeline */}
+      <div className="mt-8">
+        <GeneralGalleryManager
+          currentUserName={currentUser?.name || 'General Secretary'}
+          isExecutive={isExecutiveUnlocked}
+        />
+      </div>
         </>
       )}
     </div>

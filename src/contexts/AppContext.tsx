@@ -78,6 +78,29 @@ const dbToMember = (m: any): Member => {
   };
 };
 
+const dbToExecutive = (e: any): Member => {
+  const execId = e.executive_id || e.id;
+  const roleKey = (e.role_key || e.role || '').toLowerCase();
+  return {
+    id: execId,
+    official_member_id: execId,
+    name: e.full_name || e.name || execId,
+    full_name: e.full_name || e.name || execId,
+    phone_number: e.phone_number || e.phone || undefined,
+    status: (e.status || 'Active') as any,
+    balance: Number(e.balance || 0),
+    role: roleKey as any,
+    family: e.cmo_family || e.family as any || undefined,
+    cmo_family: e.cmo_family || e.family || undefined,
+    phone: e.phone_number || e.phone || undefined,
+    email: e.email || undefined,
+    profilePic: e.avatar_url || e.profile_picture_url || null,
+    createdAt: e.created_at || undefined,
+    updatedAt: e.updated_at || undefined
+  };
+};
+
+
 const memberToDb = (m: Member): any => ({
   official_member_id: m.official_member_id || m.id,
   full_name: m.full_name || m.name,
@@ -279,10 +302,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const refreshDatabase = useCallback(async () => {
     let loadedMembersList: Member[] = [];
+    let loadedExecutivesList: Member[] = [];
 
-    // 1. Fetch Members
+    // 1a. Fetch Operational Executives from public.cmo_executives
     try {
-      // Ensure all executives pull the complete human membership database rows
+      const { data: execsData, error: execsError } = await supabase
+        .from('cmo_executives')
+        .select('*');
+      if (!execsError && execsData && execsData.length > 0) {
+        loadedExecutivesList = execsData.map(dbToExecutive);
+      }
+    } catch (err: any) {
+      console.error("cmo_executives partition query error:", err);
+    }
+
+    // 1b. Fetch Parish Members from public.members
+    try {
       const { data: membersData, error: membersError } = await supabase
         .from('members')
         .select('*');
@@ -305,19 +340,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       loadedMembersList = [];
     }
 
-    // Sync local current user state with latest database details on page refresh
+    // Sync session credentials against cmo_executives and members
     try {
       if (typeof window !== 'undefined') {
         const sessionKey = localStorage.getItem('cmo_member_session') || localStorage.getItem('cmo_admin_id');
-        if (sessionKey && loadedMembersList.length > 0) {
-          const freshUser = loadedMembersList.find((m: Member) => m.id === sessionKey);
-          if (freshUser) {
-            setCurrentUser(freshUser);
+        const savedUserStr = localStorage.getItem('cmo_current_user');
+        const savedUserId = savedUserStr ? JSON.parse(savedUserStr).id : null;
+        const targetId = sessionKey || savedUserId;
+
+        if (targetId) {
+          // Check cmo_executives partition first
+          const execUser = loadedExecutivesList.find(
+            (ex) => ex.id === targetId || ex.official_member_id === targetId
+          );
+          if (execUser) {
+            setCurrentUser(execUser);
+          } else if (loadedMembersList.length > 0) {
+            const memberUser = loadedMembersList.find(
+              (m: Member) => m.id === targetId || m.official_member_id === targetId
+            );
+            if (memberUser) {
+              setCurrentUser(memberUser);
+            }
           }
         }
       }
     } catch (e) {
-      console.error("Error syncing current user with database details:", e);
+      console.error("Error syncing current user session with executive/member database:", e);
     }
 
     // 2. Fetch Transactions
@@ -374,16 +423,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setAnnouncementsState(seedAnnouncements);
     }
 
-    // Fetch master_roster count
+    // Fetch parish member census count strictly targeting official_member_id (HCC-CMO-26-XXXX) in public.members
     try {
       const { count, error: rosterErr } = await supabase
-        .from('master_roster')
-        .select('*', { count: 'exact', head: true });
+        .from('members')
+        .select('*', { count: 'exact', head: true })
+        .like('official_member_id', 'HCC-CMO-26-%');
       if (!rosterErr && count !== null) {
         setRosterCount(count);
+      } else {
+        // Fallback to local filtering of loaded members
+        const countLocal = loadedMembersList.filter(m => (m.official_member_id || m.id || '').startsWith('HCC-CMO-26-')).length;
+        if (countLocal > 0) setRosterCount(countLocal);
       }
     } catch (err) {
-      console.error("AppContext roster count fetch error:", err);
+      console.error("AppContext member census count fetch error:", err);
     }
   }, []);
 
@@ -393,29 +447,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setLoading(true);
       setDbError(null);
 
-      // Recover administrative session if present in local storage
+      // Check cmo_executives and local storage for initial user session
       try {
         if (typeof window !== 'undefined') {
-          const savedUser = localStorage.getItem('cmo_current_user');
+          const savedUserStr = localStorage.getItem('cmo_current_user');
           const sessionKey = localStorage.getItem('cmo_member_session') || localStorage.getItem('cmo_admin_id');
-          
-          if (sessionKey === 'WEL-OFF-2026' || sessionKey === 'TREAS-2026' || savedUser) {
-            if (savedUser) {
-              setCurrentUser(JSON.parse(savedUser));
-            } else if (sessionKey) {
-              const fallbackAdmin: Member = {
-                id: sessionKey,
-                name: sessionKey === 'WEL-OFF-2026' ? 'Welfare Officer' : 'Treasurer',
-                status: 'Active',
-                balance: 0,
-                role: sessionKey === 'WEL-OFF-2026' ? 'welfare' : 'treasurer'
-              };
-              setCurrentUser(fallbackAdmin);
+          const targetKey = sessionKey || (savedUserStr ? JSON.parse(savedUserStr).id : null);
+
+          if (targetKey) {
+            // Check cmo_executives partition directly
+            const { data: execData } = await supabase
+              .from('cmo_executives')
+              .select('*')
+              .or(`executive_id.eq.${targetKey},id.eq.${targetKey}`)
+              .maybeSingle();
+
+            if (execData) {
+              setCurrentUser(dbToExecutive(execData));
+            } else {
+              // Check public.members partition directly for general registry
+              const { data: memberData } = await supabase
+                .from('members')
+                .select('*')
+                .or(`official_member_id.eq.${targetKey},id.eq.${targetKey}`)
+                .maybeSingle();
+
+              if (memberData) {
+                setCurrentUser(dbToMember(memberData));
+              } else if (savedUserStr) {
+                setCurrentUser(JSON.parse(savedUserStr));
+              }
             }
           }
         }
       } catch (e) {
-        console.error("Administrative session recovery failed:", e);
+        console.error("Executive session recovery failed:", e);
       }
 
       await refreshDatabase();
@@ -424,6 +490,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     initializeData();
   }, [refreshDatabase]);
+
 
   // Real-time Supabase Postgres changes subscription to welfare_tickets
   useEffect(() => {

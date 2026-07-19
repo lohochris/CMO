@@ -11,6 +11,8 @@ import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { supabase } from '../../lib/supabaseClient';
 import { WelfareTicket } from '../../types';
+import { GeneralGalleryManager } from '../../app/components/gallery/GeneralGalleryManager';
+
 
 export const WelfareDashboard = () => {
   const [isExecutiveUnlocked, setIsExecutiveUnlocked] = useState<boolean>(() => {
@@ -585,6 +587,14 @@ export const WelfareDashboard = () => {
           ))}
         </div>
       </Card>
+
+      {/* General Non-Sports Gallery & Video Link Pipeline */}
+      <div className="mt-8">
+        <GeneralGalleryManager
+          currentUserName={currentUser?.name || 'Welfare Officer'}
+          isExecutive={isExecutiveUnlocked}
+        />
+      </div>
         </>
       )}
     </div>

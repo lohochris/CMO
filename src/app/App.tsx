@@ -150,7 +150,7 @@ function AppContent() {
 
       const roleLower = currentUser?.role?.toLowerCase();
       const officialId = currentUser?.official_member_id;
-      const isGlobalAdmin = ['fin_sec', 'chairman', 'cmo_chairman', 'welfare', 'treasurer', 'gen_sec', 'pro', 'provost', 'liturgist'].includes(roleLower) || officialId === 'CHAIRMAN-2026';
+      const isGlobalAdmin = ['fin_sec', 'chairman', 'cmo_chairman', 'welfare', 'treasurer', 'gen_sec', 'pro', 'provost', 'liturgist'].includes(roleLower);
       const userFamilyLower = (currentUser?.family || '').toLowerCase();
 
       if (!isGlobalAdmin && userFamilyLower !== normalizedParam) {
@@ -203,7 +203,7 @@ function AppContent() {
 
       const roleLower = currentUser?.role?.toLowerCase();
       const officialId = currentUser?.official_member_id;
-      const isGlobalAdmin = ['fin_sec', 'chairman', 'cmo_chairman', 'provost', 'liturgist', 'treasurer', 'welfare', 'pro', 'gen_sec', 'secretary'].includes(roleLower || '') || officialId === 'CHAIRMAN-2026';
+      const isGlobalAdmin = ['fin_sec', 'chairman', 'cmo_chairman', 'provost', 'liturgist', 'treasurer', 'welfare', 'pro', 'gen_sec', 'secretary'].includes(roleLower || '');
 
       if (!isGlobalAdmin) {
         let targetFamily = '';
@@ -220,7 +220,7 @@ function AppContent() {
           setTimeout(() => {
             setCurrentPage('dashboard');
           }, 10);
-          if (currentUser?.official_member_id === 'CHAIRMAN-2026' || currentUser?.role?.toLowerCase() === 'chairman' || currentUser?.role?.toLowerCase() === 'cmo_chairman') {
+          if (currentUser?.role?.toLowerCase() === 'chairman' || currentUser?.role?.toLowerCase() === 'cmo_chairman') {
             return <ChairmanDashboard />;
           }
           return <MemberDashboard />;
@@ -247,43 +247,41 @@ function AppContent() {
       currentPage === 'provost' ||
       currentPage === 'liturgist'
     ) {
-      // Force absolute Chairman routing override condition
-      const officialId = currentUser?.official_member_id;
+      const officialId = currentUser?.official_member_id || currentUser?.id;
       const userRole = currentUser?.role?.toLowerCase();
 
-      if (officialId === 'CHAIRMAN-2026' || userRole === 'chairman' || userRole === 'cmo_chairman') {
+      if (userRole === 'chairman' || userRole === 'cmo_chairman') {
         return <ChairmanDashboard />;
       }
 
       if (userRole === 'fin_sec' || userRole === 'financial_secretary') return <FinanceDashboard />;
-      if (userRole === 'welfare')          return <WelfareDashboard />;
-      if (userRole === 'treasurer')        return <TreasurerDashboard />;
-      if (userRole === 'pro')              return <PRODashboard />;
-      if (userRole === 'provost')          return <ProvostDashboard />;
-      if (userRole === 'liturgist')         return <LiturgistDashboard />;
+      if (userRole === 'welfare') return <WelfareDashboard />;
+      if (userRole === 'treasurer') return <TreasurerDashboard />;
+      if (userRole === 'pro') return <PRODashboard />;
+      if (userRole === 'provost') return <ProvostDashboard />;
+      if (userRole === 'liturgist') return <LiturgistDashboard />;
       if (userRole === 'gen_sec' || userRole === 'secretary') return <SecretaryDashboard />;
-      if (userRole === 'family_chairman' || userRole === 'family_head') {
-        return <FamilyHeadDashboard />;
-      }
-      if (userRole === 'family_secretary') {
-        return <FamilySecDashboard />;
-      }
-      if (userRole === 'member') {
-        return <MemberDashboard />;
-      }
+      if (userRole === 'sports_director') return <SportsAdminPanel />;
+      if (userRole === 'coach') return <CoachRosterWorkspace />;
+      if (userRole === 'referee') return <RefereeMatchCenter />;
+      if (userRole === 'athlete') return <AthleteProfileHub />;
+      if (userRole === 'medical_officer') return <SportsMedicalPortal />;
+      if (userRole === 'family_chairman' || userRole === 'family_head') return <FamilyHeadDashboard />;
+      if (userRole === 'family_secretary') return <FamilySecDashboard />;
 
       // Explicitly disable any fallback to <MemberDashboard /> for administrative roles
       const isAdministrativeRole = [
         'fin_sec', 'financial_secretary', 'treasurer', 'welfare', 'pro', 
         'provost', 'liturgist', 'gen_sec', 'secretary', 'family_chairman', 'family_head', 
-        'family_secretary', 'chairman', 'cmo_chairman'
+        'family_secretary', 'chairman', 'cmo_chairman', 'sports_director', 'coach',
+        'referee', 'medical_officer'
       ].includes(userRole || '');
 
       if (isAdministrativeRole) {
         return (
           <div className="flex h-64 items-center justify-center">
-            <div className="text-red-500 text-lg font-semibold animate-pulse">
-              Error: Administrative routing mismatch. Fallback disabled.
+            <div className="text-[#ffd700] text-lg font-semibold animate-pulse">
+              Loading Administrative Workspace ({userRole})...
             </div>
           </div>
         );
@@ -292,6 +290,7 @@ function AppContent() {
       // Fallback for standard organization members
       return <MemberDashboard />;
     }
+
 
     // Sports department routing
     if (currentPage === 'sports_admin') {

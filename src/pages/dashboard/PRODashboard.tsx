@@ -8,6 +8,8 @@ import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { formatDate } from '../../utils/helpers';
 import { supabase } from '../../lib/supabaseClient';
+import { GeneralGalleryManager } from '../../app/components/gallery/GeneralGalleryManager';
+
 
 export const PRODashboard = () => {
   // Lock Engine States
@@ -330,6 +332,14 @@ export const PRODashboard = () => {
           </Button>
         </div>
       </Card>
+
+      {/* General Non-Sports Gallery & Video Link Pipeline */}
+      <div className="mt-8">
+        <GeneralGalleryManager
+          currentUserName={currentUser?.name || 'PRO Officer'}
+          isExecutive={isExecutiveUnlocked}
+        />
+      </div>
         </>
       )}
     </div>
