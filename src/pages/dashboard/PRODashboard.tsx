@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
@@ -33,7 +33,26 @@ export const PRODashboard = () => {
 
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementContent, setAnnouncementContent] = useState('');
+  const [realMemberCount, setRealMemberCount] = useState<number>(0);
   const { currentUser, announcements, setAnnouncements, members, setMembers, setCurrentUser, setSuccess, setError } = useApp();
+
+  useEffect(() => {
+    const fetchMemberCount = async () => {
+      try {
+        const { count, error } = await supabase
+          .from('members')
+          .select('*', { count: 'exact', head: true });
+        
+        if (!error && count !== null) {
+          setRealMemberCount(count);
+        }
+      } catch (err) {
+        console.error("Error fetching real member count:", err);
+      }
+    };
+
+    fetchMemberCount();
+  }, []);
 
   const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
     if (!currentUser) return;
@@ -222,7 +241,7 @@ export const PRODashboard = () => {
                 </div>
                 <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Total Members</p>
-                  <p className="text-white font-bold text-sm">{members.length}</p>
+                  <p className="text-white font-bold text-sm">{realMemberCount}</p>
                 </div>
                 <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Announcements</p>

@@ -13,6 +13,8 @@ import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { supabase } from '../../lib/supabaseClient';
 import logoImage from '../../imports/CMO.png';
 import { Member, Family, MemberStatus } from '../../types';
+import { FinesEscrowVerificationLedger } from '../../app/components/common/FinesEscrowVerificationLedger';
+
 
 export const FinSecDashboard = () => {
   const {
@@ -1151,7 +1153,7 @@ export const FinSecDashboard = () => {
         </Card>
         <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 hover:scale-105 transition-all cursor-pointer">
           <TrendingUp className="w-8 h-8 text-[#ffd700] mb-2" />
-          <p className="text-gray-400 text-sm">Session Cash</p>
+          <p className="text-[#ffd700] text-sm">Session Cash</p>
           <p className="text-xl md:text-2xl font-bold text-white">
             {isExecutiveUnlocked ? (
               formatCurrency(totalSessionCash)
@@ -1160,6 +1162,11 @@ export const FinSecDashboard = () => {
             )}
           </p>
         </Card>
+      </div>
+
+      {/* Fines Escrow & Treasury Verification Sub-Ledger */}
+      <div className="no-print">
+        <FinesEscrowVerificationLedger />
       </div>
 
       <Tabs defaultValue="validation" className="w-full">

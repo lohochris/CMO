@@ -8,6 +8,8 @@ import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { supabase } from '../../lib/supabaseClient';
 import { GeneralGalleryManager } from '../../app/components/gallery/GeneralGalleryManager';
+import { FinesEscrowVerificationLedger } from '../../app/components/common/FinesEscrowVerificationLedger';
+
 
 
 export const SecretaryDashboard = () => {
@@ -360,6 +362,9 @@ Recorded by: ${currentUser?.name}`;
           </Button>
         </div>
       </Card>
+
+      {/* Fines Escrow & Treasury Verification Sub-Ledger */}
+      <FinesEscrowVerificationLedger />
 
       {/* General Non-Sports Gallery & Video Link Pipeline */}
       <div className="mt-8">
