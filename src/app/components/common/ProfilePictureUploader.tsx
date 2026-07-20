@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Camera, Upload, X, Crop, RotateCw } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
+import { getInitials } from '../../../utils/helpers';
 
 interface ProfilePictureUploaderProps {
   currentImage: string | null | undefined;
@@ -17,6 +18,11 @@ export const ProfilePictureUploader = ({ currentImage, onSave, memberName, size 
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
   const [rotation, setRotation] = useState(0);
+  const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [currentImage]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -170,11 +176,18 @@ export const ProfilePictureUploader = ({ currentImage, onSave, memberName, size 
       {/* Profile Picture Display */}
       <div className={`flex flex-col items-center text-center ${size === 'sm' ? 'gap-1 mb-2' : 'gap-4 mb-6'}`}>
         <div className="relative group">
-          <img
-            src={currentImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(memberName)}&background=ffd700&color=001a16&size=200`}
-            alt={memberName}
-            className={`${size === 'sm' ? 'w-20 h-20 md:w-24 md:h-24' : 'w-32 h-32 md:w-40 md:h-40'} rounded-full border-4 border-[#ffd700] object-cover`}
-          />
+          {currentImage && !imageError ? (
+            <img
+              src={currentImage}
+              alt=""
+              onError={() => setImageError(true)}
+              className={`${size === 'sm' ? 'w-20 h-20 md:w-24 md:h-24' : 'w-32 h-32 md:w-40 md:h-40'} rounded-full border-4 border-[#ffd700] object-cover`}
+            />
+          ) : (
+            <div className={`${size === 'sm' ? 'w-20 h-20 md:w-24 md:h-24 text-xl md:text-2xl' : 'w-32 h-32 md:w-40 md:h-40 text-3xl md:text-4xl'} rounded-full border-4 border-[#ffd700] bg-[#002520] flex items-center justify-center font-extrabold text-[#ffd700] tracking-wider select-none overflow-hidden shrink-0 shadow-lg`}>
+              {getInitials(memberName)}
+            </div>
+          )}
           <button
             type="button"
             onClick={() => setIsOpen(true)}

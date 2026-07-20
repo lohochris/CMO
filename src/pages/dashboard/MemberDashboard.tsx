@@ -10,6 +10,7 @@ import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { supabase } from '../../lib/supabaseClient';
 import { toast } from 'sonner';
+import { MemberAttendanceAndNotificationWidget } from '../../app/components/attendance/MemberAttendanceAndNotificationWidget';
 
 
 export const MemberDashboard = () => {
@@ -476,14 +477,14 @@ export const MemberDashboard = () => {
           </Card>
         )}
 
-        {/* Compact Horizontal Profile Card (Sleek Horizontal Space-Saver) */}
+        {/* Master Header: Full-Width Member Identity Profile Card */}
         <Card className="bg-[#002520] border border-[#ffd700]/20 p-4 mb-6 rounded-xl shadow-lg">
           <div className="flex flex-col md:flex-row items-center gap-6">
             <div className="flex-shrink-0">
               <ProfilePictureUploader
                 currentImage={currentUser.profilePic}
                 onSave={handleProfilePictureSave}
-                memberName={currentUser.name}
+                memberName={currentUser.full_name || currentUser.name || ''}
                 size="sm"
               />
             </div>
@@ -512,6 +513,11 @@ export const MemberDashboard = () => {
             </div>
           </div>
         </Card>
+
+        {/* Member Attendance & Real-Time Executive Notification Center */}
+        <div className="mb-6">
+          <MemberAttendanceAndNotificationWidget currentUser={currentUser} />
+        </div>
 
         <div className="mb-6">
           {currentUser.family ? (

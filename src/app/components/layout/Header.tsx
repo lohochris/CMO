@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LogIn, UserPlus, LogOut, Heart, Wallet, FileEdit, Menu, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import logoImage from '@/imports/CMO.png';
 import { useApp } from '../../../contexts/AppContext';
 import { Page } from '../../../types';
+import { getInitials } from '../../../utils/helpers';
 
 const mainNavLinks: Array<{ label: string; page: Page }> = [
   { label: 'Home', page: 'home' },
@@ -12,6 +13,34 @@ const mainNavLinks: Array<{ label: string; page: Page }> = [
 ];
 
 const familyLinks = ['Wisdom', 'Honour', 'Integrity', 'Talent'] as const;
+
+const UserAvatar = ({ user, size = 'sm' }: { user: any; size?: 'sm' | 'md' }) => {
+  const [imgError, setImgError] = useState(false);
+  const name = user?.full_name || user?.name || '';
+  const initials = getInitials(name);
+  const dimensionClass = size === 'md' ? 'w-10 h-10 text-sm' : 'w-8 h-8 text-xs';
+
+  useEffect(() => {
+    setImgError(false);
+  }, [user?.profilePic]);
+
+  if (user?.profilePic && !imgError) {
+    return (
+      <img
+        src={user.profilePic}
+        alt=""
+        onError={() => setImgError(true)}
+        className={`${dimensionClass} rounded-full border-2 border-[#ffd700] object-cover shrink-0`}
+      />
+    );
+  }
+
+  return (
+    <div className={`${dimensionClass} rounded-full border-2 border-[#ffd700] bg-[#002520] text-[#ffd700] font-extrabold flex items-center justify-center tracking-wider select-none shrink-0 shadow-sm`}>
+      {initials}
+    </div>
+  );
+};
 
 export const Header = () => {
   const { currentUser, setCurrentUser, setCurrentPage, currentPage, selectedFamily, setSelectedFamily } = useApp();
@@ -92,17 +121,11 @@ export const Header = () => {
               <>
                 <div
                   onClick={() => setCurrentPage('dashboard')}
-                  className="flex items-center gap-3 rounded-full border border-[#ffd700] px-3 py-2 cursor-pointer hover:bg-[#ffd700]/10 transition"
+                  className="flex items-center gap-3 rounded-full border border-[#ffd700] px-3 py-1.5 cursor-pointer hover:bg-[#ffd700]/10 transition"
                   title="Go to Dashboard"
                 >
-                  {currentUser.profilePic && (
-                    <img
-                      src={currentUser.profilePic}
-                      alt={displayName}
-                      className="w-8 h-8 rounded-full border-2 border-[#ffd700]"
-                    />
-                  )}
-                  <div className="min-w-0">
+                  <UserAvatar user={currentUser} size="sm" />
+                  <div className="min-w-0 max-w-[180px]">
                     <p className="text-sm font-semibold text-[#ffd700] truncate">{displayName}</p>
                     <p className="text-xs text-gray-400 truncate">{displaySubtitle}</p>
                   </div>
@@ -184,17 +207,7 @@ export const Header = () => {
                   className="flex items-center gap-3 cursor-pointer hover:bg-[#ffd700]/5 p-1 rounded transition"
                   title="Go to Dashboard"
                 >
-                  {currentUser.profilePic ? (
-                    <img
-                      src={currentUser.profilePic}
-                      alt={displayName}
-                      className="h-10 w-10 rounded-full border border-[#ffd700] object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#ffd700] text-sm text-[#ffd700]">
-                      {displayName.charAt(0)}
-                    </div>
-                  )}
+                  <UserAvatar user={currentUser} size="md" />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-[#ffd700]">{displayName}</p>
                     <p className="truncate text-xs text-gray-400">{displaySubtitle}</p>

@@ -12,6 +12,7 @@ import { formatCurrency, formatDate, isAdministrativeId } from '../../utils/help
 import { supabase } from '../../lib/supabaseClient';
 import { Member, Family, MemberStatus } from '../../types';
 import { GeneralGalleryManager } from '../../app/components/gallery/GeneralGalleryManager';
+import { ChairmanAttendanceAnalyticsWidget } from '../../app/components/attendance/ChairmanAttendanceAnalyticsWidget';
 
 
 export const ChairmanDashboard = () => {
@@ -757,13 +758,19 @@ export const ChairmanDashboard = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <TabsList className="bg-[#002520] border border-[#ffd700]/20 w-full justify-start p-1 flex-wrap h-auto gap-1">
             <TabsTrigger value="overview" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
-              Executive Summary
+              Executive Overview
             </TabsTrigger>
-            <TabsTrigger value="announcements" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
-              Announcements & Decrees
+            <TabsTrigger value="attendance" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Attendance Analytics
+            </TabsTrigger>
+            <TabsTrigger value="treasury" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Financial Treasury Ledger
             </TabsTrigger>
             <TabsTrigger value="welfare" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
               Welfare Review {unreadWelfareCount > 0 ? `(${unreadWelfareCount})` : ''}
+            </TabsTrigger>
+            <TabsTrigger value="announcements" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Announcements & Decrees
             </TabsTrigger>
             <TabsTrigger value="roster" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
               CMO Roster
@@ -977,6 +984,86 @@ export const ChairmanDashboard = () => {
               {announcements.length === 0 && (
                 <p className="text-gray-500 text-sm text-center py-4">No announcements currently active.</p>
               )}
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* Tab 2: Attendance Analytics */}
+        <TabsContent value="attendance">
+          <div className="mt-2">
+            <ChairmanAttendanceAnalyticsWidget totalRosterCount={totalMembersCount || rosterCount} />
+          </div>
+        </TabsContent>
+
+        {/* Tab 3: Financial Treasury Ledger */}
+        <TabsContent value="treasury">
+          <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-xl shadow-xl space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#ffd700]/20 pb-4">
+              <div>
+                <h3 className="text-xl font-bold text-[#ffd700] flex items-center gap-2">
+                  <DollarSign className="w-6 h-6 text-[#ffd700]" />
+                  Financial Treasury Ledger
+                </h3>
+                <p className="text-xs text-gray-300 mt-1">
+                  Executive view of CMO vault balance, realized inflows, and expense audit
+                </p>
+              </div>
+              <div className="bg-[#001a16] border border-[#ffd700]/30 px-4 py-2 rounded-lg text-right">
+                <p className="text-xs text-gray-400 font-semibold uppercase">Vault Balance</p>
+                <p className="text-xl font-extrabold text-[#ffd700]">{formatCurrency(vaultBalance)}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-[#001a16] border border-emerald-500/30 p-4 rounded-lg">
+                <p className="text-xs text-emerald-400 uppercase font-semibold">Total Revenue Inflows</p>
+                <p className="text-2xl font-bold text-emerald-400 mt-1">
+                  {formatCurrency(transactions.filter(t => t.transactionType === 'income' || t.transactionType === 'inflow').reduce((sum, t) => sum + (t.amount || 0), 0))}
+                </p>
+              </div>
+              <div className="bg-[#001a16] border border-rose-500/30 p-4 rounded-lg">
+                <p className="text-xs text-rose-400 uppercase font-semibold">Total Outflows & Expenses</p>
+                <p className="text-2xl font-bold text-rose-400 mt-1">
+                  {formatCurrency(transactions.filter(t => t.transactionType === 'expense' || t.transactionType === 'outflow').reduce((sum, t) => sum + (t.amount || 0), 0))}
+                </p>
+              </div>
+              <div className="bg-[#001a16] border border-[#ffd700]/30 p-4 rounded-lg">
+                <p className="text-xs text-gray-400 uppercase font-semibold">Total Ledger Entries</p>
+                <p className="text-2xl font-bold text-white mt-1">{transactions.length} Records</p>
+              </div>
+            </div>
+
+            {/* Treasury Transactions Stream */}
+            <div className="space-y-3 pt-2">
+              <h4 className="text-sm font-bold text-[#ffd700] uppercase tracking-wider">Recent Financial Inflows & Outflows</h4>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-b border-[#ffd700]/20 hover:bg-[#001a16]/50">
+                      <TableHead className="text-[#ffd700]">Member / Contributor</TableHead>
+                      <TableHead className="text-[#ffd700]">Purpose</TableHead>
+                      <TableHead className="text-[#ffd700]">Type</TableHead>
+                      <TableHead className="text-[#ffd700]">Amount</TableHead>
+                      <TableHead className="text-[#ffd700]">Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {transactions.slice(0, 15).map((t, idx) => (
+                      <TableRow key={t.id || idx} className="border-b border-[#ffd700]/10 hover:bg-[#001a16]/50">
+                        <TableCell className="text-white font-medium">{t.memberName || t.memberId || 'General CMO'}</TableCell>
+                        <TableCell className="text-gray-300 text-xs">{t.purpose}</TableCell>
+                        <TableCell className="text-xs font-bold uppercase">
+                          <span className={t.transactionType === 'expense' || t.transactionType === 'outflow' ? 'text-rose-400' : 'text-emerald-400'}>
+                            {t.transactionType || 'inflow'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-white font-bold font-mono text-xs">{formatCurrency(t.amount)}</TableCell>
+                        <TableCell className="text-gray-400 text-xs font-mono">{formatDate(t.timestamp)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </Card>
         </TabsContent>

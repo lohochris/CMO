@@ -33,7 +33,7 @@ export const PRODashboard = () => {
 
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementContent, setAnnouncementContent] = useState('');
-  const [realMemberCount, setRealMemberCount] = useState<number>(0);
+  const [totalMembers, setTotalMembers] = useState<number>(0);
   const { currentUser, announcements, setAnnouncements, members, setMembers, setCurrentUser, setSuccess, setError } = useApp();
 
   useEffect(() => {
@@ -44,7 +44,7 @@ export const PRODashboard = () => {
           .select('*', { count: 'exact', head: true });
         
         if (!error && count !== null) {
-          setRealMemberCount(count);
+          setTotalMembers(count);
         }
       } catch (err) {
         console.error("Error fetching real member count:", err);
@@ -241,7 +241,7 @@ export const PRODashboard = () => {
                 </div>
                 <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Total Members</p>
-                  <p className="text-white font-bold text-sm">{realMemberCount}</p>
+                  <p className="text-white font-bold text-sm">{totalMembers}</p>
                 </div>
                 <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Announcements</p>

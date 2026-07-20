@@ -9,6 +9,7 @@ import { About } from '../pages/public/About';
 import { Services } from '../pages/public/Services';
 import { Login } from '../pages/public/Login';
 import { Register } from '../pages/public/Register';
+import { PublicGallery } from '../pages/public/PublicGallery';
 import { MemberDashboard } from '../pages/dashboard/MemberDashboard';
 import { FinSecDashboard as FinanceDashboard } from '../pages/dashboard/FinSecDashboard';
 import { WelfareDashboard } from '../pages/dashboard/WelfareDashboard';
@@ -340,6 +341,8 @@ function AppContent() {
     if (currentPage === 'familyIntegritySecretary') return <FamilyIntegritySecretaryDashboard />;
     if (currentPage === 'familyTalentChairman') return <FamilyTalentChairmanDashboard />;
     if (currentPage === 'familyTalentSecretary') return <FamilyTalentSecretaryDashboard />;
+
+    if (currentPage === 'publicGallery') return <PublicGallery />;
 
     return <Home />;
   };

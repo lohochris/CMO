@@ -53,4 +53,17 @@ export const isStandardParishMember = (m: { official_member_id?: string; id?: st
   const memberId = (m.official_member_id || m.id || '').toUpperCase();
   if (isAdministrativeId(memberId)) return false;
   return memberId.startsWith('HCC-CMO-26-') || memberId.startsWith('HCC-');
+};
+
+export const getInitials = (name?: string | null): string => {
+  if (!name || !name.trim()) return 'HC';
+  const cleaned = name.trim();
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'HC';
+  if (parts.length === 1) {
+    return parts[0].substring(0, 2).toUpperCase();
+  }
+  const firstInitial = parts[0][0];
+  const lastInitial = parts[parts.length - 1][0];
+  return (firstInitial + lastInitial).toUpperCase();
 };

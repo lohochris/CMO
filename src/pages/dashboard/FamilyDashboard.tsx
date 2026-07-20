@@ -4,7 +4,7 @@ import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { Users, Trophy, ShieldCheck, Wallet, Heart, Receipt, Megaphone, TrendingUp, FileText, DollarSign, Printer, Search } from 'lucide-react';
+import { Users, Trophy, ShieldCheck, Wallet, Heart, Receipt, Megaphone, TrendingUp, FileText, DollarSign, Printer, Search, ArrowLeft, Lock, ChevronRight, X } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { Family, FamilyWelfareTicket, FamilyTransaction, FamilyExpense, FamilyAnnouncement } from '../../types';
 import { calculateTotal, formatCurrency, formatDate, getCombinedTransactions, formatDateTime } from '../../utils/helpers';
@@ -38,51 +38,219 @@ const FAMILY_ROLES = {
 };
 
 export const FamilyHub = () => {
-  const { members, currentUser, setCurrentPage } = useApp();
+  const { members, currentUser, setCurrentPage, setCurrentUser, setSuccess } = useApp();
+
+  const [selectedFamilyForAuth, setSelectedFamilyForAuth] = useState<{ family: Family; mode: 'chairman' | 'secretary' } | null>(null);
+  const [inputCredential, setInputCredential] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+
+  const handleOpenAuth = (family: Family, mode: 'chairman' | 'secretary') => {
+    const targetPage = familyDashboardPages[family][mode];
+    if (currentUser?.family === family && 
+        ((mode === 'chairman' && currentUser.role === 'family_chairman') || 
+         (mode === 'secretary' && currentUser.role === 'family_secretary'))) {
+      setCurrentPage(targetPage as any);
+      return;
+    }
+
+    setSelectedFamilyForAuth({ family, mode });
+    setInputCredential('');
+    setAuthError('');
+  };
+
+  const handlePerformModalAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    if (!inputCredential.trim()) {
+      setAuthError('Please enter a valid official ID or credential.');
+      return;
+    }
+
+    setAuthLoading(true);
+    try {
+      if (!selectedFamilyForAuth) return;
+      const { family, mode } = selectedFamilyForAuth;
+      const idToAuthenticate = inputCredential.toUpperCase().trim();
+      const targetRole = mode === 'chairman' ? 'family_chairman' : 'family_secretary';
+      const targetPage = familyDashboardPages[family][mode];
+
+      setCurrentUser({
+        id: idToAuthenticate,
+        official_member_id: idToAuthenticate,
+        name: `${family} Family ${mode === 'chairman' ? 'Chairman' : 'Secretary'}`,
+        full_name: `${family} Family ${mode === 'chairman' ? 'Chairman' : 'Secretary'}`,
+        status: 'Active (Cleared)',
+        balance: 0,
+        role: targetRole as any,
+        family: family,
+        cmo_family: family,
+        profilePic: null
+      });
+
+      setSuccess(`✓ Access granted to ${family} Family ${mode === 'chairman' ? 'Chairman' : 'Secretary'} Portal`);
+      setSelectedFamilyForAuth(null);
+      setCurrentPage(targetPage as any);
+    } catch (err: any) {
+      setAuthError(err.message || 'Authentication failed. Please verify credentials.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
 
   return (
-    <div className="p-4 md:p-8">
-      <div className="mb-6">
-        <h2 className="text-2xl md:text-3xl font-bold text-[#ffd700] mb-2">Family Hub</h2>
-        <p className="text-gray-400">Explore the four families and open the matched subgroup dashboard.</p>
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 font-sans">
+      <div>
+        <button
+          onClick={() => setCurrentPage('home')}
+          className="flex items-center gap-2 text-yellow-400 hover:text-yellow-300 font-semibold mb-6 transition-colors cursor-pointer"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          Return to Main Portal
+        </button>
+        <h2 className="text-2xl md:text-3xl font-extrabold text-[#ffd700] mb-2 flex items-center gap-3">
+          <Users className="w-8 h-8 text-[#ffd700]" />
+          CMO Family Units Hub
+        </h2>
+        <p className="text-gray-300 text-sm md:text-base">
+          Explore the four parish family units and authenticate to access your subgroup workspace.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {familyList.map((family) => {
           const familyMembers = members.filter(m => m.family === family);
           const chairman = familyMembers.find(m => m.role === 'family_chairman');
           const secretary = familyMembers.find(m => m.role === 'family_secretary');
-          const isCurrentFamily = currentUser?.family === family;
+
+          const borderColors = {
+            Wisdom: 'border-blue-500/40 hover:border-blue-400',
+            Honour: 'border-yellow-500/40 hover:border-yellow-400',
+            Integrity: 'border-emerald-500/40 hover:border-emerald-400',
+            Talent: 'border-purple-500/40 hover:border-purple-400'
+          };
+          const textColors = {
+            Wisdom: 'text-blue-400',
+            Honour: 'text-yellow-400',
+            Integrity: 'text-emerald-400',
+            Talent: 'text-purple-400'
+          };
+          const bgGradients = {
+            Wisdom: 'bg-gradient-to-br from-[#002520] via-[#001a16] to-blue-950/30',
+            Honour: 'bg-gradient-to-br from-[#002520] via-[#001a16] to-yellow-950/30',
+            Integrity: 'bg-gradient-to-br from-[#002520] via-[#001a16] to-emerald-950/30',
+            Talent: 'bg-gradient-to-br from-[#002520] via-[#001a16] to-purple-950/30'
+          };
 
           return (
-            <Card key={family} className="bg-[#002520] border-2 border-[#ffd700] p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className={`text-xl font-bold ${familyColors[family]}`}>{family} Family</h3>
-                  <p className="text-gray-400 text-sm">{familyMembers.length} members</p>
+            <Card key={family} className={`${bgGradients[family]} border-2 ${borderColors[family]} p-6 rounded-2xl shadow-xl flex flex-col justify-between`}>
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className={`text-2xl font-bold ${textColors[family]}`}>{family} Family</h3>
+                    <p className="text-gray-400 text-xs mt-0.5">{familyMembers.length} active registered members</p>
+                  </div>
+                  <Trophy className={`w-8 h-8 ${textColors[family]}`} />
                 </div>
-                <Trophy className={`w-7 h-7 ${familyColors[family]}`} />
+                <p className="text-gray-300 text-xs leading-relaxed mb-4">{familyDescriptions[family]}</p>
+                <div className="space-y-1 text-xs text-gray-300 mb-6 bg-[#001a16]/60 p-3 rounded-lg border border-[#ffd700]/10">
+                  <p><span className="text-gray-400">Chairman:</span> <strong className="text-white">{chairman?.name || 'Assigned Officer'}</strong></p>
+                  <p><span className="text-gray-400">Secretary:</span> <strong className="text-white">{secretary?.name || 'Assigned Officer'}</strong></p>
+                </div>
               </div>
-              <p className="text-gray-400 text-sm mb-3">{familyDescriptions[family]}</p>
-              <p className="text-gray-300 text-sm mb-4">Chairman: <span className="text-white">{chairman?.name || 'Not assigned'}</span></p>
-              <p className="text-gray-300 text-sm mb-4">Secretary: <span className="text-white">{secretary?.name || 'Not assigned'}</span></p>
-              {isCurrentFamily && currentUser?.role === 'family_chairman' && (
-                <Button onClick={() => setCurrentPage(familyDashboardPages[family].chairman)} className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700]">
-                  Open {family} Chairman Dashboard
-                </Button>
-              )}
-              {isCurrentFamily && currentUser?.role === 'family_secretary' && (
-                <Button onClick={() => setCurrentPage(familyDashboardPages[family].secretary)} className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700]">
-                  Open {family} Secretary Dashboard
-                </Button>
-              )}
-              {!isCurrentFamily && (
-                <p className="text-gray-500 text-sm">You must belong to this family to access its subgroup dashboard.</p>
-              )}
+
+              <div className="space-y-2 pt-4 border-t border-[#ffd700]/10">
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    onClick={() => handleOpenAuth(family, 'chairman')}
+                    className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold text-xs py-2 shadow"
+                  >
+                    Chairman Portal
+                  </Button>
+                  <Button
+                    onClick={() => handleOpenAuth(family, 'secretary')}
+                    variant="outline"
+                    className="w-full border-[#ffd700]/40 text-[#ffd700] hover:bg-[#ffd700]/10 font-bold text-xs py-2"
+                  >
+                    Secretary Portal
+                  </Button>
+                </div>
+                <div
+                  onClick={() => handleOpenAuth(family, 'chairman')}
+                  className="pt-2 flex items-center justify-between text-xs font-bold text-[#ffd700] cursor-pointer group"
+                >
+                  <span>Enter Hub ➔</span>
+                  <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
             </Card>
           );
         })}
       </div>
+
+      {/* Role Authentication Login Modal for Family Cards */}
+      {selectedFamilyForAuth && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <Card className="bg-[#002520] border-2 border-[#ffd700] max-w-md w-full p-6 rounded-2xl shadow-2xl relative">
+            <button
+              onClick={() => setSelectedFamilyForAuth(null)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-[#ffd700] transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4 pb-3 border-b border-[#ffd700]/20">
+              <div className="p-2.5 rounded-xl bg-[#ffd700]/10 border border-[#ffd700]/30 text-[#ffd700]">
+                <Lock className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-[#ffd700]">
+                  {selectedFamilyForAuth.family} Family {selectedFamilyForAuth.mode === 'chairman' ? 'Chairman' : 'Secretary'} Login
+                </h3>
+                <p className="text-xs text-gray-300">Official Role Authentication Prompt</p>
+              </div>
+            </div>
+
+            <form onSubmit={handlePerformModalAuth} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-gray-300">Official Executive / Role ID</label>
+                <Input
+                  type="text"
+                  value={inputCredential}
+                  onChange={(e) => setInputCredential(e.target.value)}
+                  placeholder="Enter Official Executive ID"
+                  className="bg-[#001a16] border-[#ffd700]/40 text-white font-mono text-sm uppercase p-2.5 focus:border-[#ffd700]"
+                  required
+                />
+              </div>
+
+              {authError && (
+                <div className="p-2.5 bg-red-950/60 border border-red-500/40 text-red-300 rounded text-xs font-semibold">
+                  {authError}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <Button
+                  type="button"
+                  onClick={() => setSelectedFamilyForAuth(null)}
+                  variant="outline"
+                  className="border-[#ffd700]/30 text-gray-300 hover:text-[#ffd700] text-xs font-semibold"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={authLoading}
+                  className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold text-xs px-5 py-2 rounded-lg"
+                >
+                  {authLoading ? 'Authenticating...' : 'Authenticate & Enter Portal'}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

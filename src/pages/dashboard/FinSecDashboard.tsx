@@ -1164,16 +1164,14 @@ export const FinSecDashboard = () => {
         </Card>
       </div>
 
-      {/* Fines Escrow & Treasury Verification Sub-Ledger */}
-      <div className="no-print">
-        <FinesEscrowVerificationLedger />
-      </div>
-
       <Tabs defaultValue="validation" className="w-full">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 no-print">
           <TabsList className="bg-[#002520] border border-[#ffd700] flex-wrap mb-0">
             <TabsTrigger value="validation" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer">
               Validation Queue
+            </TabsTrigger>
+            <TabsTrigger value="escrow-verification" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer font-bold">
+              Fines Escrow Verification
             </TabsTrigger>
             <TabsTrigger value="welfare-audit" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer">
               Welfare Audit
@@ -1249,32 +1247,39 @@ export const FinSecDashboard = () => {
           <>
             {/* Validation Queue */}
             <TabsContent value="validation">
-          <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 md:p-6">
-            <h3 className="text-xl font-bold text-[#ffd700] mb-4">Pending Member Validation</h3>
-            {pendingMembers.length === 0 ? (
-              <p className="text-gray-400">No pending validations</p>
-            ) : (
-              <div className="space-y-3">
-                {pendingMembers.map((member, index) => (
-                  <div key={index} className="bg-[#001a16] border border-[#ffd700] p-4 rounded flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div>
-                      <p className="text-white font-semibold">{member.name}</p>
-                      <p className="text-gray-400 text-sm">{member.phone}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => validateMember(index)}
-                      className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] w-full md:w-auto cursor-pointer rounded px-4 py-2"
-                    >
-                      <CheckCircle className="w-4 h-4 mr-2 inline" />
-                      Validate & Generate ID
-                    </button>
+              <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 md:p-6">
+                <h3 className="text-xl font-bold text-[#ffd700] mb-4">Pending Member Validation</h3>
+                {pendingMembers.length === 0 ? (
+                  <p className="text-gray-400">No pending validations</p>
+                ) : (
+                  <div className="space-y-3">
+                    {pendingMembers.map((member, index) => (
+                      <div key={index} className="bg-[#001a16] border border-[#ffd700] p-4 rounded flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                          <p className="text-white font-semibold">{member.name}</p>
+                          <p className="text-gray-400 text-sm">{member.phone}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => validateMember(index)}
+                          className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] w-full md:w-auto cursor-pointer rounded px-4 py-2"
+                        >
+                          <CheckCircle className="w-4 h-4 mr-2 inline" />
+                          Validate & Generate ID
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+              </Card>
+            </TabsContent>
+
+            {/* Dedicated Fines Escrow & Treasury Verification Sub-Ledger Tab Container */}
+            <TabsContent value="escrow-verification">
+              <div className="w-full">
+                <FinesEscrowVerificationLedger />
               </div>
-            )}
-          </Card>
-        </TabsContent>
+            </TabsContent>
 
         {/* Welfare Audit */}
         <TabsContent value="welfare-audit">
