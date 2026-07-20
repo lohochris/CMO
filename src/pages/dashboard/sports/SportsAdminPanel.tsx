@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   X,
   Flame,
+  ArrowLeft,
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
 import { useApp } from '../../../contexts/AppContext';
@@ -107,7 +108,7 @@ const nextStatus = (current: TournamentStatus): TournamentStatus => {
 // Component
 // ──────────────────────────────────────────────
 export const SportsAdminPanel = () => {
-  const { currentUser, setCurrentUser, members, setMembers, setSuccess } = useApp();
+  const { currentUser, setCurrentUser, members, setMembers, setSuccess, setCurrentPage } = useApp();
 
   const [isChangingPin, setIsChangingPin] = useState(false);
   const [currentPin, setCurrentPin] = useState("");
@@ -348,6 +349,10 @@ export const SportsAdminPanel = () => {
   // ── Render ─────────────────────────────────
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8 font-sans">
+      <button onClick={() => setCurrentPage('home')} className="flex items-center gap-2 text-yellow-400 hover:text-yellow-300 font-semibold mb-6 transition-colors cursor-pointer">
+        <ArrowLeft className="w-5 h-5"/>
+        Return to Main Portal
+      </button>
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between flex-wrap gap-4">

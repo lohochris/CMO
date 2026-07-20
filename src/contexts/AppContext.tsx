@@ -425,18 +425,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setAnnouncementsState(seedAnnouncements);
     }
 
-    // Fetch parish member census count strictly targeting official_member_id (HCC-CMO-26-XXXX) in public.members
+    // Fetch parish member census count directly from public.members
     try {
       const { count, error: rosterErr } = await supabase
         .from('members')
-        .select('*', { count: 'exact', head: true })
-        .like('official_member_id', 'HCC-CMO-26-%');
+        .select('*', { count: 'exact', head: true });
       if (!rosterErr && count !== null) {
         setRosterCount(count);
       } else {
-        // Fallback to local filtering of loaded members
-        const countLocal = loadedMembersList.filter(m => (m.official_member_id || m.id || '').startsWith('HCC-CMO-26-')).length;
-        if (countLocal > 0) setRosterCount(countLocal);
+        // Fallback to local count of loaded members
+        setRosterCount(loadedMembersList.length);
       }
     } catch (err) {
       console.error("AppContext member census count fetch error:", err);

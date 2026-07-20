@@ -17,12 +17,16 @@ import {
   Camera,
   Clock,
   AlertCircle,
-  FileCheck
+  FileCheck,
+  Lock,
+  UserCheck,
+  XCircle
 } from 'lucide-react';
 import { formatCurrency, formatDateTime } from '../../utils/helpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { GeneralGalleryManager } from '../../app/components/gallery/GeneralGalleryManager';
+import { ProvostAttendanceWorkspace } from '../../app/components/attendance/ProvostAttendanceWorkspace';
 
 interface DisciplinaryLog {
   id: string;
@@ -36,8 +40,8 @@ interface DisciplinaryLog {
 export default function ProvostDashboard() {
   const { currentUser, members, setMembers, setCurrentUser, refreshDatabase } = useApp();
 
-  // Tab State
-  const [activeTab, setActiveTab] = useState<'disciplinary' | 'escrow' | 'gallery'>('disciplinary');
+  // Tab State: 3 Core Unified Workspaces
+  const [activeTab, setActiveTab] = useState<'rollcall' | 'escrow' | 'gallery'>('rollcall');
 
   // Lock Engine States
   const [isExecutiveUnlocked, setIsExecutiveUnlocked] = useState<boolean>(() => {
@@ -66,6 +70,8 @@ export default function ProvostDashboard() {
   
   // Fine Ledger Form States
   const [fineMemberId, setFineMemberId] = useState('');
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
   const [fineInfraction, setFineInfraction] = useState('Lateness');
   const [fineAmount, setFineAmount] = useState('500');
   const [fineNotes, setFineNotes] = useState('');
@@ -84,8 +90,9 @@ export default function ProvostDashboard() {
     'Absence': 1000,
     'Insubordination': 2000,
     'Dress Code Violation': 500,
-    'Conduct Unbecoming': 1500,
-    'Other': 1000,
+    'Conduct / Unbecoming Behavior': 1500,
+    'Late Dues Penalty': 1000,
+    'Custom Penalty': 1000,
   };
 
   useEffect(() => {
@@ -332,6 +339,8 @@ export default function ProvostDashboard() {
       toast.success(`Fine of ₦${amountVal.toLocaleString()} logged against ${targetMember.name}`);
       
       setFineMemberId('');
+      setMemberSearchQuery('');
+      setIsMemberDropdownOpen(false);
       setFineNotes('');
       setFineAmount('500');
       setFineInfraction('Lateness');
@@ -436,9 +445,7 @@ export default function ProvostDashboard() {
                 className="bg-[#001a16] hover:bg-[#ffd700]/10 text-[#ffd700] border border-[#ffd700]/30 px-3 py-2 rounded text-sm font-semibold transition-colors flex items-center gap-2 cursor-pointer"
                 title="Lock Executive Workspace"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
+                <Lock className="h-4 w-4" />
                 Lock
               </button>
             )}
@@ -520,9 +527,7 @@ export default function ProvostDashboard() {
         {!isExecutiveUnlocked ? (
           <div className="flex flex-col items-center justify-center py-16 px-4 bg-[#001411] border border-[#ffd700]/20 rounded-lg max-w-md mx-auto text-center space-y-6 my-8 shadow-xl">
             <div className="p-3 bg-[#002a24] rounded-full border border-[#ffd700]/30 text-[#ffd700]">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
+              <Lock className="h-8 w-8 text-[#ffd700]" />
             </div>
             <div>
               <h3 className="text-lg font-bold text-[#ffd700]">Executive Security Gateway</h3>
@@ -538,25 +543,18 @@ export default function ProvostDashboard() {
           </div>
         ) : (
           <>
-            {/* High-Contrast Professional Tab Selector Bar */}
+            {/* High-Contrast 3-Tab Professional Selector Bar */}
             <div className="bg-[#002520] p-1.5 rounded-xl border border-[#ffd700]/30 shadow-lg flex flex-wrap gap-2">
               <button
-                onClick={() => setActiveTab('disciplinary')}
+                onClick={() => setActiveTab('rollcall')}
                 className={`flex-1 min-w-[200px] flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-bold text-sm transition-all cursor-pointer ${
-                  activeTab === 'disciplinary'
+                  activeTab === 'rollcall'
                     ? 'bg-[#ffd700] text-[#001a16] shadow-md scale-[1.01]'
                     : 'text-gray-300 hover:text-white hover:bg-[#001a16]/60'
                 }`}
               >
-                <BookOpen className="w-4 h-4" />
-                <span>Disciplinary Actions Ledger</span>
-                {disciplinaryLogs.length > 0 && (
-                  <span className={`ml-1 text-xs px-2 py-0.5 rounded-full font-mono ${
-                    activeTab === 'disciplinary' ? 'bg-[#001a16] text-[#ffd700]' : 'bg-[#ffd700]/20 text-[#ffd700]'
-                  }`}>
-                    {disciplinaryLogs.length}
-                  </span>
-                )}
+                <UserCheck className="w-4 h-4" />
+                <span>Roll-Call & Disciplinary Hub</span>
               </button>
 
               <button
@@ -589,256 +587,176 @@ export default function ProvostDashboard() {
               </button>
             </div>
 
-            {/* Tab 1: Disciplinary Actions Ledger */}
-            {activeTab === 'disciplinary' && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                
-                {/* Left Column: General Disciplinary Directory & Session Logs */}
-                <div className="lg:col-span-2 space-y-6">
-                  {/* General Directory & Quick Actions */}
-                  <div className="bg-[#002520] border border-[#ffd700]/20 rounded-xl p-6 shadow-lg">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                      <div>
-                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                          <BookOpen className="w-5 h-5 text-[#ffd700]" />
-                          General Disciplinary Directory
-                        </h2>
-                        <p className="text-xs text-gray-400 mt-1">Search members to log instant infraction notices</p>
-                      </div>
-                      <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-                        <div className="relative flex-grow">
+            {/* Tab 1: Roll-Call & Disciplinary Hub Workspace */}
+            {activeTab === 'rollcall' && (
+              <div className="space-y-8">
+                {/* 1. Live Roll-Call, 4-Hour Operational Session Timer & Pending Excuses Queue */}
+                <ProvostAttendanceWorkspace members={members} />
+
+                {/* 2. Manual Disciplinary Infraction Assessor Card */}
+                <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-xl shadow-xl">
+                  <div className="flex items-center gap-3 mb-6 pb-4 border-b border-[#ffd700]/20">
+                    <div className="p-2 bg-purple-500/20 text-purple-400 rounded-lg border border-purple-500/30">
+                      <ShieldAlert className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-[#ffd700]">Manual Disciplinary Infraction Assessor</h3>
+                      <p className="text-xs text-gray-300">Log non-attendance infractions (Dress Code, Insubordination, Conduct, Late Dues) directly to Escrow</p>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleFineSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Searchable Member Combobox */}
+                      <div className="space-y-1 relative">
+                        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Select Penalized Member</label>
+                        <div className="relative">
                           <Input
                             type="text"
-                            placeholder="Search member name/ID..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="bg-[#001a16] border-[#ffd700]/20 rounded pl-9 text-sm text-white"
+                            placeholder="Type name, ID, or family..."
+                            value={memberSearchQuery}
+                            onFocus={() => setIsMemberDropdownOpen(true)}
+                            onChange={(e) => {
+                              setMemberSearchQuery(e.target.value);
+                              setIsMemberDropdownOpen(true);
+                              if (!e.target.value) setFineMemberId('');
+                            }}
+                            className="bg-[#001a16] border-[#ffd700]/30 text-white text-xs pl-8 pr-8"
+                            required={!fineMemberId}
                           />
-                          <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-                        </div>
-                        <select
-                          value={selectedFamily}
-                          onChange={(e) => setSelectedFamily(e.target.value)}
-                          className="bg-[#001a16] border border-[#ffd700]/20 rounded p-2 text-xs text-white cursor-pointer"
-                        >
-                          <option value="">All Families</option>
-                          <option value="Wisdom">Wisdom</option>
-                          <option value="Honour">Honour</option>
-                          <option value="Integrity">Integrity</option>
-                          <option value="Talent">Talent</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-sm border-collapse">
-                        <thead>
-                          <tr className="border-b border-[#ffd700]/10 text-gray-400 font-semibold">
-                            <th className="py-3 px-4">Member Name</th>
-                            <th className="py-3 px-4">Member ID</th>
-                            <th className="py-3 px-4">Family</th>
-                            <th className="py-3 px-4 text-center">Log Disciplinary Infraction</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredMembers.length > 0 ? (
-                            filteredMembers.map((member) => (
-                              <tr key={member.id} className="border-b border-[#ffd700]/5 hover:bg-[#001a16]/40 transition-colors">
-                                <td className="py-4 px-4 font-bold text-white uppercase">{member.name}</td>
-                                <td className="py-4 px-4 font-mono text-gray-300">{member.official_member_id || 'Pending'}</td>
-                                <td className="py-4 px-4 text-gray-300">{member.family || 'None'}</td>
-                                <td className="py-4 px-4">
-                                  <div className="flex gap-1 justify-center flex-wrap">
-                                    <Button
-                                      onClick={() => logInfraction(member, 'Lateness')}
-                                      className="bg-yellow-600/20 border border-yellow-500/30 hover:bg-yellow-600 text-yellow-300 text-xs px-2 py-1 h-auto"
-                                    >
-                                      Late
-                                    </Button>
-                                    <Button
-                                      onClick={() => logInfraction(member, 'Absence')}
-                                      className="bg-red-600/20 border border-red-500/30 hover:bg-red-600 text-red-300 text-xs px-2 py-1 h-auto"
-                                    >
-                                      Absent
-                                    </Button>
-                                    <Button
-                                      onClick={() => logInfraction(member, 'Insubordination')}
-                                      className="bg-purple-600/20 border border-purple-500/30 hover:bg-purple-600 text-purple-300 text-xs px-2 py-1 h-auto"
-                                    >
-                                      Insubordinate
-                                    </Button>
-                                    <Button
-                                      onClick={() => logInfraction(member, 'Dress Code Violation')}
-                                      className="bg-blue-600/20 border border-blue-500/30 hover:bg-blue-600 text-blue-300 text-xs px-2 py-1 h-auto"
-                                    >
-                                      Dress Code
-                                    </Button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan={4} className="py-8 text-center text-gray-400">
-                                No matching members found in database.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {/* Session Disciplinary Logs Ledger */}
-                  <div className="bg-[#002520] border border-[#ffd700]/20 rounded-xl p-6 shadow-lg">
-                    <div className="flex justify-between items-center mb-6">
-                      <div>
-                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                          <Scale className="w-5 h-5 text-[#ffd700]" />
-                          Session Disciplinary Logs Ledger
-                        </h2>
-                        <p className="text-xs text-gray-400 mt-1">Temporary logs recorded during this active session</p>
-                      </div>
-                      {disciplinaryLogs.length > 0 && (
-                        <Button 
-                          onClick={clearAllLocalLogs}
-                          className="bg-red-500/10 border border-red-500/30 hover:bg-red-600 text-red-400 hover:text-white text-xs px-3 py-1 h-auto"
-                        >
-                          Clear History
-                        </Button>
-                      )}
-                    </div>
-
-                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-                      {disciplinaryLogs.map((log) => (
-                        <div key={log.id} className="bg-[#001a16] border border-[#ffd700]/10 p-4 rounded flex justify-between items-center">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                log.infraction === 'Insubordination' ? 'bg-purple-500/20 text-purple-400' :
-                                log.infraction === 'Absence' ? 'bg-red-500/20 text-red-400' :
-                                log.infraction === 'Lateness' ? 'bg-yellow-500/20 text-yellow-400' :
-                                'bg-blue-500/20 text-blue-400'
-                              }`}>
-                                {log.infraction}
-                              </span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                log.status === 'Resolved' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
-                              }`}>
-                                {log.status}
-                              </span>
-                            </div>
-                            <p className="text-white font-semibold mt-1 uppercase text-sm">{log.memberName}</p>
-                            <p className="text-gray-400 text-xs font-mono">{log.memberId} • {formatDateTime(log.timestamp)}</p>
-                          </div>
-                          <div className="flex gap-1">
-                            {log.status === 'Active' && (
-                              <Button
-                                onClick={() => resolveInfractionLocal(log.id)}
-                                className="bg-green-600/10 border border-green-500/20 hover:bg-green-600 text-green-400 hover:text-white text-xs py-1 px-2 h-auto"
-                              >
-                                Resolve
-                              </Button>
-                            )}
-                            <Button
-                              onClick={() => clearInfractionLocal(log.id)}
-                              className="bg-gray-500/10 border border-gray-500/20 hover:bg-gray-700 text-gray-400 hover:text-white text-xs py-1 px-2 h-auto"
+                          <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400" />
+                          {fineMemberId && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFineMemberId('');
+                                setMemberSearchQuery('');
+                                setIsMemberDropdownOpen(true);
+                              }}
+                              className="absolute right-2.5 top-2.5 text-gray-400 hover:text-white cursor-pointer"
+                              title="Clear selection"
                             >
-                              Remove
-                            </Button>
-                          </div>
+                              <XCircle className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
-                      ))}
-                      {disciplinaryLogs.length === 0 && (
-                        <p className="text-gray-400 text-center py-6 text-sm">
-                          No active infractions logged in this session. Use the directory above to record infractions.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
 
-                {/* Right Column: Fine Assessment Creation Form */}
-                <div className="space-y-6">
-                  <Card className="bg-[#002520] border border-[#ffd700]/20 p-6 rounded-xl shadow-lg">
-                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                      <Gavel className="w-5 h-5 text-[#ffd700]" />
-                      Fine Assessment Form
-                    </h3>
-                    
-                    <form onSubmit={handleFineSubmit} className="flex flex-col gap-4">
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1 font-semibold uppercase tracking-wider">Select Penalized Member</label>
+                        {/* Filtered Dropdown List */}
+                        {isMemberDropdownOpen && (
+                          <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-[#001a16] border-2 border-[#ffd700]/40 rounded-lg shadow-2xl max-h-56 overflow-y-auto divide-y divide-gray-800">
+                            {members
+                              .filter(m => m.status !== 'Deceased')
+                              .filter(m => {
+                                const q = memberSearchQuery.toLowerCase().trim();
+                                if (!q) return true;
+                                const nameMatch = (m.name || m.full_name || '').toLowerCase().includes(q);
+                                const idMatch = (m.official_member_id || m.id || '').toLowerCase().includes(q);
+                                const familyMatch = (m.family || m.cmo_family || '').toLowerCase().includes(q);
+                                return nameMatch || idMatch || familyMatch;
+                              })
+                              .length === 0 ? (
+                              <div className="p-3 text-xs text-gray-400 text-center">No matching member found</div>
+                            ) : (
+                              members
+                                .filter(m => m.status !== 'Deceased')
+                                .filter(m => {
+                                  const q = memberSearchQuery.toLowerCase().trim();
+                                  if (!q) return true;
+                                  const nameMatch = (m.name || m.full_name || '').toLowerCase().includes(q);
+                                  const idMatch = (m.official_member_id || m.id || '').toLowerCase().includes(q);
+                                  const familyMatch = (m.family || m.cmo_family || '').toLowerCase().includes(q);
+                                  return nameMatch || idMatch || familyMatch;
+                                })
+                                .map((m) => {
+                                  const mId = m.official_member_id || m.id;
+                                  const isSelected = mId === fineMemberId;
+                                  return (
+                                    <div
+                                      key={m.id}
+                                      onClick={() => {
+                                        setFineMemberId(mId);
+                                        setMemberSearchQuery(`${m.name || m.full_name} (${mId})`);
+                                        setIsMemberDropdownOpen(false);
+                                      }}
+                                      className={`p-2.5 cursor-pointer flex items-center justify-between text-xs transition-colors ${
+                                        isSelected ? 'bg-[#003830] text-[#ffd700]' : 'hover:bg-[#002a24] text-white'
+                                      }`}
+                                    >
+                                      <div>
+                                        <span className="font-bold block">{m.name || m.full_name}</span>
+                                        <span className="text-gray-400 font-mono text-[11px]">ID: {mId}</span>
+                                      </div>
+                                      {m.family && (
+                                        <span className="px-2 py-0.5 bg-[#002a24] text-[#ffd700] text-[10px] rounded border border-[#ffd700]/20 font-semibold">
+                                          {m.family}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Infraction Type</label>
                         <select
-                          value={fineMemberId}
-                          onChange={(e) => setFineMemberId(e.target.value)}
-                          className="w-full bg-[#001a16] border border-[#ffd700]/20 rounded p-2 text-sm text-white focus:outline-none focus:border-[#ffd700]/50 cursor-pointer"
+                          value={fineInfraction}
+                          onChange={(e) => handleInfractionChange(e.target.value)}
+                          className="w-full bg-[#001a16] border border-[#ffd700]/30 text-white rounded p-2.5 text-xs focus:border-[#ffd700] focus:outline-none cursor-pointer"
                         >
-                          <option value="">Select member...</option>
-                          {members.filter(m => m.role === 'member').map((m) => (
-                            <option key={m.id} value={m.official_member_id || m.id}>
-                              {m.name} ({m.official_member_id || m.id})
+                          {Object.keys(INFRACTION_PRESETS).map((preset) => (
+                            <option key={preset} value={preset}>
+                              {preset}
                             </option>
                           ))}
                         </select>
                       </div>
 
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1 font-semibold uppercase tracking-wider">Infraction Type</label>
-                        <select
-                          value={fineInfraction}
-                          onChange={(e) => handleInfractionChange(e.target.value)}
-                          className="w-full bg-[#001a16] border border-[#ffd700]/20 rounded p-2 text-sm text-white focus:outline-none focus:border-[#ffd700]/50 cursor-pointer"
-                        >
-                          {Object.keys(INFRACTION_PRESETS).map((inf) => (
-                            <option key={inf} value={inf}>{inf}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1 font-semibold uppercase tracking-wider">Fine Amount (₦)</label>
+                      <div className="space-y-1">
+                        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Fine Amount (₦)</label>
                         <div className="relative">
-                          <input
+                          <Input
                             type="number"
-                            placeholder="e.g. 500"
+                            placeholder="500"
                             value={fineAmount}
                             onChange={(e) => setFineAmount(e.target.value)}
-                            className="w-full bg-[#001a16] border border-[#ffd700]/20 rounded p-2 pl-7 text-sm text-white focus:outline-none focus:border-[#ffd700]/50 font-mono"
+                            className="bg-[#001a16] border-[#ffd700]/30 text-white pl-8 text-xs font-mono"
+                            required
                           />
-                          <DollarSign className="absolute left-2.5 top-3 w-3.5 h-3.5 text-gray-400" />
+                          <span className="absolute left-2.5 top-2.5 text-[#ffd700] font-extrabold text-xs select-none">₦</span>
                         </div>
                       </div>
+                    </div>
 
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1 font-semibold uppercase tracking-wider">Official Notes & Rationale</label>
-                        <textarea
-                          rows={3}
-                          placeholder="Provide specific notes regarding infraction date or location..."
-                          value={fineNotes}
-                          onChange={(e) => setFineNotes(e.target.value)}
-                          className="w-full bg-[#001a16] border border-[#ffd700]/20 rounded p-2 text-sm text-white focus:outline-none focus:border-[#ffd700]/50 resize-none"
-                        />
-                      </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Infraction Notes & Justification</label>
+                      <Input
+                        type="text"
+                        value={fineNotes}
+                        onChange={(e) => setFineNotes(e.target.value)}
+                        placeholder="Provide details regarding the infraction..."
+                        className="bg-[#001a16] border-[#ffd700]/30 text-white text-xs"
+                      />
+                    </div>
 
-                      <Button 
-                        type="submit" 
-                        disabled={submittingFine}
-                        className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold flex items-center justify-center gap-2 mt-2"
-                      >
-                        {submittingFine ? 'Logging Fine...' : 'Assess Fine'}
-                      </Button>
-                    </form>
-                  </Card>
-                </div>
-
+                    <Button
+                      type="submit"
+                      disabled={submittingFine}
+                      className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#e6c200] font-bold text-xs py-2.5 rounded transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                    >
+                      <Gavel className="w-4 h-4" />
+                      {submittingFine ? 'Logging Fine...' : 'Log Disciplinary Fine to Escrow'}
+                    </Button>
+                  </form>
+                </Card>
               </div>
             )}
 
             {/* Tab 2: Fines Escrow & Clearances Workspace */}
             {activeTab === 'escrow' && (
               <div className="space-y-6">
-                
                 {/* Summary Stat Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="bg-[#002520] border border-[#ffd700]/20 rounded-xl p-4 shadow-lg">
@@ -872,7 +790,7 @@ export default function ProvostDashboard() {
                         Fines Escrow & Clearances Grid
                       </h2>
                       <p className="text-xs text-gray-400 mt-1">
-                        Track fine payment lifecycle: Mark unpaid items as <span className="text-[#ffd700] font-semibold">"Pending Verification"</span> when physical cash/transfer is received.
+                        Track fine payment lifecycle: Mark unpaid items as <span className="text-[#ffd700] font-semibold">&ldquo;Pending Verification&rdquo;</span> when physical cash/transfer is received.
                       </p>
                     </div>
 
@@ -1006,7 +924,6 @@ export default function ProvostDashboard() {
                     </table>
                   </div>
                 </Card>
-
               </div>
             )}
 

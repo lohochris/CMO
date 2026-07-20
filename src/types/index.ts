@@ -41,7 +41,8 @@ export type Page =
   | 'standings_board'
   | 'medical_portal'
   | 'equipment_ledger'
-  | 'sports_finance';
+  | 'sports_finance'
+  | 'publicGallery';
 
 export interface Member {
   id: string;
@@ -155,5 +156,45 @@ export interface GeneralGalleryItem {
   video_url?: string | null;
   title?: string | null;
   uploaded_by?: string | null;
+  created_at?: string;
+}
+
+export interface AttendanceRecord {
+  id?: string;
+  meeting_date: string;
+  meeting_title?: string;
+  member_id: string;
+  official_member_id?: string;
+  member_name: string;
+  status: 'Present' | 'Late' | 'Excused' | 'Absent';
+  fine_amount: number;
+  excuse_status?: 'None' | 'Pending' | 'Approved' | 'Rejected';
+  excuse_category?: string;
+  excuse_reason?: string;
+  excuse_submitted_at?: string;
+  check_in_time?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CmoNotification {
+  id?: string;
+  member_id: string;
+  official_member_id?: string;
+  title: string;
+  message: string;
+  type?: 'attendance' | 'fine' | 'excuse' | 'general';
+  read_status?: boolean;
+  created_at?: string;
+}
+
+export interface CmoMeetingSession {
+  id?: string;
+  meeting_date: string;
+  meeting_title?: string;
+  opened_at: string;
+  locks_at: string;
+  is_manually_locked?: boolean;
+  opened_by?: string;
   created_at?: string;
 }
