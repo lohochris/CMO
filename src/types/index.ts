@@ -55,6 +55,7 @@ export interface Member {
   role: MemberRole;
   family?: Family;
   cmo_family?: string;
+  familyUnit?: string;
   phone?: string;
   profilePic?: string | null;
   email?: string;

@@ -31,14 +31,28 @@ export const Login = () => {
         // ── EXECUTIVE AUTHENTICATION PIPELINE ──────────────────────────────────────────
         // Direct route to public.cmo_executives filtering exclusively on text-based executive_id
         const EXEC_ALIAS_MAP: Record<string, string> = {
-          'FIN-SEC-2026':   'FIN-SEC-2026',
-          'WEL-OFF-2026':   'WELFARE-2026',
-          'WELFORCE-2026':  'WELFARE-2026',
-          'TREAS-2026':     'TREASURER-2026',
-          'SECRETARY-2026': 'SECRETARY-2026',
-          'PRO-2026':       'PRO-2026',
-          'PROVOST-2026':   'PROVOST-2026',
-          'LITURGIST-2026': 'LITURGIST-2026',
+          'CHAIRMAN':          'CMO-CHAIRMAN-2026',
+          'CMO-CHAIRMAN':      'CMO-CHAIRMAN-2026',
+          'CMO-CHAIRMAN-2026': 'CMO-CHAIRMAN-2026',
+          'FINSEC':            'FIN-SEC-2026',
+          'FIN-SEC':           'FIN-SEC-2026',
+          'FIN-SEC-2026':      'FIN-SEC-2026',
+          'WELFARE':           'WELFARE-2026',
+          'WEL-OFF-2026':      'WELFARE-2026',
+          'WELFORCE-2026':     'WELFARE-2026',
+          'WELFARE-2026':      'WELFARE-2026',
+          'TREASURER':         'TREASURER-2026',
+          'TREAS-2026':        'TREASURER-2026',
+          'TREASURER-2026':    'TREASURER-2026',
+          'SECRETARY':         'SECRETARY-2026',
+          'GEN-SEC':           'SECRETARY-2026',
+          'SECRETARY-2026':    'SECRETARY-2026',
+          'PRO':               'PRO-2026',
+          'PRO-2026':          'PRO-2026',
+          'PROVOST':           'PROVOST-2026',
+          'PROVOST-2026':      'PROVOST-2026',
+          'LITURGIST':         'LITURGIST-2026',
+          'LITURGIST-2026':    'LITURGIST-2026',
         };
         const resolvedId = EXEC_ALIAS_MAP[inputMemberId] ?? inputMemberId;
 
@@ -93,6 +107,22 @@ export const Login = () => {
           setError('Invalid Executive / Official ID. Please check your credentials or contact system administrator.');
           setLoading(false);
           return;
+        }
+
+        const idUpper = inputMemberId.toUpperCase();
+        let parsedFamily: string | undefined = undefined;
+        if (idUpper.includes('HONOUR')) parsedFamily = 'Honour';
+        else if (idUpper.includes('INTEGRITY')) parsedFamily = 'Integrity';
+        else if (idUpper.includes('TALENT')) parsedFamily = 'Talent';
+        else if (idUpper.includes('WISDOM')) parsedFamily = 'Wisdom';
+
+        if (parsedFamily) {
+          member = {
+            ...member,
+            family: parsedFamily as any,
+            cmo_family: parsedFamily,
+            familyUnit: parsedFamily
+          };
         }
       } else {
         // ── MEMBER AUTHENTICATION PIPELINE ──────────────────────────────────────────────

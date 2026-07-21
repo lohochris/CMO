@@ -1,18 +1,60 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { supabase } from '../../lib/supabaseClient';
-import { Member } from '../../types';
+import { Member, Family, FamilyExpense, FamilyTransaction, FamilyAnnouncement } from '../../types';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
+import { Input } from '../../app/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
 import { toast } from 'sonner';
-import { Users, CalendarCheck, HeartPulse, Send, MessageSquare, Shield, PhoneCall, HeartHandshake, ClipboardList, BookOpen } from 'lucide-react';
+import { Users, CalendarCheck, HeartPulse, Send, MessageSquare, Shield, PhoneCall, HeartHandshake, ClipboardList, BookOpen, TrendingUp, Receipt, DollarSign, Printer, Megaphone } from 'lucide-react';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
+import { calculateTotal, formatCurrency, formatDate, getCombinedTransactions, formatDateTime } from '../../utils/helpers';
+import { generateExpenseId, generateAnnouncementId } from '../../utils/idGenerators';
 
 export default function FamilyHeadDashboard() {
-  const { currentUser, members, setMembers, setCurrentUser } = useApp();
-  const rawFamily = currentUser?.cmo_family || currentUser?.family || '';
-  const cleanFamilyName = rawFamily.replace(/\s*Family\s*/gi, '').trim();
+  const {
+    currentUser,
+    members,
+    setMembers,
+    setCurrentUser,
+    familyTransactions,
+    setFamilyTransactions,
+    familyExpenses,
+    setFamilyExpenses,
+    familyWelfareTickets,
+    setFamilyWelfareTickets,
+    familyAnnouncements,
+    setFamilyAnnouncements
+  } = useApp();
+
+  const resolveUnitFromUser = (user: any): string => {
+    let unit = user?.familyUnit || user?.cmo_family || user?.family;
+    if (!unit && (user?.official_member_id || user?.id)) {
+      const uId = String(user.official_member_id || user.id).toUpperCase();
+      if (uId.includes('HONOUR')) unit = 'Honour';
+      else if (uId.includes('INTEGRITY')) unit = 'Integrity';
+      else if (uId.includes('TALENT')) unit = 'Talent';
+      else if (uId.includes('WISDOM')) unit = 'Wisdom';
+    }
+    return (unit || 'Wisdom').replace(/\s*Family\s*/gi, '').trim() || 'Wisdom';
+  };
+
+  const assignedFamily = resolveUnitFromUser(currentUser);
+  const roleStr = String(currentUser?.role || '').toLowerCase();
+  const isFamilyOfficer = ['family_sec', 'family_head', 'family_secretary', 'family_chairman', 'familysecretary', 'familychairman'].includes(roleStr);
+
+  const [activeFamilyUnit, setActiveFamilyUnit] = useState<string>(assignedFamily);
+  const [activeTab, setActiveTab] = useState<'overview' | 'welfare' | 'finance' | 'reports' | 'announcements'>('overview');
+
+  useEffect(() => {
+    const targetFamily = resolveUnitFromUser(currentUser);
+    setActiveFamilyUnit(targetFamily);
+  }, [currentUser]);
+
+  const cleanFamilyName = activeFamilyUnit.replace(/\s*Family\s*/gi, '').trim() || 'Wisdom';
   const familyOptions = [cleanFamilyName, `${cleanFamilyName} Family`];
   const familyDisplayName = `${cleanFamilyName} Family`;
 
@@ -34,13 +76,39 @@ export default function FamilyHeadDashboard() {
   const [pinError, setPinError] = useState<string | null>(null);
   const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
 
-  // Hidden PIN Configuration States (Inside Update Profile Photo Modal)
+  // Hidden PIN Configuration States
   const [isChangingPin, setIsChangingPin] = useState(false);
   const [currentPin, setCurrentPin] = useState("");
   const [newPin, setNewPin] = useState("");
   const [pinChangeError, setPinChangeError] = useState<string | null>(null);
   const [pinChangeSuccess, setPinChangeSuccess] = useState(false);
   const [isSubmittingPinChange, setIsSubmittingPinChange] = useState(false);
+
+  // Welfare Form States
+  const [welfareMemberId, setWelfareMemberId] = useState('');
+  const [welfareCategory, setWelfareCategory] = useState('');
+  const [welfareAmount, setWelfareAmount] = useState('');
+  const [welfareReason, setWelfareReason] = useState('');
+  const [submittingWelfare, setSubmittingWelfare] = useState(false);
+
+  // Finance Form States
+  const [manualSearchQuery, setManualSearchQuery] = useState('');
+  const [manualSearchIndex, setManualSearchIndex] = useState(-1);
+  const [manualMemberId, setManualMemberId] = useState('');
+  const [manualAmount, setManualAmount] = useState('');
+  const [manualPurpose, setManualPurpose] = useState('');
+
+  const [newIncomeAmount, setNewIncomeAmount] = useState('');
+  const [newIncomePurpose, setNewIncomePurpose] = useState('');
+  const [newIncomeDate, setNewIncomeDate] = useState(new Date().toISOString().split('T')[0]);
+
+  const [familyExpenseAmount, setFamilyExpenseAmount] = useState('');
+  const [familyExpensePurpose, setFamilyExpensePurpose] = useState('');
+  const [familyExpenseDate, setFamilyExpenseDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Announcement Form States
+  const [announcementTitle, setAnnouncementTitle] = useState('');
+  const [announcementContent, setAnnouncementContent] = useState('');
 
   // Avatar upload hook
   const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
@@ -145,11 +213,9 @@ export default function FamilyHeadDashboard() {
     honourCount: 0,
     integrityCount: 0
   });
-  const [fellowshipLoading, setFellowshipLoading] = useState(false);
 
   const fetchLastFellowshipAttendance = async () => {
     if (!cleanFamilyName) return;
-    setFellowshipLoading(true);
     try {
       const { data: latestMeetings, error: meetErr } = await supabase
         .from('fellowship_meetings')
@@ -178,7 +244,7 @@ export default function FamilyHeadDashboard() {
           let talentCount = 0;
           let honourCount = 0;
           let integrityCount = 0;
-          
+
           attendanceData.forEach(row => {
             const rowId = row.official_member_id || row.official_member;
             const memberProfile = members.find(m => {
@@ -189,7 +255,7 @@ export default function FamilyHeadDashboard() {
             const mFamily = memberProfile
               ? (memberProfile.family || memberProfile.cmo_family || '')
               : (row.family || '');
-            
+
             const isMyFamily = mFamily.toLowerCase().includes(cleanFamilyName.toLowerCase());
 
             if (isMyFamily) {
@@ -219,8 +285,6 @@ export default function FamilyHeadDashboard() {
       }
     } catch (err) {
       console.error('Error fetching last fellowship attendance:', err);
-    } finally {
-      setFellowshipLoading(false);
     }
   };
 
@@ -244,22 +308,14 @@ export default function FamilyHeadDashboard() {
 
   useEffect(() => {
     fetchFamilyAssignments();
-    
-    // Subscribe to real-time changes
     const channel = supabase
       .channel(`family-head-spiritual-${cleanFamilyName}`)
       .on(
         'postgres_changes',
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'liturgical_assignments', 
-          filter: `assigned_family=eq.${cleanFamilyName}` 
-        },
-        () => {
-          fetchFamilyAssignments();
-        }
+        { event: '*', schema: 'public', table: 'liturgical_assignments', filter: `assigned_family=eq.${cleanFamilyName}` },
+        () => fetchFamilyAssignments()
       )
+      .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
@@ -267,23 +323,10 @@ export default function FamilyHeadDashboard() {
 
   useEffect(() => {
     fetchLastFellowshipAttendance();
-    
     const meetingsChannel = supabase
       .channel(`family-head-meetings-${cleanFamilyName}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'fellowship_meetings' },
-        () => {
-          fetchLastFellowshipAttendance();
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'fellowship_attendance' },
-        () => {
-          fetchLastFellowshipAttendance();
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fellowship_meetings' }, () => fetchLastFellowshipAttendance())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fellowship_attendance' }, () => fetchLastFellowshipAttendance())
       .subscribe();
 
     return () => {
@@ -294,46 +337,23 @@ export default function FamilyHeadDashboard() {
   const getStatusBadge = (status: string) => {
     const statusVal = status || 'Assigned';
     if (statusVal === 'Completed') {
-      return (
-        <span className="bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded text-xs font-semibold">
-          Completed
-        </span>
-      );
+      return <span className="bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded text-xs font-semibold">Completed</span>;
     }
     if (statusVal === 'Pending') {
-      return (
-        <span className="bg-orange-950/60 text-orange-400 border border-orange-500/30 px-2.5 py-0.5 rounded text-xs font-semibold">
-          Pending
-        </span>
-      );
+      return <span className="bg-orange-950/60 text-orange-400 border border-orange-500/30 px-2.5 py-0.5 rounded text-xs font-semibold">Pending</span>;
     }
-    return (
-      <span className="bg-blue-950/60 text-[#ffd700] border border-blue-500/30 px-2.5 py-0.5 rounded text-xs font-semibold">
-        Assigned
-      </span>
-    );
+    return <span className="bg-blue-950/60 text-[#ffd700] border border-blue-500/30 px-2.5 py-0.5 rounded text-xs font-semibold">Assigned</span>;
   };
 
-  // Welfare Form States
-  const [welfareMemberId, setWelfareMemberId] = useState('');
-  const [welfareCategory, setWelfareCategory] = useState('');
-  const [welfareAmount, setWelfareAmount] = useState('');
-  const [welfareReason, setWelfareReason] = useState('');
-  const [submittingWelfare, setSubmittingWelfare] = useState(false);
-
-
-
   const fetchData = async () => {
-    if (!rawFamily) return;
     setLoading(true);
     try {
-      // 1. Fetch family members
       const { data: membersData, error: membersErr } = await supabase
         .from('members')
         .select('*')
         .in('cmo_family', familyOptions);
 
-      if (membersErr) throw membersErr;
+      if (membersErr) console.warn("Error loading members:", membersErr);
 
       const mappedMembers = (membersData || []).map((m: any) => ({
         id: m.official_member_id || m.id,
@@ -353,18 +373,15 @@ export default function FamilyHeadDashboard() {
 
       setFamilyMembers(mappedMembers);
 
-      // 2. Fetch meetings
       const { data: meetingsData, error: meetingsErr } = await supabase
         .from('family_meetings')
         .select('*')
         .in('cmo_family', familyOptions);
 
-      if (meetingsErr) throw meetingsErr;
-
+      if (meetingsErr) console.warn("Error loading meetings:", meetingsErr);
       const loadedMeetings = meetingsData || [];
       setMeetings(loadedMeetings);
 
-      // 3. Fetch attendance
       if (loadedMeetings.length > 0) {
         const meetingIds = loadedMeetings.map(m => m.id);
         const { data: attendanceData, error: attendanceErr } = await supabase
@@ -372,13 +389,12 @@ export default function FamilyHeadDashboard() {
           .select('*')
           .in('meeting_id', meetingIds);
 
-        if (attendanceErr) throw attendanceErr;
+        if (attendanceErr) console.warn("Error loading attendance:", attendanceErr);
         setAttendance(attendanceData || []);
       } else {
         setAttendance([]);
       }
 
-      // 4. Fetch private family welfare tickets
       const familyMemberIds = mappedMembers.map(m => m.official_member_id).filter(Boolean);
       if (familyMemberIds.length > 0) {
         const { data: welfareData, error: welfareErr } = await supabase
@@ -387,12 +403,11 @@ export default function FamilyHeadDashboard() {
           .in('official_member_id', familyMemberIds)
           .order('created_at', { ascending: false });
 
-        if (welfareErr) throw welfareErr;
+        if (welfareErr) console.warn("Error loading welfare tickets:", welfareErr);
         setWelfareTickets(welfareData || []);
       } else {
         setWelfareTickets([]);
       }
-
     } catch (err) {
       console.error("Error fetching Family Head portal data:", err);
     } finally {
@@ -402,12 +417,11 @@ export default function FamilyHeadDashboard() {
 
   useEffect(() => {
     fetchData();
-  }, [rawFamily]);
+  }, [activeFamilyUnit, currentUser]);
 
   // Calculations
   const activeMembers = familyMembers.filter(m => m.status !== 'Deceased');
   const totalMembersCount = activeMembers.length;
-  const activeFamilyCount = familyMembers.filter(m => m.status === 'Active').length;
 
   const totalPresent = attendance.filter(a => a.status === 'Present').length;
   const totalAttendanceRecords = attendance.length;
@@ -415,8 +429,6 @@ export default function FamilyHeadDashboard() {
 
   const getConsecutiveMisses = () => {
     if (meetings.length < 2) return [];
-
-    // Sort meetings by date descending
     const sortedMeetings = [...meetings].sort((a, b) => new Date(b.meeting_date).getTime() - new Date(a.meeting_date).getTime());
     const lastTwoMeetings = sortedMeetings.slice(0, 2);
     const lastTwoIds = lastTwoMeetings.map(m => m.id);
@@ -430,8 +442,8 @@ export default function FamilyHeadDashboard() {
 
   const flaggedMembers = getConsecutiveMisses();
 
-  const filteredRoster = familyMembers.filter(m => 
-    m.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+  const filteredRoster = familyMembers.filter(m =>
+    m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (m.official_member_id || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -474,7 +486,6 @@ export default function FamilyHeadDashboard() {
       setWelfareAmount('');
       setWelfareReason('');
 
-      // Refresh welfare list
       const familyMemberIds = familyMembers.map(m => m.official_member_id).filter(Boolean);
       if (familyMemberIds.length > 0) {
         const { data: updatedWelfare } = await supabase
@@ -492,6 +503,169 @@ export default function FamilyHeadDashboard() {
     }
   };
 
+  // Settle Welfare Ticket & Record Expense
+  const handleSettleFamilyTicket = (ticketId: string) => {
+    const ticket = welfareTickets.find(t => t.id === ticketId || t.ticket_id === ticketId);
+    if (!ticket) return;
+
+    const amount = ticket.requested_amount || ticket.amount || 0;
+    const updatedTickets = welfareTickets.map(t =>
+      (t.id === ticketId || t.ticket_id === ticketId)
+        ? { ...t, status: 'Settled & Cleared' }
+        : t
+    );
+    setWelfareTickets(updatedTickets);
+
+    const expense: FamilyExpense = {
+      id: generateExpenseId(),
+      amount: amount,
+      purpose: `Welfare disbursement for ${ticket.member_name}`,
+      date: new Date().toISOString().split('T')[0],
+      recordedBy: currentUser?.name || 'Family Head',
+      family: cleanFamilyName as Family
+    };
+    setFamilyExpenses([...familyExpenses, expense]);
+    toast.success(`Ticket settled and recorded as expense.`);
+  };
+
+  // Financial Handlers
+  const handleRecordFamilyIncome = () => {
+    if (!newIncomeAmount || !newIncomePurpose || !newIncomeDate) {
+      toast.error('Please fill all income fields');
+      return;
+    }
+    const amount = parseFloat(newIncomeAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Invalid amount');
+      return;
+    }
+    const transaction: FamilyTransaction = {
+      memberId: 'FAMILY',
+      amount,
+      purpose: newIncomePurpose,
+      timestamp: new Date(newIncomeDate).toISOString(),
+      family: cleanFamilyName as Family
+    };
+    setFamilyTransactions([...familyTransactions, transaction]);
+    toast.success(`Family income recorded: ${formatCurrency(amount)}`);
+    setNewIncomeAmount('');
+    setNewIncomePurpose('');
+    setNewIncomeDate(new Date().toISOString().split('T')[0]);
+  };
+
+  const handleRecordFamilyExpense = () => {
+    if (!familyExpenseAmount || !familyExpensePurpose || !familyExpenseDate) {
+      toast.error('Please fill all expense fields');
+      return;
+    }
+    const amount = parseFloat(familyExpenseAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Invalid amount');
+      return;
+    }
+    const expense: FamilyExpense = {
+      id: generateExpenseId(),
+      amount,
+      purpose: familyExpensePurpose,
+      date: familyExpenseDate,
+      recordedBy: currentUser?.name || 'Family Head',
+      family: cleanFamilyName as Family
+    };
+    setFamilyExpenses([...familyExpenses, expense]);
+    toast.success(`Family expense recorded: ${formatCurrency(amount)}`);
+    setFamilyExpenseAmount('');
+    setFamilyExpensePurpose('');
+    setFamilyExpenseDate(new Date().toISOString().split('T')[0]);
+  };
+
+  const manualSearchResults = manualSearchQuery.trim()
+    ? familyMembers
+        .filter(m => `${m.name} ${m.official_member_id || m.id}`.toLowerCase().includes(manualSearchQuery.toLowerCase()))
+        .slice(0, 10)
+    : [];
+  const selectedManualMember = familyMembers.find(m => (m.official_member_id || m.id) === manualMemberId);
+  const showManualSearchResults = Boolean(
+    manualSearchQuery.trim() &&
+    manualSearchResults.length > 0 &&
+    (!selectedManualMember || manualSearchQuery !== `${selectedManualMember.name} (${selectedManualMember.official_member_id || selectedManualMember.id})`)
+  );
+
+  const selectManualMember = (memberId: string, displayText: string) => {
+    setManualMemberId(memberId);
+    setManualSearchQuery(displayText);
+    setManualSearchIndex(-1);
+  };
+
+  const handleManualTransaction = () => {
+    if (!manualMemberId || !manualAmount || !manualPurpose) {
+      toast.error('Please fill all manual transaction fields');
+      return;
+    }
+    const member = familyMembers.find(m => (m.official_member_id || m.id) === manualMemberId);
+    if (!member) {
+      toast.error('Family member not found');
+      return;
+    }
+    const amount = parseFloat(manualAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Invalid amount.');
+      return;
+    }
+    const updatedMembers = members.map(m =>
+      (m.official_member_id || m.id) === manualMemberId
+        ? { ...m, balance: m.balance + amount, status: 'Active' as const }
+        : m
+    );
+    setMembers(updatedMembers);
+
+    const transaction: FamilyTransaction = {
+      memberId: manualMemberId,
+      amount,
+      purpose: manualPurpose,
+      timestamp: new Date().toISOString(),
+      family: cleanFamilyName as Family
+    };
+    setFamilyTransactions([...familyTransactions, transaction]);
+    toast.success(`Manual transaction recorded: ${formatCurrency(amount)} for ${member.name}`);
+    setManualMemberId('');
+    setManualSearchQuery('');
+    setManualAmount('');
+    setManualPurpose('');
+  };
+
+  const handlePrintLedger = () => {
+    window.print();
+  };
+
+  // Post Announcement Handler
+  const handlePostFamilyAnnouncement = () => {
+    if (!announcementTitle || !announcementContent) {
+      toast.error('Please fill title and content');
+      return;
+    }
+    const announcement: FamilyAnnouncement = {
+      id: generateAnnouncementId(),
+      title: announcementTitle,
+      content: announcementContent,
+      author: currentUser?.name || 'Family Head',
+      timestamp: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+      family: cleanFamilyName as Family
+    };
+    setFamilyAnnouncements([announcement, ...familyAnnouncements]);
+    setAnnouncementTitle('');
+    setAnnouncementContent('');
+    toast.success('Family announcement posted successfully!');
+  };
+
+  // Filtered Finance Data
+  const currentFamilyTxs = familyTransactions.filter(tx => tx.family === cleanFamilyName);
+  const currentFamilyExps = familyExpenses.filter(exp => exp.family === cleanFamilyName);
+  const currentFamilyAnnouncements = familyAnnouncements.filter(ann => ann.family === cleanFamilyName);
+  const familyLedger = getCombinedTransactions(currentFamilyTxs, currentFamilyExps);
+  const totalIncomeVal = calculateTotal(currentFamilyTxs);
+  const totalExpensesVal = calculateTotal(currentFamilyExps);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#001a16] p-6 flex items-center justify-center">
@@ -502,24 +676,52 @@ export default function FamilyHeadDashboard() {
 
   return (
     <div className="min-h-screen bg-[#001a16] p-4 md:p-8 font-sans text-gray-200">
-      <div className="max-w-7xl mx-auto">
-        
+      <div className="max-w-7xl mx-auto space-y-6">
+
         {/* Header Section */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 bg-[#002520] p-6 rounded-xl border border-[#ffd700]/20 shadow-xl">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#002520] p-6 rounded-xl border border-[#ffd700]/20 shadow-xl">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Shield className="w-6 h-6 text-[#ffd700]" />
-              <span className="text-[#ffd700] font-bold text-xs uppercase tracking-wider">Leadership Portal</span>
+            <div className="flex items-center gap-3 mb-2 flex-wrap">
+              <div className="flex items-center gap-1.5 bg-[#ffd700]/10 border border-[#ffd700]/30 px-2.5 py-0.5 rounded-full">
+                <Shield className="w-4 h-4 text-[#ffd700]" />
+                <span className="text-[#ffd700] font-bold text-xs uppercase tracking-wider">Leadership Portal</span>
+              </div>
+
+              {isFamilyOfficer ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400 text-sm">Assigned Family Unit:</span>
+                  <span className="bg-yellow-400 text-black font-bold px-3 py-1 rounded-full text-xs uppercase">
+                    {cleanFamilyName}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 bg-[#001a16] border border-[#ffd700]/30 p-1 rounded-lg text-xs font-semibold text-gray-300">
+                  <span className="text-gray-400 pl-1 text-[11px]">Active Unit:</span>
+                  {(['Wisdom', 'Honour', 'Integrity', 'Talent'] as const).map((unit) => (
+                    <button
+                      key={unit}
+                      onClick={() => setActiveFamilyUnit(unit)}
+                      className={`px-2.5 py-0.5 rounded transition-all cursor-pointer text-xs ${
+                        cleanFamilyName.toLowerCase() === unit.toLowerCase()
+                          ? 'bg-[#ffd700] text-[#001a16] font-extrabold shadow-sm'
+                          : 'hover:text-[#ffd700] hover:bg-[#ffd700]/10'
+                      }`}
+                    >
+                      {unit}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            {/* Clean Header displaying exactly Wisdom Family Hub / Honour Family Hub without duplicates */}
-            <h1 className="text-3xl font-extrabold text-white">{familyDisplayName} Hub</h1>
+
+            <h1 className="text-3xl font-extrabold text-white">{familyDisplayName} Leadership Hub</h1>
             <p className="text-gray-400 text-sm mt-1">
               Family Head: <span className="text-white font-medium">{currentUser?.name}</span>
             </p>
           </div>
           <div className="flex gap-2">
-            <Button 
-              onClick={fetchData} 
+            <Button
+              onClick={fetchData}
               className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold"
             >
               Refresh Hub
@@ -539,9 +741,9 @@ export default function FamilyHeadDashboard() {
           </div>
         </div>
 
-        {/* Compact Horizontal Profile Card (Sleek Horizontal Space-Saver) */}
+        {/* Profile Card */}
         {currentUser && (
-          <Card className="bg-[#002520] border border-[#ffd700]/20 p-4 mb-6 rounded-xl shadow-lg">
+          <Card className="bg-[#002520] border border-[#ffd700]/20 p-4 rounded-xl shadow-lg">
             <div className="flex flex-col md:flex-row items-center gap-6">
               <div className="flex-shrink-0">
                 <ProfilePictureUploader
@@ -552,13 +754,13 @@ export default function FamilyHeadDashboard() {
                   extraContent={
                     <>
                       <div className="border-t border-white/10 my-4" />
-                      <button 
+                      <button
                         type="button"
                         onClick={() => {
                           setIsChangingPin(!isChangingPin);
                           setPinChangeError(null);
                           setPinChangeSuccess(false);
-                        }} 
+                        }}
                         className="text-[10px] text-gray-600 hover:text-[#ffd700] transition-colors block ml-auto focus:outline-none cursor-pointer"
                       >
                         Manage Gateway Access
@@ -611,104 +813,6 @@ export default function FamilyHeadDashboard() {
           </Card>
         )}
 
-        {/* Dashboard Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {/* Card 1: Total Members */}
-          <Card className="bg-[#002520] border border-[#ffd700]/10 p-6 rounded-xl hover:scale-102 transition-transform duration-300">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-gray-400 text-sm font-semibold uppercase tracking-wider">Total Members</p>
-                <h3 className="text-4xl font-extrabold text-white mt-2">{totalMembersCount}</h3>
-                <p className="text-xs text-gray-400 mt-2">Active registered profiles</p>
-              </div>
-              <div className="p-3 bg-blue-500/10 rounded-lg text-blue-400 border border-blue-500/20">
-                <Users className="w-6 h-6" />
-              </div>
-            </div>
-          </Card>
-
-          {/* Card 2: Attendance Rate */}
-          <Card className="bg-[#002520] border border-[#ffd700]/10 p-6 rounded-xl hover:scale-102 transition-transform duration-300">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-gray-400 text-sm font-semibold uppercase tracking-wider">Attendance Rate</p>
-                <h3 className="text-4xl font-extrabold text-[#ffd700] mt-2">{attendanceRate}%</h3>
-                <p className="text-xs text-gray-400 mt-2">Based on {meetings.length} family meeting(s)</p>
-              </div>
-              <div className="p-3 bg-[#ffd700]/10 rounded-lg text-[#ffd700] border border-[#ffd700]/20">
-                <CalendarCheck className="w-6 h-6" />
-              </div>
-            </div>
-          </Card>
-
-          {/* Card 3: Welfare Checks */}
-          <Card className={`bg-[#002520] border p-6 rounded-xl hover:scale-102 transition-transform duration-300 ${flaggedMembers.length > 0 ? 'border-red-500/30 bg-red-950/10' : 'border-[#ffd700]/10'}`}>
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-gray-400 text-sm font-semibold uppercase tracking-wider">Welfare Checks</p>
-                <h3 className={`text-4xl font-extrabold mt-2 ${flaggedMembers.length > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                  {flaggedMembers.length}
-                </h3>
-                <p className="text-xs text-gray-400 mt-2">Missed last 2 consecutive meetings</p>
-              </div>
-              <div className={`p-3 rounded-lg border ${flaggedMembers.length > 0 ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-green-500/10 text-green-400 border-green-500/20'}`}>
-                <HeartPulse className="w-6 h-6" />
-              </div>
-            </div>
-          </Card>
-
-          {/* Card 4: Thursday Fellowship Attendance Summary */}
-          <Card className="bg-[#002520] border border-[#ffd700]/10 p-6 rounded-xl hover:scale-102 transition-transform duration-300 col-span-1 sm:col-span-2 lg:col-span-4">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 w-full">
-              <div>
-                <p className="text-gray-400 text-sm font-semibold uppercase tracking-wider">Fellowship Attendance ({familyDisplayName})</p>
-                <h3 className="text-4xl font-extrabold text-[#ffd700] mt-2">
-                  {lastFellowshipAttendance.date ? (
-                    `${Math.round((lastFellowshipAttendance.present / (activeFamilyCount || 1)) * 100)}%`
-                  ) : (
-                    'N/A'
-                  )}
-                </h3>
-                <p className="text-xs text-gray-400 mt-2">
-                  {lastFellowshipAttendance.date ? (
-                    (() => {
-                      const dateStr = lastFellowshipAttendance.date;
-                      const parsedDate = new Date(dateStr.replace(/-/g, '/'));
-                      const formattedDate = isNaN(parsedDate.getTime()) 
-                        ? dateStr 
-                        : `${parsedDate.getMonth() + 1}/${parsedDate.getDate()}/${parsedDate.getFullYear()}`;
-                      return `Date: ${formattedDate} (${lastFellowshipAttendance.present} / ${activeFamilyCount} Present)`;
-                    })()
-                  ) : (
-                    'No sessions recorded yet'
-                  )}
-                </p>
-              </div>
-
-              {lastFellowshipAttendance.date && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 border-t md:border-t-0 md:border-l border-[#ffd700]/20 pt-4 md:pt-0 md:pl-6 text-xs w-full md:w-auto flex-grow justify-around">
-                  <div className="text-gray-300">
-                    <span className="text-[#ffd700] font-bold">Wisdom Family:</span> {lastFellowshipAttendance.wisdomCount} Present
-                  </div>
-                  <div className="text-gray-300">
-                    <span className="text-[#ffd700] font-bold">Talent Family:</span> {lastFellowshipAttendance.talentCount} Present
-                  </div>
-                  <div className="text-gray-300">
-                    <span className="text-[#ffd700] font-bold">Honour Family:</span> {lastFellowshipAttendance.honourCount} Present
-                  </div>
-                  <div className="text-gray-300">
-                    <span className="text-[#ffd700] font-bold">Integrity Family:</span> {lastFellowshipAttendance.integrityCount} Present
-                  </div>
-                </div>
-              )}
-
-              <div className="p-3 bg-teal-500/10 rounded-lg text-teal-400 border border-teal-500/20 self-start md:self-center">
-                <BookOpen className="w-6 h-6" />
-              </div>
-            </div>
-          </Card>
-        </div>
-
         {!isExecutiveUnlocked ? (
           <div className="flex flex-col items-center justify-center py-16 px-4 bg-[#001411] border border-[#ffd700]/20 rounded-lg max-w-md mx-auto text-center space-y-6 my-8 shadow-xl">
             <div className="p-3 bg-[#002a24] rounded-full border border-[#ffd700]/30 text-[#ffd700]">
@@ -729,315 +833,676 @@ export default function FamilyHeadDashboard() {
             </form>
           </div>
         ) : (
-          <>
-            {/* Family Liturgical Duties Schedule */}
-            <Card className="bg-[#002520] border border-[#ffd700]/25 p-6 rounded-xl mb-8 shadow-lg">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-4">
-            <BookOpen className="w-5 h-5 text-[#ffd700]" />
-            Family Liturgical Duties Schedule
-          </h2>
-          <div className="bg-[#001a16] border border-[#ffd700]/10 rounded p-4">
-            {assignmentsLoading ? (
-              <p className="text-gray-400 text-center py-4 font-semibold animate-pulse">Loading family duties...</p>
-            ) : familyAssignments.length === 0 ? (
-              <p className="text-gray-400 text-center py-4">No upcoming liturgical duties scheduled for the {familyDisplayName}.</p>
-            ) : (
-              <div className="space-y-3">
-                {familyAssignments.map((assignment) => (
-                  <div key={assignment.id} className="p-3 bg-[#002520]/60 rounded border border-[#ffd700]/15 flex flex-col md:flex-row md:items-center justify-between gap-2 hover:scale-[1.01] transition-transform">
+          /* UNLOCKED 5-TAB OPERATIONAL WORKSPACE */
+          <Tabs value={activeTab} onValueChange={(val: any) => setActiveTab(val)} className="w-full space-y-6">
+            <TabsList className="bg-[#002520] border border-[#ffd700]/30 p-1.5 rounded-xl flex flex-wrap gap-2">
+              <TabsTrigger value="overview" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] font-bold text-xs md:text-sm px-4 py-2 rounded-lg transition-all cursor-pointer">
+                Overview
+              </TabsTrigger>
+              <TabsTrigger value="welfare" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] font-bold text-xs md:text-sm px-4 py-2 rounded-lg transition-all cursor-pointer">
+                Welfare & Disbursement
+              </TabsTrigger>
+              <TabsTrigger value="finance" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] font-bold text-xs md:text-sm px-4 py-2 rounded-lg transition-all cursor-pointer">
+                Finance
+              </TabsTrigger>
+              <TabsTrigger value="reports" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] font-bold text-xs md:text-sm px-4 py-2 rounded-lg transition-all cursor-pointer">
+                Reports
+              </TabsTrigger>
+              <TabsTrigger value="announcements" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] font-bold text-xs md:text-sm px-4 py-2 rounded-lg transition-all cursor-pointer">
+                Announcements
+              </TabsTrigger>
+            </TabsList>
+
+            {/* TAB 1: OVERVIEW */}
+            <TabsContent value="overview" className="space-y-6">
+              {/* Metrics Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <Card className="bg-[#002520] border border-[#ffd700]/10 p-6 rounded-xl hover:scale-102 transition-transform duration-300">
+                  <div className="flex justify-between items-start">
                     <div>
-                      <h4 className="text-white font-bold text-sm uppercase">{assignment.activity_name}</h4>
-                      <p className="text-gray-400 text-xs mt-0.5">
-                        Duty Role: <span className="text-[#ffd700] font-semibold">{assignment.duty_role}</span>
-                      </p>
-                      {assignment.notes && <p className="text-gray-400 text-xs italic mt-1 font-mono">Instruction: {assignment.notes}</p>}
+                      <p className="text-gray-400 text-sm font-semibold uppercase tracking-wider">Total Members</p>
+                      <h3 className="text-4xl font-extrabold text-white mt-2">{totalMembersCount}</h3>
+                      <p className="text-xs text-gray-400 mt-2">Active registered profiles</p>
                     </div>
-                    <div className="text-right flex flex-col md:items-end gap-1.5">
-                      <span className="bg-[#ffd700]/15 text-[#ffd700] px-2.5 py-0.5 rounded text-xs font-mono font-bold">
-                        {new Date(assignment.activity_date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                      </span>
-                      {getStatusBadge(assignment.status)}
+                    <div className="p-3 bg-blue-500/10 rounded-lg text-blue-400 border border-blue-500/20">
+                      <Users className="w-6 h-6" />
                     </div>
                   </div>
-                ))}
+                </Card>
+
+                <Card className="bg-[#002520] border border-[#ffd700]/10 p-6 rounded-xl hover:scale-102 transition-transform duration-300">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-gray-400 text-sm font-semibold uppercase tracking-wider">Attendance Rate</p>
+                      <h3 className="text-4xl font-extrabold text-[#ffd700] mt-2">{attendanceRate}%</h3>
+                      <p className="text-xs text-gray-400 mt-2">Based on {meetings.length} family meeting(s)</p>
+                    </div>
+                    <div className="p-3 bg-[#ffd700]/10 rounded-lg text-[#ffd700] border border-[#ffd700]/20">
+                      <CalendarCheck className="w-6 h-6" />
+                    </div>
+                  </div>
+                </Card>
+
+                <Card className={`bg-[#002520] border p-6 rounded-xl hover:scale-102 transition-transform duration-300 ${flaggedMembers.length > 0 ? 'border-red-500/30 bg-red-950/10' : 'border-[#ffd700]/10'}`}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-gray-400 text-sm font-semibold uppercase tracking-wider">Welfare Checks</p>
+                      <h3 className={`text-4xl font-extrabold mt-2 ${flaggedMembers.length > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                        {flaggedMembers.length}
+                      </h3>
+                      <p className="text-xs text-gray-400 mt-2">Missed last 2 consecutive meetings</p>
+                    </div>
+                    <div className={`p-3 rounded-lg border ${flaggedMembers.length > 0 ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-green-500/10 text-green-400 border-green-500/20'}`}>
+                      <HeartPulse className="w-6 h-6" />
+                    </div>
+                  </div>
+                </Card>
+
+                <Card className="bg-[#002520] border border-[#ffd700]/10 p-6 rounded-xl hover:scale-102 transition-transform duration-300">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-gray-400 text-sm font-semibold uppercase tracking-wider">Income / Expenses</p>
+                      <h3 className="text-2xl font-extrabold text-green-400 mt-2">{formatCurrency(totalIncomeVal)}</h3>
+                      <p className="text-xs text-red-400 mt-1">Exp: {formatCurrency(totalExpensesVal)}</p>
+                    </div>
+                    <div className="p-3 bg-teal-500/10 rounded-lg text-teal-400 border border-teal-500/20">
+                      <TrendingUp className="w-6 h-6" />
+                    </div>
+                  </div>
+                </Card>
               </div>
-            )}
-          </div>
-        </Card>
 
-        {/* Welfare Alert Section */}
-        {flaggedMembers.length > 0 && (
-          <div className="bg-red-950/20 border-2 border-red-500/30 p-6 rounded-xl mb-8">
-            <h2 className="text-xl font-bold text-red-400 mb-2 flex items-center gap-2">
-              <HeartPulse className="w-5 h-5 animate-pulse" />
-              Urgent Welfare Outreach Required
-            </h2>
-            <p className="text-gray-300 text-sm mb-4">
-              The following members have been absent for the last 2 consecutive family meetings. Please reach out to check on their well-being.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {flaggedMembers.map((m) => (
-                <div key={m.id} className="bg-[#002520] p-4 rounded-lg border border-red-500/20 flex justify-between items-center">
-                  <div>
-                    <h4 className="font-bold text-white uppercase">{m.name}</h4>
-                    <p className="text-xs text-gray-400">{m.official_member_id || 'No ID assigned'}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    {m.phone_number && (
-                      <>
-                        <a 
-                          href={`tel:${m.phone_number}`}
-                          className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg flex items-center justify-center transition-colors"
-                          title="Call member"
-                        >
-                          <PhoneCall className="w-4 h-4" />
-                        </a>
-                        <a 
-                          href={`sms:${m.phone_number}`}
-                          className="bg-purple-600 hover:bg-purple-700 text-white p-2 rounded-lg flex items-center justify-center transition-colors"
-                          title="Send SMS"
-                        >
-                          <Send className="w-4 h-4" />
-                        </a>
-                        <a 
-                          href={`https://wa.me/${m.phone_number.replace(/\D/g, '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg flex items-center justify-center transition-colors"
-                          title="WhatsApp chat"
-                        >
-                          <MessageSquare className="w-4 h-4" />
-                        </a>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Welfare & Case Tracker Section (NEW INTEGRATION) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-          {/* Ongoing Welfare Issues Table */}
-          <div className="lg:col-span-2 bg-[#002520] border border-[#ffd700]/10 rounded-xl p-6 shadow-lg">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-6">
-              <HeartHandshake className="w-5 h-5 text-[#ffd700]" />
-              Welfare Case Tracker
-            </h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-[#ffd700]/10 text-gray-400 font-semibold">
-                    <th className="py-3 px-4">Member</th>
-                    <th className="py-3 px-4">Category</th>
-                    <th className="py-3 px-4">Amount Requested</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4">Submission Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {welfareTickets.length > 0 ? (
-                    welfareTickets.map((ticket) => (
-                      <tr key={ticket.id || ticket.ticket_id} className="border-b border-[#ffd700]/5 hover:bg-[#001a16]/40 transition-colors">
-                        <td className="py-4 px-4 font-bold text-white uppercase">{ticket.member_name}</td>
-                        <td className="py-4 px-4 text-gray-300">{ticket.category}</td>
-                        <td className="py-4 px-4 text-[#ffd700] font-mono">₦{(ticket.requested_amount || ticket.amount || 0).toLocaleString()}</td>
-                        <td className="py-4 px-4">
-                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                            ticket.status === 'Approved' || ticket.status === 'Completed' || ticket.status === 'Settled & Cleared' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
-                            ticket.status === 'Pending' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' :
-                            'bg-red-500/10 text-red-400 border border-red-500/20'
-                          }`}>
-                            {ticket.status}
-                          </span>
-                          {ticket.status === 'Declined' && (
-                            <span className="text-red-500 text-xs italic mt-1 block">
-                              Reason: {ticket.decline_reason || ticket.declineReason || ticket.rejection_reason || ticket.reason || 'No reason provided'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-4 px-4 text-gray-400 text-xs">
-                          {new Date(ticket.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </td>
-                      </tr>
-                    ))
+              {/* Liturgical Duties */}
+              <Card className="bg-[#002520] border border-[#ffd700]/25 p-6 rounded-xl shadow-lg">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-4">
+                  <BookOpen className="w-5 h-5 text-[#ffd700]" />
+                  Family Liturgical Duties Schedule
+                </h2>
+                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded p-4">
+                  {assignmentsLoading ? (
+                    <p className="text-gray-400 text-center py-4 font-semibold animate-pulse">Loading family duties...</p>
+                  ) : familyAssignments.length === 0 ? (
+                    <p className="text-gray-400 text-center py-4">No upcoming liturgical duties scheduled for the {familyDisplayName}.</p>
                   ) : (
-                    <tr>
-                      <td colSpan={5} className="py-8 text-center text-gray-400">
-                        No ongoing family welfare cases recorded.
-                      </td>
-                    </tr>
+                    <div className="space-y-3">
+                      {familyAssignments.map((assignment) => (
+                        <div key={assignment.id} className="p-3 bg-[#002520]/60 rounded border border-[#ffd700]/15 flex flex-col md:flex-row md:items-center justify-between gap-2 hover:scale-[1.01] transition-transform">
+                          <div>
+                            <h4 className="text-white font-bold text-sm uppercase">{assignment.activity_name}</h4>
+                            <p className="text-gray-400 text-xs mt-0.5">
+                              Duty Role: <span className="text-[#ffd700] font-semibold">{assignment.duty_role}</span>
+                            </p>
+                            {assignment.notes && <p className="text-gray-400 text-xs italic mt-1 font-mono">Instruction: {assignment.notes}</p>}
+                          </div>
+                          <div className="text-right flex flex-col md:items-end gap-1.5">
+                            <span className="bg-[#ffd700]/15 text-[#ffd700] px-2.5 py-0.5 rounded text-xs font-mono font-bold">
+                              {new Date(assignment.activity_date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                            </span>
+                            {getStatusBadge(assignment.status)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                </div>
+              </Card>
 
-          {/* Log Welfare Ticket Form */}
-          <Card className="bg-[#002520] border border-[#ffd700]/10 p-6 rounded-xl shadow-lg">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <ClipboardList className="w-5 h-5 text-[#ffd700]" />
-              Submit Welfare Request
-            </h3>
-            <form onSubmit={handleWelfareSubmit} className="flex flex-col gap-4">
-              <div>
-                <label className="block text-xs text-gray-400 mb-1 font-semibold uppercase tracking-wider">Select Member</label>
-                <select
-                  value={welfareMemberId}
-                  onChange={(e) => setWelfareMemberId(e.target.value)}
-                  className="w-full bg-[#001a16] border border-[#ffd700]/20 rounded p-2 text-sm text-white focus:outline-none focus:border-[#ffd700]/50 cursor-pointer"
-                >
-                  <option value="">Choose member...</option>
-                  {familyMembers.map((m) => (
-                    <option key={m.id} value={m.official_member_id}>
-                      {m.name} ({m.official_member_id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1 font-semibold uppercase tracking-wider">Package Category</label>
-                <select
-                  value={welfareCategory}
-                  onChange={(e) => setWelfareCategory(e.target.value)}
-                  className="w-full bg-[#001a16] border border-[#ffd700]/20 rounded p-2 text-sm text-white focus:outline-none focus:border-[#ffd700]/50 cursor-pointer"
-                >
-                  <option value="">Choose category...</option>
-                  <option value="Medical Assistance">Medical Assistance</option>
-                  <option value="Death Levy">Death Levy Support</option>
-                  <option value="Child Birth Support">Child Birth Support</option>
-                  <option value="Emergency Assistance">Emergency Assistance</option>
-                  <option value="Wife's Death">Wife's Death Support</option>
-                  <option value="Others">Others</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1 font-semibold uppercase tracking-wider">Requested Amount (₦)</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 20000"
-                  value={welfareAmount}
-                  onChange={(e) => setWelfareAmount(e.target.value)}
-                  className="w-full bg-[#001a16] border border-[#ffd700]/20 rounded p-2 text-sm text-white focus:outline-none focus:border-[#ffd700]/50 font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1 font-semibold uppercase tracking-wider">Case Reason / Details</label>
-                <textarea
-                  rows={3}
-                  placeholder="Describe the medical, emergency, or support scenario..."
-                  value={welfareReason}
-                  onChange={(e) => setWelfareReason(e.target.value)}
-                  className="w-full bg-[#001a16] border border-[#ffd700]/20 rounded p-2 text-sm text-white focus:outline-none focus:border-[#ffd700]/50 resize-none"
-                />
-              </div>
-              <Button 
-                type="submit" 
-                disabled={submittingWelfare}
-                className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold flex items-center justify-center gap-2 mt-2"
-              >
-                {submittingWelfare ? 'Logging Request...' : 'Submit Request'}
-              </Button>
-            </form>
-          </Card>
-        </div>
-
-        {/* Family Roster Directory */}
-        <div className="bg-[#002520] border border-[#ffd700]/10 rounded-xl p-6 shadow-lg">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <Users className="w-5 h-5 text-[#ffd700]" />
-              Family Roster Directory
-            </h2>
-            <input
-              type="text"
-              placeholder="Search members by name or ID..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-[#001a16] border border-[#ffd700]/20 rounded px-4 py-2 text-sm w-full md:w-80 focus:outline-none focus:border-[#ffd700]/50"
-            />
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm border-collapse">
-              <thead>
-                <tr className="border-b border-[#ffd700]/10 text-gray-400 font-semibold">
-                  <th className="py-3 px-4">Member Name</th>
-                  <th className="py-3 px-4">Member ID</th>
-                  <th className="py-3 px-4">Role</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Phone Number</th>
-                  <th className="py-3 px-4 text-center">Contact Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRoster.length > 0 ? (
-                  filteredRoster.map((member) => (
-                    <tr key={member.id} className="border-b border-[#ffd700]/5 hover:bg-[#001a16]/40 transition-colors">
-                      <td className="py-4 px-4 font-bold text-white uppercase">{member.name}</td>
-                      <td className="py-4 px-4 font-mono text-gray-300">{member.official_member_id || 'Pending'}</td>
-                      <td className="py-4 px-4 text-xs text-gray-400 uppercase">{member.role.replace('_', ' ')}</td>
-                      <td className="py-4 px-4">
-                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                          member.status === 'Active' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
-                          member.status === 'Inactive' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' :
-                          'bg-gray-500/10 text-gray-400 border border-gray-500/20'
-                        }`}>
-                          {member.status}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 text-gray-300">{member.phone_number || member.phone || 'N/A'}</td>
-                      <td className="py-4 px-4">
-                        <div className="flex gap-2 justify-center">
-                          {member.phone_number || member.phone ? (
+              {/* Welfare Alert Section */}
+              {flaggedMembers.length > 0 && (
+                <div className="bg-red-950/20 border-2 border-red-500/30 p-6 rounded-xl">
+                  <h2 className="text-xl font-bold text-red-400 mb-2 flex items-center gap-2">
+                    <HeartPulse className="w-5 h-5 animate-pulse" />
+                    Urgent Welfare Outreach Required
+                  </h2>
+                  <p className="text-gray-300 text-sm mb-4">
+                    The following members have been absent for the last 2 consecutive family meetings. Please reach out to check on their well-being.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {flaggedMembers.map((m) => (
+                      <div key={m.id} className="bg-[#002520] p-4 rounded-lg border border-red-500/20 flex justify-between items-center">
+                        <div>
+                          <h4 className="font-bold text-white uppercase">{m.name}</h4>
+                          <p className="text-xs text-gray-400">{m.official_member_id || 'No ID assigned'}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          {m.phone_number && (
                             <>
-                              <a 
-                                href={`tel:${member.phone_number || member.phone}`}
-                                className="bg-blue-600/10 hover:bg-blue-600 hover:text-white text-blue-400 p-2 rounded-lg border border-blue-500/20 transition-all"
-                                title="Call Member"
-                              >
+                              <a href={`tel:${m.phone_number}`} className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg flex items-center justify-center transition-colors" title="Call member">
                                 <PhoneCall className="w-4 h-4" />
                               </a>
-                              <a 
-                                href={`sms:${member.phone_number || member.phone}`}
-                                className="bg-purple-600/10 hover:bg-purple-600 hover:text-white text-purple-400 p-2 rounded-lg border border-purple-500/20 transition-all"
-                                title="Send SMS"
-                              >
+                              <a href={`sms:${m.phone_number}`} className="bg-purple-600 hover:bg-purple-700 text-white p-2 rounded-lg flex items-center justify-center transition-colors" title="Send SMS">
                                 <Send className="w-4 h-4" />
                               </a>
-                              <a 
-                                href={`https://wa.me/${(member.phone_number || member.phone || '').replace(/\D/g, '')}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="bg-green-600/10 hover:bg-green-600 hover:text-white text-green-400 p-2 rounded-lg border border-green-500/20 transition-all"
-                                title="WhatsApp Chat"
-                              >
+                              <a href={`https://wa.me/${m.phone_number.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg flex items-center justify-center transition-colors" title="WhatsApp chat">
                                 <MessageSquare className="w-4 h-4" />
                               </a>
                             </>
-                          ) : (
-                            <span className="text-gray-500 text-xs">No Contact Details</span>
                           )}
                         </div>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={6} className="py-8 text-center text-gray-400">
-                      No matching family members found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-          </>
+              {/* Roster Directory */}
+              <div className="bg-[#002520] border border-[#ffd700]/10 rounded-xl p-6 shadow-lg">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Users className="w-5 h-5 text-[#ffd700]" />
+                    Family Roster Directory
+                  </h2>
+                  <input
+                    type="text"
+                    placeholder="Search members by name or ID..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="bg-[#001a16] border border-[#ffd700]/20 rounded px-4 py-2 text-sm w-full md:w-80 focus:outline-none focus:border-[#ffd700]/50"
+                  />
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-[#ffd700]/10 text-gray-400 font-semibold">
+                        <th className="py-3 px-4">Member Name</th>
+                        <th className="py-3 px-4">Member ID</th>
+                        <th className="py-3 px-4">Role</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Phone Number</th>
+                        <th className="py-3 px-4 text-center">Contact Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRoster.length > 0 ? (
+                        filteredRoster.map((member) => (
+                          <tr key={member.id} className="border-b border-[#ffd700]/5 hover:bg-[#001a16]/40 transition-colors">
+                            <td className="py-4 px-4 font-bold text-white uppercase">{member.name}</td>
+                            <td className="py-4 px-4 font-mono text-gray-300">{member.official_member_id || 'Pending'}</td>
+                            <td className="py-4 px-4 text-xs text-gray-400 uppercase">{member.role.replace('_', ' ')}</td>
+                            <td className="py-4 px-4">
+                              <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                                member.status === 'Active' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
+                                member.status === 'Inactive' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' :
+                                'bg-gray-500/10 text-gray-400 border border-gray-500/20'
+                              }`}>
+                                {member.status}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 text-gray-300">{member.phone_number || member.phone || 'N/A'}</td>
+                            <td className="py-4 px-4">
+                              <div className="flex gap-2 justify-center">
+                                {member.phone_number || member.phone ? (
+                                  <>
+                                    <a href={`tel:${member.phone_number || member.phone}`} className="bg-blue-600/10 hover:bg-blue-600 hover:text-white text-blue-400 p-2 rounded-lg border border-blue-500/20 transition-all" title="Call Member">
+                                      <PhoneCall className="w-4 h-4" />
+                                    </a>
+                                    <a href={`sms:${member.phone_number || member.phone}`} className="bg-purple-600/10 hover:bg-purple-600 hover:text-white text-purple-400 p-2 rounded-lg border border-purple-500/20 transition-all" title="Send SMS">
+                                      <Send className="w-4 h-4" />
+                                    </a>
+                                    <a href={`https://wa.me/${(member.phone_number || member.phone || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="bg-green-600/10 hover:bg-green-600 hover:text-white text-green-400 p-2 rounded-lg border border-green-500/20 transition-all" title="WhatsApp Chat">
+                                      <MessageSquare className="w-4 h-4" />
+                                    </a>
+                                  </>
+                                ) : (
+                                  <span className="text-gray-500 text-xs">No Contact Details</span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-gray-400">
+                            No matching family members found.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* TAB 2: WELFARE & DISBURSEMENT */}
+            <TabsContent value="welfare" className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Welfare Case Tracker */}
+                <div className="lg:col-span-2 bg-[#002520] border border-[#ffd700]/10 rounded-xl p-6 shadow-lg">
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-6">
+                    <HeartHandshake className="w-5 h-5 text-[#ffd700]" />
+                    Welfare Case Tracker & Disbursement
+                  </h2>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm border-collapse">
+                      <thead>
+                        <tr className="border-b border-[#ffd700]/10 text-gray-400 font-semibold">
+                          <th className="py-3 px-4">Member</th>
+                          <th className="py-3 px-4">Category</th>
+                          <th className="py-3 px-4">Amount</th>
+                          <th className="py-3 px-4">Status</th>
+                          <th className="py-3 px-4">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {welfareTickets.length > 0 ? (
+                          welfareTickets.map((ticket) => {
+                            const tId = ticket.id || ticket.ticket_id;
+                            const isSettled = ticket.status === 'Settled & Cleared' || ticket.status === 'Approved' || ticket.status === 'Completed';
+                            return (
+                              <tr key={tId} className="border-b border-[#ffd700]/5 hover:bg-[#001a16]/40 transition-colors">
+                                <td className="py-4 px-4 font-bold text-white uppercase">{ticket.member_name}</td>
+                                <td className="py-4 px-4 text-gray-300">{ticket.category}</td>
+                                <td className="py-4 px-4 text-[#ffd700] font-mono">₦{(ticket.requested_amount || ticket.amount || 0).toLocaleString()}</td>
+                                <td className="py-4 px-4">
+                                  <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                                    isSettled ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
+                                    ticket.status === 'Pending' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' :
+                                    'bg-red-500/10 text-red-400 border border-red-500/20'
+                                  }`}>
+                                    {ticket.status}
+                                  </span>
+                                </td>
+                                <td className="py-4 px-4">
+                                  {!isSettled ? (
+                                    <Button
+                                      onClick={() => handleSettleFamilyTicket(tId)}
+                                      className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold text-xs py-1 px-3"
+                                    >
+                                      Settle & Record Expense
+                                    </Button>
+                                  ) : (
+                                    <span className="text-xs text-gray-400">Cleared</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan={5} className="py-8 text-center text-gray-400">
+                              No ongoing family welfare cases recorded.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Log Welfare Ticket Form */}
+                <Card className="bg-[#002520] border border-[#ffd700]/10 p-6 rounded-xl shadow-lg">
+                  <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <ClipboardList className="w-5 h-5 text-[#ffd700]" />
+                    Submit Welfare Request
+                  </h3>
+                  <form onSubmit={handleWelfareSubmit} className="flex flex-col gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1 font-semibold uppercase tracking-wider">Select Member</label>
+                      <select
+                        value={welfareMemberId}
+                        onChange={(e) => setWelfareMemberId(e.target.value)}
+                        className="w-full bg-[#001a16] border border-[#ffd700]/20 rounded p-2 text-sm text-white focus:outline-none focus:border-[#ffd700]/50 cursor-pointer"
+                      >
+                        <option value="">Choose member...</option>
+                        {familyMembers.map((m) => (
+                          <option key={m.id} value={m.official_member_id}>
+                            {m.name} ({m.official_member_id})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1 font-semibold uppercase tracking-wider">Package Category</label>
+                      <select
+                        value={welfareCategory}
+                        onChange={(e) => setWelfareCategory(e.target.value)}
+                        className="w-full bg-[#001a16] border border-[#ffd700]/20 rounded p-2 text-sm text-white focus:outline-none focus:border-[#ffd700]/50 cursor-pointer"
+                      >
+                        <option value="">Choose category...</option>
+                        <option value="Medical Assistance">Medical Assistance</option>
+                        <option value="Death Levy">Death Levy Support</option>
+                        <option value="Child Birth Support">Child Birth Support</option>
+                        <option value="Emergency Assistance">Emergency Assistance</option>
+                        <option value="Wife's Death">Wife's Death Support</option>
+                        <option value="Others">Others</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1 font-semibold uppercase tracking-wider">Requested Amount (₦)</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 20000"
+                        value={welfareAmount}
+                        onChange={(e) => setWelfareAmount(e.target.value)}
+                        className="w-full bg-[#001a16] border border-[#ffd700]/20 rounded p-2 text-sm text-white focus:outline-none focus:border-[#ffd700]/50 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1 font-semibold uppercase tracking-wider">Case Reason / Details</label>
+                      <textarea
+                        rows={3}
+                        placeholder="Describe the medical, emergency, or support scenario..."
+                        value={welfareReason}
+                        onChange={(e) => setWelfareReason(e.target.value)}
+                        className="w-full bg-[#001a16] border border-[#ffd700]/20 rounded p-2 text-sm text-white focus:outline-none focus:border-[#ffd700]/50 resize-none"
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      disabled={submittingWelfare}
+                      className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold flex items-center justify-center gap-2 mt-2"
+                    >
+                      {submittingWelfare ? 'Logging Request...' : 'Submit Request'}
+                    </Button>
+                  </form>
+                </Card>
+              </div>
+            </TabsContent>
+
+            {/* TAB 3: FINANCE */}
+            <TabsContent value="finance" className="space-y-6">
+              <div className="grid gap-6 lg:grid-cols-3">
+                {/* Manual Transaction Entry */}
+                <Card className="bg-[#002520] border-2 border-[#ffd700]/30 p-6 rounded-xl">
+                  <h3 className="text-xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
+                    <DollarSign className="w-5 h-5" />
+                    Manual Transaction Entry
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-gray-300 text-sm block mb-2">Search Member</label>
+                      <Input
+                        value={manualSearchQuery}
+                        onChange={(e) => {
+                          setManualSearchQuery(e.target.value);
+                          setManualSearchIndex(-1);
+                          if (!e.target.value) setManualMemberId('');
+                        }}
+                        placeholder="Search by name or ID"
+                        className="bg-[#001a16] border-[#ffd700]/30 text-white"
+                        autoComplete="off"
+                      />
+                      {showManualSearchResults && (
+                        <div className="mt-2 max-h-52 overflow-y-auto rounded border border-[#ffd700]/50 bg-[#001a16]">
+                          {manualSearchResults.map((member, index) => (
+                            <button
+                              key={member.id}
+                              type="button"
+                              onClick={() => selectManualMember(member.official_member_id || member.id, `${member.name} (${member.official_member_id || member.id})`)}
+                              className={`w-full text-left px-3 py-2 text-sm ${manualSearchIndex === index ? 'bg-[#ffd700]/30 text-white' : 'text-white hover:bg-[#ffd700]/20'}`}
+                            >
+                              {member.name} — {member.official_member_id || member.id}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm block mb-2">Member ID</label>
+                      <Input
+                        value={manualMemberId}
+                        onChange={(e) => setManualMemberId(e.target.value.toUpperCase())}
+                        placeholder="HCC-CMO-26-XXXX"
+                        className="bg-[#001a16] border-[#ffd700]/30 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm block mb-2">Amount (₦)</label>
+                      <Input
+                        type="number"
+                        value={manualAmount}
+                        onChange={(e) => setManualAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="bg-[#001a16] border-[#ffd700]/30 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm block mb-2">Purpose</label>
+                      <Input
+                        value={manualPurpose}
+                        onChange={(e) => setManualPurpose(e.target.value)}
+                        placeholder="e.g., Welfare Dues, Monthly Dues"
+                        className="bg-[#001a16] border-[#ffd700]/30 text-white"
+                      />
+                    </div>
+                    <Button onClick={handleManualTransaction} className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold">
+                      Record Manual Entry
+                    </Button>
+                  </div>
+                </Card>
+
+                {/* Record Family Income */}
+                <Card className="bg-[#002520] border-2 border-[#ffd700]/30 p-6 rounded-xl">
+                  <h3 className="text-xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-green-400" />
+                    Record Family Income
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-gray-300 text-sm block mb-2">Amount (₦)</label>
+                      <Input
+                        type="number"
+                        value={newIncomeAmount}
+                        onChange={(e) => setNewIncomeAmount(e.target.value)}
+                        className="bg-[#001a16] border-[#ffd700]/30 text-white"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm block mb-2">Purpose</label>
+                      <Input
+                        value={newIncomePurpose}
+                        onChange={(e) => setNewIncomePurpose(e.target.value)}
+                        className="bg-[#001a16] border-[#ffd700]/30 text-white"
+                        placeholder="e.g., Family Covenant Levy"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm block mb-2">Date</label>
+                      <Input
+                        type="date"
+                        value={newIncomeDate}
+                        onChange={(e) => setNewIncomeDate(e.target.value)}
+                        className="bg-[#001a16] border-[#ffd700]/30 text-white"
+                      />
+                    </div>
+                    <Button onClick={handleRecordFamilyIncome} className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold">
+                      Record Income
+                    </Button>
+                  </div>
+                </Card>
+
+                {/* Record Family Expense */}
+                <Card className="bg-[#002520] border-2 border-[#ffd700]/30 p-6 rounded-xl">
+                  <h3 className="text-xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
+                    <Receipt className="w-5 h-5 text-red-400" />
+                    Record Family Expense
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-gray-300 text-sm block mb-2">Amount (₦)</label>
+                      <Input
+                        type="number"
+                        value={familyExpenseAmount}
+                        onChange={(e) => setFamilyExpenseAmount(e.target.value)}
+                        className="bg-[#001a16] border-[#ffd700]/30 text-white"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm block mb-2">Purpose</label>
+                      <Input
+                        value={familyExpensePurpose}
+                        onChange={(e) => setFamilyExpensePurpose(e.target.value)}
+                        className="bg-[#001a16] border-[#ffd700]/30 text-white"
+                        placeholder="e.g., Supplies, Welfare Support"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm block mb-2">Date</label>
+                      <Input
+                        type="date"
+                        value={familyExpenseDate}
+                        onChange={(e) => setFamilyExpenseDate(e.target.value)}
+                        className="bg-[#001a16] border-[#ffd700]/30 text-white"
+                      />
+                    </div>
+                    <Button onClick={handleRecordFamilyExpense} className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold">
+                      Record Expense
+                    </Button>
+                  </div>
+                </Card>
+              </div>
+
+              {/* Ledger Table */}
+              <Card className="bg-[#002520] border-2 border-[#ffd700]/30 p-6 rounded-xl shadow-lg">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-4">
+                  <h3 className="text-xl font-bold text-[#ffd700]">Family Financial Ledger</h3>
+                  <Button onClick={handlePrintLedger} className="w-full md:w-auto bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold">
+                    <Printer className="w-4 h-4 mr-2 inline" />
+                    Print Statement
+                  </Button>
+                </div>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-[#ffd700]/30 hover:bg-[#001a16]">
+                        <TableHead className="text-[#ffd700]">Date</TableHead>
+                        <TableHead className="text-[#ffd700]">Type</TableHead>
+                        <TableHead className="text-[#ffd700]">Description</TableHead>
+                        <TableHead className="text-[#ffd700]">Credit</TableHead>
+                        <TableHead className="text-[#ffd700]">Debit</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {familyLedger.length > 0 ? (
+                        familyLedger.map((item, idx) => (
+                          <TableRow key={idx} className="border-[#ffd700]/15 hover:bg-[#001a16]">
+                            <TableCell className="text-gray-400 text-sm">{formatDate(item.timestamp)}</TableCell>
+                            <TableCell>
+                              <span className={`text-xs px-2 py-1 rounded font-semibold ${item.type === 'income' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                {item.type === 'income' ? 'Income' : 'Expense'}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-white">{item.purpose}</TableCell>
+                            <TableCell className="text-green-400 font-semibold">{item.type === 'income' ? formatCurrency(item.amount) : '-'}</TableCell>
+                            <TableCell className="text-red-400 font-semibold">{item.type === 'expense' ? formatCurrency(item.amount) : '-'}</TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={5} className="py-6 text-center text-gray-400">
+                            No ledger transactions recorded yet.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </Card>
+            </TabsContent>
+
+            {/* TAB 4: REPORTS */}
+            <TabsContent value="reports" className="space-y-6">
+              <Card className="bg-[#002520] border-2 border-[#ffd700]/30 p-6 rounded-xl">
+                <h3 className="text-xl font-bold text-[#ffd700] mb-4">Family Operational & Financial Reports</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Top Contributors */}
+                  <div className="bg-[#001a16] border border-[#ffd700]/20 p-5 rounded-xl">
+                    <h4 className="text-white font-bold text-base mb-3 flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-green-400" />
+                      Top Contributors (by Total Amount)
+                    </h4>
+                    <div className="space-y-2">
+                      {(() => {
+                        const byMember: Record<string, number> = {};
+                        currentFamilyTxs.forEach(t => { byMember[t.memberId] = (byMember[t.memberId] || 0) + t.amount; });
+                        const top = Object.entries(byMember).sort((a,b) => b[1]-a[1]).slice(0,5);
+                        if (top.length === 0) return <p className="text-gray-400 text-sm">No recorded contributions yet.</p>;
+                        return top.map(([mId, amt]) => {
+                          const mName = familyMembers.find(m => (m.official_member_id || m.id) === mId)?.name || mId;
+                          return (
+                            <div key={mId} className="flex justify-between items-center bg-[#002520] p-2.5 rounded border border-[#ffd700]/10">
+                              <span className="text-white text-sm font-semibold truncate">{mName}</span>
+                              <span className="text-green-400 font-bold font-mono">{formatCurrency(amt)}</span>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Expense Breakdown */}
+                  <div className="bg-[#001a16] border border-[#ffd700]/20 p-5 rounded-xl">
+                    <h4 className="text-white font-bold text-base mb-3 flex items-center gap-2">
+                      <Receipt className="w-5 h-5 text-red-400" />
+                      Expense Category Breakdown
+                    </h4>
+                    <div className="space-y-2">
+                      {(() => {
+                        const byPurpose: Record<string, number> = {};
+                        currentFamilyExps.forEach(e => { byPurpose[e.purpose] = (byPurpose[e.purpose] || 0) + e.amount; });
+                        const list = Object.entries(byPurpose).sort((a,b) => b[1]-a[1]).slice(0,6);
+                        if (list.length === 0) return <p className="text-gray-400 text-sm">No recorded family expenses yet.</p>;
+                        return list.map(([purpose, amt]) => (
+                          <div key={purpose} className="flex justify-between items-center bg-[#002520] p-2.5 rounded border border-[#ffd700]/10">
+                            <span className="text-white text-sm truncate">{purpose}</span>
+                            <span className="text-red-400 font-bold font-mono">{formatCurrency(amt)}</span>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </TabsContent>
+
+            {/* TAB 5: ANNOUNCEMENTS */}
+            <TabsContent value="announcements" className="space-y-6">
+              <Card className="bg-[#002520] border-2 border-[#ffd700]/30 p-6 rounded-xl">
+                <h3 className="text-xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
+                  <Megaphone className="w-5 h-5" />
+                  Family Announcements
+                </h3>
+                <div className="space-y-4 mb-8 bg-[#001a16] p-4 rounded-xl border border-[#ffd700]/20">
+                  <h4 className="text-white font-semibold text-sm">Post New Subgroup Notice</h4>
+                  <Input
+                    value={announcementTitle}
+                    onChange={(e) => setAnnouncementTitle(e.target.value)}
+                    placeholder="Announcement Title"
+                    className="bg-[#002520] border-[#ffd700]/30 text-white"
+                  />
+                  <textarea
+                    value={announcementContent}
+                    onChange={(e) => setAnnouncementContent(e.target.value)}
+                    placeholder="Type notice message details..."
+                    className="w-full bg-[#002520] border border-[#ffd700]/30 text-white p-3 rounded-lg min-h-[120px] focus:outline-none focus:border-[#ffd700]"
+                  />
+                  <Button onClick={handlePostFamilyAnnouncement} className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold">
+                    <Megaphone className="w-4 h-4 mr-2 inline" />
+                    Publish Announcement
+                  </Button>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-white font-semibold text-sm">Active Subgroup Announcements</h4>
+                  {currentFamilyAnnouncements.length > 0 ? (
+                    currentFamilyAnnouncements.map(ann => (
+                      <div key={ann.id} className="bg-[#001a16] border border-[#ffd700]/20 p-4 rounded-xl space-y-1">
+                        <h5 className="text-[#ffd700] font-bold text-base">{ann.title}</h5>
+                        <p className="text-gray-300 text-sm leading-relaxed">{ann.content}</p>
+                        <p className="text-xs text-gray-500 pt-2 font-mono">Posted by {ann.author} on {formatDateTime(ann.timestamp)}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-gray-400 text-sm py-4 text-center">No active announcements for {familyDisplayName}.</p>
+                  )}
+                </div>
+              </Card>
+            </TabsContent>
+          </Tabs>
         )}
-
       </div>
     </div>
   );

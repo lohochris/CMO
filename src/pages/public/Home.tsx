@@ -46,6 +46,7 @@ const EXECUTIVE_OFFICES: ExecOffice[] = [
     title: 'Chairman Office',
     subtitle: 'Executive Leadership & Governance',
     aliasId: 'CMO-CHAIRMAN-2026',
+    routePage: 'chairman',
     icon: Building2,
     description: 'Executive supervision, executive approvals, and overall parish organization direction.',
   },
@@ -54,6 +55,7 @@ const EXECUTIVE_OFFICES: ExecOffice[] = [
     title: 'General Secretary',
     subtitle: 'Secretarial & Official Documentation',
     aliasId: 'SECRETARY-2026',
+    routePage: 'secretary',
     icon: FileText,
     description: 'Meeting minutes, official correspondence, registers, and secretarial records.',
   },
@@ -62,6 +64,7 @@ const EXECUTIVE_OFFICES: ExecOffice[] = [
     title: 'Financial Secretary',
     subtitle: 'Revenue, Dues & Assessment Ledger',
     aliasId: 'FIN-SEC-2026',
+    routePage: 'fin_sec',
     icon: DollarSign,
     description: 'Member dues collection, levy management, debt audit, and financial clearance.',
   },
@@ -70,6 +73,7 @@ const EXECUTIVE_OFFICES: ExecOffice[] = [
     title: 'PRO Office',
     subtitle: 'Public Relations & Announcements',
     aliasId: 'PRO-2026',
+    routePage: 'pro',
     icon: Megaphone,
     description: 'Public publicity, parish announcements, press releases, and media outreach.',
   },
@@ -78,6 +82,7 @@ const EXECUTIVE_OFFICES: ExecOffice[] = [
     title: 'Provost Marshall',
     subtitle: 'Roll-Call, Discipline & Fines',
     aliasId: 'PROVOST-2026',
+    routePage: 'provost',
     icon: ShieldCheck,
     description: 'Live roll-call attendance, 4-hour session lock, fines enforcement, and excuse processing.',
   },
@@ -86,6 +91,7 @@ const EXECUTIVE_OFFICES: ExecOffice[] = [
     title: 'Treasury Office',
     subtitle: 'Vault & Expenditure Disbursement',
     aliasId: 'TREASURER-2026',
+    routePage: 'treasurer',
     icon: Award,
     description: 'Bank reconciliation, cash vault management, and approved voucher disbursements.',
   },
@@ -94,6 +100,7 @@ const EXECUTIVE_OFFICES: ExecOffice[] = [
     title: 'Welfare Office',
     subtitle: 'Member Support & Assistance',
     aliasId: 'WELFARE-2026',
+    routePage: 'welfare',
     icon: Heart,
     description: 'Benevolence tickets, member support, emergency relief, and bereavement assistance.',
   },
@@ -102,26 +109,9 @@ const EXECUTIVE_OFFICES: ExecOffice[] = [
     title: 'Liturgist Office',
     subtitle: 'Liturgy & Mass Roster Planning',
     aliasId: 'LITURGIST-2026',
+    routePage: 'liturgist',
     icon: Sparkles,
     description: 'Mass warden assignments, liturgical schedules, and spiritual activity coordination.',
-  },
-  {
-    id: 'family_head',
-    title: 'Family Head Portal',
-    subtitle: 'Family Chairmen & Leadership',
-    aliasId: 'FAMILY-HEAD-2026',
-    routePage: 'familyChairman',
-    icon: Users,
-    description: 'Family unit oversight, sub-committee coordination, and family welfare supervision.',
-  },
-  {
-    id: 'family_sec',
-    title: 'Family Secretary Portal',
-    subtitle: 'Family Unit Secretarial Ledger',
-    aliasId: 'FAMILY-SEC-2026',
-    routePage: 'familySecretary',
-    icon: ClipboardList,
-    description: 'Family unit meeting minutes, roll-call registers, and family secretarial reports.',
   },
 ];
 
@@ -266,20 +256,76 @@ export const Home = () => {
       
       // Auto-authenticate with requested administrative role
       if (selectedOfficeForAuth?.type === 'exec') {
+        const titleLower = selectedOfficeForAuth.title.toLowerCase();
+        let resolvedRole = 'cmo_chairman';
+
         const roleMap: Record<string, string> = {
           'CMO-CHAIRMAN-2026': 'cmo_chairman',
+          'CHAIRMAN': 'cmo_chairman',
           'SECRETARY-2026': 'gen_sec',
+          'SECRETARY': 'gen_sec',
           'FIN-SEC-2026': 'fin_sec',
+          'FIN-SEC': 'fin_sec',
+          'FINSEC': 'fin_sec',
           'PRO-2026': 'pro',
+          'PRO': 'pro',
           'PROVOST-2026': 'provost',
+          'PROVOST': 'provost',
           'TREASURER-2026': 'treasurer',
+          'TREASURER': 'treasurer',
           'WELFARE-2026': 'welfare',
+          'WELFARE': 'welfare',
           'LITURGIST-2026': 'liturgist',
+          'LITURGIST': 'liturgist',
           'FAMILY-HEAD-2026': 'family_head',
+          'FAMILY-HEAD': 'family_head',
           'FAMILY-SEC-2026': 'family_secretary',
+          'FAMILY-SEC': 'family_secretary',
         };
 
-        const resolvedRole = roleMap[idToAuthenticate] || 'cmo_chairman';
+        if (idToAuthenticate in roleMap) {
+          resolvedRole = roleMap[idToAuthenticate];
+        } else if (titleLower.includes('liturgist')) {
+          resolvedRole = 'liturgist';
+        } else if (titleLower.includes('provost')) {
+          resolvedRole = 'provost';
+        } else if (titleLower.includes('pro')) {
+          resolvedRole = 'pro';
+        } else if (titleLower.includes('welfare')) {
+          resolvedRole = 'welfare';
+        } else if (titleLower.includes('treasury') || titleLower.includes('treasurer')) {
+          resolvedRole = 'treasurer';
+        } else if (titleLower.includes('financial')) {
+          resolvedRole = 'fin_sec';
+        } else if (titleLower.includes('secretary')) {
+          resolvedRole = 'gen_sec';
+        } else if (titleLower.includes('family head')) {
+          resolvedRole = 'family_head';
+        } else if (titleLower.includes('family sec')) {
+          resolvedRole = 'family_secretary';
+        } else if (titleLower.includes('chairman')) {
+          resolvedRole = 'cmo_chairman';
+        }
+
+        const targetPage: Page = selectedOfficeForAuth.targetPage || (
+          resolvedRole === 'liturgist' ? 'liturgist' :
+          resolvedRole === 'provost' ? 'provost' :
+          resolvedRole === 'pro' ? 'pro' :
+          resolvedRole === 'welfare' ? 'welfare' :
+          resolvedRole === 'treasurer' ? 'treasurer' :
+          resolvedRole === 'gen_sec' ? 'secretary' :
+          resolvedRole === 'fin_sec' ? 'fin_sec' :
+          resolvedRole === 'family_head' ? 'familyChairman' :
+          resolvedRole === 'family_secretary' ? 'familySecretary' :
+          resolvedRole === 'cmo_chairman' ? 'chairman' : 'dashboard'
+        );
+
+        let parsedFamilyUnit: any = 'Wisdom';
+        const idUpper = idToAuthenticate.toUpperCase();
+        if (idUpper.includes('HONOUR')) parsedFamilyUnit = 'Honour';
+        else if (idUpper.includes('INTEGRITY')) parsedFamilyUnit = 'Integrity';
+        else if (idUpper.includes('TALENT')) parsedFamilyUnit = 'Talent';
+        else if (idUpper.includes('WISDOM')) parsedFamilyUnit = 'Wisdom';
 
         setCurrentUser({
           id: idToAuthenticate,
@@ -289,18 +335,16 @@ export const Home = () => {
           status: 'Active (Cleared)',
           balance: 0,
           role: resolvedRole as any,
+          family: parsedFamilyUnit,
+          cmo_family: parsedFamilyUnit,
+          familyUnit: parsedFamilyUnit,
           profilePic: null
         });
 
         setSuccess(`✓ Access granted to ${selectedOfficeForAuth.title}`);
         setShowExecModal(false);
         setSelectedOfficeForAuth(null);
-
-        if (selectedOfficeForAuth.targetPage) {
-          setCurrentPage(selectedOfficeForAuth.targetPage);
-        } else {
-          setCurrentPage('dashboard');
-        }
+        setCurrentPage(targetPage);
       } else if (selectedOfficeForAuth?.type === 'sports') {
         setCurrentUser({
           id: idToAuthenticate,
@@ -395,11 +439,11 @@ export const Home = () => {
                 Executive Portals
               </h3>
               <p className="text-gray-300 text-xs leading-relaxed">
-                Role-based administrative portals for elected executive officers and family heads (10 Offices).
+                Role-based administrative portals for elected central executive officers (8 Offices).
               </p>
             </div>
             <div className="mt-6 pt-4 border-t border-[#ffd700]/10 flex items-center justify-between text-xs font-bold text-[#ffd700]">
-              <span>Open 10 Executive Offices</span>
+              <span>Open 8 Central Executive Offices</span>
               <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
             </div>
           </Card>
@@ -477,7 +521,7 @@ export const Home = () => {
         </div>
       </div>
 
-      {/* ── MODAL 1: EXECUTIVE OFFICES SELECTOR DRAWER (10 OFFICES) ───────────────── */}
+      {/* ── MODAL 1: EXECUTIVE OFFICES SELECTOR DRAWER (8 OFFICES) ───────────────── */}
       {showExecModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
           <Card className="bg-[#002520] border-2 border-[#ffd700] max-w-5xl w-full max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
@@ -493,7 +537,7 @@ export const Home = () => {
                 </button>
                 <h2 className="text-2xl font-bold text-[#ffd700] flex items-center gap-2 mt-1">
                   <ShieldCheck className="w-6 h-6 text-[#ffd700]" />
-                  Executive Offices Directory (10 Offices)
+                  Central Executive Offices Directory (8 Offices)
                 </h2>
                 <p className="text-xs text-gray-300 mt-0.5">
                   Select an administrative office below to authenticate and enter executive workspace.
