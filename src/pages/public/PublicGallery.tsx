@@ -109,6 +109,21 @@ export const PublicGallery: React.FC = () => {
     album_name?: string;
   } | null>(null);
 
+  // Escape key handler for Lightbox Modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActiveMedia(null);
+      }
+    };
+    if (activeMedia) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeMedia]);
+
   const loadGalleryData = useCallback(async () => {
     setLoading(true);
     try {
@@ -163,7 +178,7 @@ export const PublicGallery: React.FC = () => {
   });
 
   return (
-    <div className="min-h-screen bg-[#001a16] text-white p-4 md:p-8 max-w-7xl mx-auto">
+    <div className="min-h-screen bg-[#001a16] text-white p-4 md:p-8 max-w-7xl mx-auto font-sans">
       {/* Top Bar Navigation & Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
@@ -240,12 +255,12 @@ export const PublicGallery: React.FC = () => {
                 onClick={() => setActiveMedia(item)}
                 className="bg-[#002520] border border-[#ffd700]/20 overflow-hidden rounded-xl group hover:border-[#ffd700] transition-all duration-300 hover:shadow-xl hover:shadow-[#ffd700]/10 cursor-pointer flex flex-col"
               >
-                {/* Media Image Thumbnail Container */}
-                <div className="relative aspect-video overflow-hidden bg-black/40">
+                {/* Media Image Thumbnail Container with Aspect Ratio & Object Top formatting */}
+                <div className="relative aspect-video overflow-hidden bg-emerald-950/80">
                   <img
                     src={displayImage}
                     alt={item.title}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                    className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80 group-hover:opacity-90 transition-opacity" />
 
@@ -258,8 +273,8 @@ export const PublicGallery: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Category Pill Tag */}
-                  <span className="absolute top-3 left-3 bg-[#001a16]/80 backdrop-blur text-[#ffd700] border border-[#ffd700]/40 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full">
+                  {/* Category Badge Pill with Backdrop Blur */}
+                  <span className="absolute top-3 left-3 backdrop-blur-md bg-black/50 text-[#ffd700] border border-[#ffd700]/30 text-xs font-semibold px-2.5 py-1 rounded-md shadow">
                     {item.category}
                   </span>
                 </div>
@@ -267,12 +282,12 @@ export const PublicGallery: React.FC = () => {
                 {/* Media Details Footer */}
                 <div className="p-4 flex-grow flex flex-col justify-between">
                   <div>
-                    <h3 className="font-bold text-white text-sm line-clamp-2 group-hover:text-[#ffd700] transition-colors mb-2">
+                    <h3 className="font-bold text-white text-sm line-clamp-1 truncate group-hover:text-[#ffd700] transition-colors mb-1.5" title={item.title}>
                       {item.title}
                     </h3>
-                    <p className="text-xs text-gray-400 flex items-center gap-1.5 mb-2">
-                      <Tag className="w-3.5 h-3.5 text-[#ffd700]" />
-                      {item.album_name}
+                    <p className="text-xs text-gray-400 flex items-center gap-1.5 mb-2 truncate">
+                      <Tag className="w-3.5 h-3.5 text-[#ffd700] flex-shrink-0" />
+                      <span className="truncate">{item.album_name}</span>
                     </p>
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t border-[#ffd700]/10 text-[11px] text-gray-400">
@@ -291,34 +306,42 @@ export const PublicGallery: React.FC = () => {
         </div>
       )}
 
-      {/* Interactive Lightbox Modal */}
+      {/* Full-Screen Interactive Lightbox Modal Component */}
       {activeMedia && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <Card className="bg-[#002520] border-2 border-[#ffd700] max-w-4xl w-full rounded-2xl overflow-hidden shadow-2xl relative">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setActiveMedia(null);
+          }}
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <Card className="bg-[#002520] border-2 border-[#ffd700] max-w-4xl w-full rounded-2xl overflow-hidden shadow-2xl relative flex flex-col max-h-[90vh]">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-[#ffd700]/20 bg-[#001a16]">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full bg-[#ffd700]/10 text-[#ffd700] border border-[#ffd700]/30 text-xs font-bold uppercase">
-                  {activeMedia.category || 'Gallery'}
+            <div className="flex items-center justify-between p-4 border-b border-[#ffd700]/20 bg-[#001a16] flex-shrink-0">
+              <div className="flex items-center gap-3 overflow-hidden">
+                <span className="backdrop-blur-md bg-black/50 text-[#ffd700] border border-[#ffd700]/30 text-xs font-semibold px-2.5 py-1 rounded-md flex-shrink-0">
+                  {activeMedia.category || 'General'}
                 </span>
-                <h3 className="font-bold text-white text-base truncate max-w-md">{activeMedia.title}</h3>
+                <h3 className="font-bold text-white text-base truncate" title={activeMedia.title}>
+                  {activeMedia.title}
+                </h3>
               </div>
               <button
                 onClick={() => setActiveMedia(null)}
-                className="text-gray-400 hover:text-[#ffd700] p-1 rounded-lg transition-colors cursor-pointer"
+                className="text-gray-400 hover:text-[#ffd700] p-1.5 rounded-lg transition-colors cursor-pointer flex-shrink-0 ml-2"
+                title="Close (Esc)"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
 
             {/* Modal Body: Media Viewer */}
-            <div className="p-4 bg-black/60 flex items-center justify-center min-h-[300px] max-h-[70vh]">
+            <div className="p-4 bg-black/70 flex items-center justify-center min-h-[300px] overflow-auto flex-grow">
               {activeMedia.video_url ? (
                 (() => {
                   const meta = parseVideoUrl(activeMedia.video_url!);
                   if (meta?.embedUrl) {
                     return (
-                      <div className="w-full aspect-video rounded-xl overflow-hidden border border-[#ffd700]/20">
+                      <div className="w-full aspect-video rounded-xl overflow-hidden border border-[#ffd700]/20 max-h-[65vh]">
                         <iframe
                           src={meta.embedUrl}
                           title={activeMedia.title}
@@ -327,6 +350,16 @@ export const PublicGallery: React.FC = () => {
                           allowFullScreen
                         />
                       </div>
+                    );
+                  }
+                  if (activeMedia.video_url.endsWith('.mp4') || activeMedia.video_url.endsWith('.webm')) {
+                    return (
+                      <video
+                        controls
+                        src={activeMedia.video_url}
+                        className="max-h-[65vh] w-auto max-w-full rounded-lg border border-[#ffd700]/20"
+                        autoPlay
+                      />
                     );
                   }
                   return (
@@ -348,14 +381,25 @@ export const PublicGallery: React.FC = () => {
                 <img
                   src={activeMedia.media_url || 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=1200&q=80'}
                   alt={activeMedia.title}
-                  className="max-h-[65vh] w-auto object-contain rounded-lg shadow-lg border border-[#ffd700]/20"
+                  className="max-h-[65vh] w-auto max-w-full object-contain rounded-lg shadow-lg border border-[#ffd700]/20"
                 />
               )}
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 bg-[#001a16] border-t border-[#ffd700]/20 flex justify-between items-center text-xs text-gray-300">
-              <span className="font-semibold text-[#ffd700]">Album: {activeMedia.album_name || 'Holy Cross CMO'}</span>
+            <div className="p-4 bg-[#001a16] border-t border-[#ffd700]/20 flex flex-wrap justify-between items-center text-xs text-gray-300 flex-shrink-0 gap-2">
+              <div className="flex items-center gap-4">
+                <span className="font-semibold text-[#ffd700] flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5" />
+                  Album: {activeMedia.album_name || 'Holy Cross CMO'}
+                </span>
+                {activeMedia.created_at && (
+                  <span className="text-gray-400 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5" />
+                    Uploaded: {new Date(activeMedia.created_at).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
               <Button
                 onClick={() => setActiveMedia(null)}
                 className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold text-xs px-4 py-1.5 rounded-lg"

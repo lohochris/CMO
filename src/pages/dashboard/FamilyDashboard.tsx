@@ -4,7 +4,7 @@ import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { Users, Trophy, ShieldCheck, Wallet, Heart, Receipt, Megaphone, TrendingUp, FileText, DollarSign, Printer, Search, ArrowLeft, Lock, ChevronRight, X } from 'lucide-react';
+import { Users, Trophy, ShieldCheck, Wallet, Heart, Receipt, Megaphone, TrendingUp, FileText, DollarSign, Printer, Search, ArrowLeft, Lock, ChevronRight, X, ClipboardList } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { Family, FamilyWelfareTicket, FamilyTransaction, FamilyExpense, FamilyAnnouncement } from '../../types';
 import { calculateTotal, formatCurrency, formatDate, getCombinedTransactions, formatDateTime } from '../../utils/helpers';
@@ -165,7 +165,7 @@ export const FamilyHub = () => {
                     onClick={() => handleOpenAuth(family, 'chairman')}
                     className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold text-xs py-2 shadow"
                   >
-                    Chairman Portal
+                    Family Head Portal
                   </Button>
                   <Button
                     onClick={() => handleOpenAuth(family, 'secretary')}
@@ -205,7 +205,7 @@ export const FamilyHub = () => {
               </div>
               <div>
                 <h3 className="text-lg font-bold text-[#ffd700]">
-                  {selectedFamilyForAuth.family} Family {selectedFamilyForAuth.mode === 'chairman' ? 'Chairman' : 'Secretary'} Login
+                  {selectedFamilyForAuth.family} Family {selectedFamilyForAuth.mode === 'chairman' ? 'Family Head' : 'Secretary'} Login
                 </h3>
                 <p className="text-xs text-gray-300">Official Role Authentication Prompt</p>
               </div>

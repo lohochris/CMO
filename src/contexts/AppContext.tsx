@@ -50,8 +50,19 @@ const dbToMember = (m: any): Member => {
   if (mappedStatus === 'Active (Cleared)') mappedStatus = 'Active';
   else if (mappedStatus === 'Pending Validation') mappedStatus = 'Inactive';
 
+  const mId = m.official_member || m.official_member_id || m.id || '';
+  let parsedFamily = m.cmo_family || m.family || m.family_unit || m.familyUnit || undefined;
+
+  if (!parsedFamily && typeof mId === 'string') {
+    const idUpper = mId.toUpperCase();
+    if (idUpper.includes('HONOUR')) parsedFamily = 'Honour';
+    else if (idUpper.includes('INTEGRITY')) parsedFamily = 'Integrity';
+    else if (idUpper.includes('TALENT')) parsedFamily = 'Talent';
+    else if (idUpper.includes('WISDOM')) parsedFamily = 'Wisdom';
+  }
+
   return {
-    id: m.official_member || m.official_member_id || m.id,
+    id: mId,
     name: m.full_name || m.name,
     full_name: m.full_name || m.name,
     official_member_id: m.official_member || m.official_member_id || undefined,
@@ -59,8 +70,9 @@ const dbToMember = (m: any): Member => {
     status: mappedStatus as any,
     balance: Number(m.balance),
     role: m.role as any,
-    family: m.cmo_family || m.family as any,
-    cmo_family: m.cmo_family || m.family || undefined,
+    family: parsedFamily as any,
+    cmo_family: parsedFamily,
+    familyUnit: parsedFamily,
     phone: m.phone_number || m.phone || undefined,
     email: m.email || undefined,
     homeTownAddress: m.home_town_address || undefined,
@@ -79,8 +91,18 @@ const dbToMember = (m: any): Member => {
 };
 
 const dbToExecutive = (e: any): Member => {
-  const execId = e.executive_id || e.id;
+  const execId = e.executive_id || e.id || '';
   const roleKey = (e.role_key || e.role || '').toLowerCase();
+
+  let parsedFamily = e.cmo_family || e.family || e.family_unit || e.familyUnit || undefined;
+  if (!parsedFamily && typeof execId === 'string') {
+    const idUpper = execId.toUpperCase();
+    if (idUpper.includes('HONOUR')) parsedFamily = 'Honour';
+    else if (idUpper.includes('INTEGRITY')) parsedFamily = 'Integrity';
+    else if (idUpper.includes('TALENT')) parsedFamily = 'Talent';
+    else if (idUpper.includes('WISDOM')) parsedFamily = 'Wisdom';
+  }
+
   return {
     id: execId,
     official_member_id: execId,
@@ -90,8 +112,9 @@ const dbToExecutive = (e: any): Member => {
     status: (e.status || 'Active') as any,
     balance: Number(e.balance || 0),
     role: roleKey as any,
-    family: e.cmo_family || e.family as any || undefined,
-    cmo_family: e.cmo_family || e.family || undefined,
+    family: parsedFamily as any,
+    cmo_family: parsedFamily,
+    familyUnit: parsedFamily,
     phone: e.phone_number || e.phone || undefined,
     email: e.email || undefined,
     profilePic: e.avatar_url || e.profile_picture_url || null,
@@ -249,7 +272,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       if (typeof window !== 'undefined') {
         const saved = localStorage.getItem('cmo_current_user');
-        return saved ? JSON.parse(saved) : null;
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          let fUnit = parsed.familyUnit || parsed.cmo_family || parsed.family;
+          const uId = String(parsed.official_member_id || parsed.id || '').toUpperCase();
+          if (!fUnit && uId) {
+            if (uId.includes('HONOUR')) fUnit = 'Honour';
+            else if (uId.includes('INTEGRITY')) fUnit = 'Integrity';
+            else if (uId.includes('TALENT')) fUnit = 'Talent';
+            else if (uId.includes('WISDOM')) fUnit = 'Wisdom';
+          }
+          if (fUnit) {
+            parsed.familyUnit = fUnit;
+            parsed.cmo_family = parsed.cmo_family || fUnit;
+            parsed.family = parsed.family || fUnit;
+          }
+          return parsed;
+        }
       }
     } catch (e) {
       console.error(e);
@@ -283,6 +322,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(true);
   const [dbError, setDbError] = useState<string | null>(null);
+
+  // Auto-dismiss success notification toast after 3 seconds
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => {
+        setSuccess('');
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
+  // Auto-dismiss error notification toast after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   // References to keep mutable states fresh in asynchronous callbacks
   const membersRef = useRef<Member[]>(members);

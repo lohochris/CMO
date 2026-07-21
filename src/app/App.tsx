@@ -246,22 +246,23 @@ function AppContent() {
       currentPage === 'chairman' ||
       currentPage === 'fin_sec' ||
       currentPage === 'provost' ||
-      currentPage === 'liturgist'
+      currentPage === 'liturgist' ||
+      currentPage === 'familyChairman' ||
+      currentPage === 'familySecretary'
     ) {
       const officialId = currentUser?.official_member_id || currentUser?.id;
       const userRole = currentUser?.role?.toLowerCase();
 
-      if (userRole === 'chairman' || userRole === 'cmo_chairman') {
-        return <ChairmanDashboard />;
-      }
-
-      if (userRole === 'fin_sec' || userRole === 'financial_secretary') return <FinanceDashboard />;
-      if (userRole === 'welfare') return <WelfareDashboard />;
-      if (userRole === 'treasurer') return <TreasurerDashboard />;
-      if (userRole === 'pro') return <PRODashboard />;
-      if (userRole === 'provost') return <ProvostDashboard />;
-      if (userRole === 'liturgist') return <LiturgistDashboard />;
-      if (userRole === 'gen_sec' || userRole === 'secretary') return <SecretaryDashboard />;
+      if (currentPage === 'familyChairman' || userRole === 'family_chairman' || userRole === 'family_head') return <FamilyHeadDashboard />;
+      if (currentPage === 'familySecretary' || userRole === 'family_secretary' || userRole === 'family_sec') return <FamilySecDashboard />;
+      if (currentPage === 'liturgist' || userRole === 'liturgist') return <LiturgistDashboard />;
+      if (currentPage === 'provost' || userRole === 'provost') return <ProvostDashboard />;
+      if (currentPage === 'pro' || userRole === 'pro') return <PRODashboard />;
+      if (currentPage === 'welfare' || userRole === 'welfare') return <WelfareDashboard />;
+      if (currentPage === 'treasurer' || userRole === 'treasurer') return <TreasurerDashboard />;
+      if (currentPage === 'secretary' || userRole === 'gen_sec' || userRole === 'secretary') return <SecretaryDashboard />;
+      if (currentPage === 'fin_sec' || userRole === 'fin_sec' || userRole === 'financial_secretary') return <FinanceDashboard />;
+      if (currentPage === 'chairman' || userRole === 'chairman' || userRole === 'cmo_chairman') return <ChairmanDashboard />;
       if (userRole === 'sports_director') return <SportsAdminPanel />;
       if (userRole === 'coach') return <CoachRosterWorkspace />;
       if (userRole === 'referee') return <RefereeMatchCenter />;
@@ -331,16 +332,8 @@ function AppContent() {
       return <SportsFinancialHub />;
     }
     if (currentPage === 'familyHub') return <FamilyHub />;
-    if (currentPage === 'familyChairman') return <FamilyChairmanDashboard />;
-    if (currentPage === 'familySecretary') return <FamilySecretaryDashboard />;
-    if (currentPage === 'familyWisdomChairman') return <FamilyWisdomChairmanDashboard />;
-    if (currentPage === 'familyWisdomSecretary') return <FamilyWisdomSecretaryDashboard />;
-    if (currentPage === 'familyHonourChairman') return <FamilyHonourChairmanDashboard />;
-    if (currentPage === 'familyHonourSecretary') return <FamilyHonourSecretaryDashboard />;
-    if (currentPage === 'familyIntegrityChairman') return <FamilyIntegrityChairmanDashboard />;
-    if (currentPage === 'familyIntegritySecretary') return <FamilyIntegritySecretaryDashboard />;
-    if (currentPage === 'familyTalentChairman') return <FamilyTalentChairmanDashboard />;
-    if (currentPage === 'familyTalentSecretary') return <FamilyTalentSecretaryDashboard />;
+    if (currentPage === 'familyChairman' || currentPage === 'familyWisdomChairman' || currentPage === 'familyHonourChairman' || currentPage === 'familyIntegrityChairman' || currentPage === 'familyTalentChairman') return <FamilyHeadDashboard />;
+    if (currentPage === 'familySecretary' || currentPage === 'familyWisdomSecretary' || currentPage === 'familyHonourSecretary' || currentPage === 'familyIntegritySecretary' || currentPage === 'familyTalentSecretary') return <FamilySecDashboard />;
 
     if (currentPage === 'publicGallery') return <PublicGallery />;
 
