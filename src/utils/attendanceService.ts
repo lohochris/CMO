@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
-import { AttendanceRecord, CmoNotification } from '../types';
+import { AttendanceRecord, CmoNotification, CmoMeetingSession } from '../types';
 
 export const DEFAULT_LATE_FINE = 500;
 export const DEFAULT_ABSENT_FINE = 1000;

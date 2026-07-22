@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef, useCallback } from 'react';
-import { Member, Transaction, WelfareTicket, Expense, Announcement, Page, FamilyTransaction, FamilyExpense, FamilyWelfareTicket, FamilyAnnouncement } from '../types';
+import { Member, Transaction, WelfareTicket, Expense, Announcement, Page, Family, FamilyTransaction, FamilyExpense, FamilyWelfareTicket, FamilyAnnouncement } from '../types';
 import { seedAnnouncements } from '../data/seedData';
 import { supabase } from '../lib/supabaseClient';
 import { toast } from 'sonner';
+import { isAdministrativeId } from '../utils/helpers';
 
 interface AppContextType {
   members: Member[];
@@ -40,7 +41,66 @@ interface AppContextType {
   totalExpenses: number;
   vaultBalance: number;
   refreshDatabase: () => Promise<void>;
+  refreshUserContext: () => Promise<void>;
+  executives: Member[];
+  setExecutives: React.Dispatch<React.SetStateAction<Member[]>>;
 }
+
+const HARDCODED_OFFICES = [
+  { office_id: 'HCC-CMO-EXEC-CH', office_name: 'Chairman Office', category: 'Executive' },
+  { office_id: 'HCC-CMO-EXEC-FS', office_name: 'Financial Secretary', category: 'Executive' },
+  { office_id: 'HCC-CMO-EXEC-TR', office_name: 'Treasurer Office', category: 'Executive' },
+  { office_id: 'HCC-CMO-EXEC-WE', office_name: 'Welfare Office', category: 'Executive' },
+  { office_id: 'HCC-CMO-EXEC-PR', office_name: 'PRO Office', category: 'Executive' },
+  { office_id: 'HCC-CMO-EXEC-PV', office_name: 'Provost Marshall', category: 'Executive' },
+  { office_id: 'HCC-CMO-EXEC-SE', office_name: 'General Secretary', category: 'Executive' },
+  { office_id: 'HCC-CMO-EXEC-LT', office_name: 'Liturgist Office', category: 'Executive' },
+
+  { office_id: 'HCC-CMO-WIS-FH', office_name: 'Wisdom Family Head', category: 'Family' },
+  { office_id: 'HCC-CMO-WIS-FS', office_name: 'Wisdom Family Secretary', category: 'Family' },
+  { office_id: 'HCC-CMO-HON-FH', office_name: 'Honour Family Head', category: 'Family' },
+  { office_id: 'HCC-CMO-HON-FS', office_name: 'Honour Family Secretary', category: 'Family' },
+  { office_id: 'HCC-CMO-TAL-FH', office_name: 'Talent Family Head', category: 'Family' },
+  { office_id: 'HCC-CMO-TAL-FS', office_name: 'Talent Family Secretary', category: 'Family' },
+  { office_id: 'HCC-CMO-INT-FH', office_name: 'Integrity Family Head', category: 'Family' },
+  { office_id: 'HCC-CMO-INT-FS', office_name: 'Integrity Family Secretary', category: 'Family' },
+
+  { office_id: 'HCC-CMO-SPRT-DIR', office_name: 'Sports Director', category: 'Sports' },
+  { office_id: 'HCC-CMO-SPRT-TR', office_name: 'Sports Treasurer', category: 'Sports' },
+  { office_id: 'HCC-CMO-SPRT-MED', office_name: 'Sports Medical Officer', category: 'Sports' },
+  { office_id: 'HCC-CMO-SPRT-COACH', office_name: 'Sports Coach', category: 'Sports' },
+  { office_id: 'HCC-CMO-SPRT-REF', office_name: 'Sports Referee', category: 'Sports' }
+];
+
+const mapCredentialToOfficeId = (cred: string): string => {
+  const c = cred.toUpperCase().trim();
+  
+  if (c === 'CMO-CHAIRMAN-2026' || c === 'CHAIRMAN' || c === 'HCC-CMO-EXEC-CH') return 'HCC-CMO-EXEC-CH';
+  if (c === 'FIN-SEC-2026' || c === 'FIN-SEC' || c === 'FINSEC' || c === 'HCC-CMO-EXEC-FS') return 'HCC-CMO-EXEC-FS';
+  if (c === 'TREASURER-2026' || c === 'TREASURER' || c === 'TREAS-2026' || c === 'HCC-CMO-EXEC-TR') return 'HCC-CMO-EXEC-TR';
+  if (c === 'WELFARE-2026' || c === 'WELFARE' || c === 'WEL-OFF-2026' || c === 'HCC-CMO-EXEC-WE') return 'HCC-CMO-EXEC-WE';
+  if (c === 'PRO-2026' || c === 'PRO' || c === 'HCC-CMO-EXEC-PR') return 'HCC-CMO-EXEC-PR';
+  if (c === 'PROVOST-2026' || c === 'PROVOST' || c === 'HCC-CMO-EXEC-PV') return 'HCC-CMO-EXEC-PV';
+  if (c === 'SECRETARY-2026' || c === 'SECRETARY' || c === 'HCC-CMO-EXEC-SE') return 'HCC-CMO-EXEC-SE';
+  if (c === 'LITURGIST-2026' || c === 'LITURGIST' || c === 'HCC-CMO-EXEC-LT') return 'HCC-CMO-EXEC-LT';
+
+  if (c === 'SPORTS-ADMIN-2026' || c === 'HCC-CMO-SPRT-DIR') return 'HCC-CMO-SPRT-DIR';
+  if (c === 'HCC-CMO-SPRT-TR') return 'HCC-CMO-SPRT-TR';
+  if (c === 'HCC-CMO-SPRT-MED') return 'HCC-CMO-SPRT-MED';
+  if (c === 'HCC-CMO-SPRT-COACH') return 'HCC-CMO-SPRT-COACH';
+  if (c === 'HCC-CMO-SPRT-REF') return 'HCC-CMO-SPRT-REF';
+
+  if (c === 'FAMILY-HEAD-WISDOM' || c === 'HCC-CMO-WIS-FH') return 'HCC-CMO-WIS-FH';
+  if (c === 'FAMILY-SEC-WISDOM' || c === 'HCC-CMO-WIS-FS') return 'HCC-CMO-WIS-FS';
+  if (c === 'FAMILY-HEAD-HONOUR' || c === 'HCC-CMO-HON-FH') return 'HCC-CMO-HON-FH';
+  if (c === 'FAMILY-SEC-HONOUR' || c === 'HCC-CMO-HON-FS') return 'HCC-CMO-HON-FS';
+  if (c === 'FAMILY-HEAD-INTEGRITY' || c === 'HCC-CMO-INT-FH') return 'HCC-CMO-INT-FH';
+  if (c === 'FAMILY-SEC-INTEGRITY' || c === 'HCC-CMO-INT-FS') return 'HCC-CMO-INT-FS';
+  if (c === 'FAMILY-HEAD-TALENT' || c === 'HCC-CMO-TAL-FH') return 'HCC-CMO-TAL-FH';
+  if (c === 'FAMILY-SEC-TALENT' || c === 'HCC-CMO-TAL-FS') return 'HCC-CMO-TAL-FS';
+
+  return c;
+};
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -90,9 +150,10 @@ const dbToMember = (m: any): Member => {
   };
 };
 
-const dbToExecutive = (e: any): Member => {
+const dbToExecutive = (e: any, membersList?: Member[]): Member => {
   const execId = e.executive_id || e.id || '';
   const roleKey = (e.role_key || e.role || '').toLowerCase();
+  const matchingMember = membersList?.find(m => m.id === e.user_id || m.official_member_id === e.user_id);
 
   let parsedFamily = e.cmo_family || e.family || e.family_unit || e.familyUnit || undefined;
   if (!parsedFamily && typeof execId === 'string') {
@@ -106,18 +167,18 @@ const dbToExecutive = (e: any): Member => {
   return {
     id: execId,
     official_member_id: execId,
-    name: e.full_name || e.name || execId,
-    full_name: e.full_name || e.name || execId,
-    phone_number: e.phone_number || e.phone || undefined,
+    name: matchingMember?.full_name || matchingMember?.name || e.full_name || e.name || execId,
+    full_name: matchingMember?.full_name || matchingMember?.name || e.full_name || e.name || execId,
+    phone_number: matchingMember?.phone_number || e.phone_number || e.phone || undefined,
     status: (e.status || 'Active') as any,
     balance: Number(e.balance || 0),
     role: roleKey as any,
     family: parsedFamily as any,
     cmo_family: parsedFamily,
     familyUnit: parsedFamily,
-    phone: e.phone_number || e.phone || undefined,
-    email: e.email || undefined,
-    profilePic: e.avatar_url || e.profile_picture_url || null,
+    phone: matchingMember?.phone || e.phone_number || e.phone || undefined,
+    email: matchingMember?.email || e.email || undefined,
+    profilePic: matchingMember?.profilePic || e.avatar_url || e.profile_picture_url || null,
     createdAt: e.created_at || undefined,
     updatedAt: e.updated_at || undefined
   };
@@ -257,6 +318,7 @@ const announcementToDb = (a: Announcement): any => {
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [members, setMembersState] = useState<Member[]>([]);
+  const [executives, setExecutives] = useState<Member[]>([]);
   const [transactions, setTransactionsState] = useState<Transaction[]>([]);
   const [rosterCount, setRosterCount] = useState(0);
   const [welfareTickets, setWelfareTicketsState] = useState<WelfareTicket[]>([]);
@@ -365,19 +427,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     let loadedMembersList: Member[] = [];
     let loadedExecutivesList: Member[] = [];
 
-    // 1a. Fetch Operational Executives from public.cmo_executives
-    try {
-      const { data: execsData, error: execsError } = await supabase
-        .from('cmo_executives')
-        .select('*');
-      if (!execsError && execsData && execsData.length > 0) {
-        loadedExecutivesList = execsData.map(dbToExecutive);
-      }
-    } catch (err: any) {
-      console.error("cmo_executives partition query error:", err);
-    }
-
-    // 1b. Fetch Parish Members from public.members
+    // 1b. Fetch Parish Members first so we can map executives correctly
     try {
       const { data: membersData, error: membersError } = await supabase
         .from('members')
@@ -401,6 +451,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       loadedMembersList = [];
     }
 
+    // 1a. Fetch Operational Executives from public.cmo_executives
+    try {
+      const { data: execsData, error: execsError } = await supabase
+        .from('cmo_executives')
+        .select('*');
+      if (!execsError && execsData && execsData.length > 0) {
+        loadedExecutivesList = execsData.map(e => dbToExecutive(e, loadedMembersList));
+        setExecutives(loadedExecutivesList);
+      } else {
+        setExecutives([]);
+      }
+    } catch (err: any) {
+      console.error("cmo_executives partition query error:", err);
+    }
+
+    // Fetch all office assignments to resolve names
+    let loadedAssignments: any[] = [];
+    try {
+      const { data: assignmentsData, error: assignmentsError } = await supabase
+        .from('office_assignments')
+        .select('*');
+      if (!assignmentsError && assignmentsData) {
+        loadedAssignments = assignmentsData;
+      }
+    } catch (err) {
+      console.error("Failed to fetch office assignments:", err);
+    }
+
     // Sync session credentials against cmo_executives and members
     try {
       if (typeof window !== 'undefined') {
@@ -410,18 +488,79 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const targetId = sessionKey || savedUserId;
 
         if (targetId) {
-          // Check cmo_executives partition first
-          const execUser = loadedExecutivesList.find(
-            (ex) => ex.id === targetId || ex.official_member_id === targetId
-          );
-          if (execUser) {
-            setCurrentUser(execUser);
-          } else if (loadedMembersList.length > 0) {
-            const memberUser = loadedMembersList.find(
-              (m: Member) => m.id === targetId || m.official_member_id === targetId
+          const mappedOfficeId = mapCredentialToOfficeId(targetId);
+          const assignment = loadedAssignments.find(a => a.office_id === mappedOfficeId);
+          const officeObj = HARDCODED_OFFICES.find(o => o.office_id === mappedOfficeId);
+          const officeName = officeObj?.office_name || mappedOfficeId;
+          const isOffice = HARDCODED_OFFICES.some(o => o.office_id === mappedOfficeId);
+
+          if (isOffice) {
+            if (assignment) {
+              const memberDetails = loadedMembersList.find(m => 
+                m.official_member_id === assignment.official_member_id || m.id === assignment.official_member_id
+              );
+              
+              if (memberDetails) {
+                setCurrentUser({
+                  id: targetId,
+                  official_member_id: targetId,
+                  name: memberDetails.full_name || memberDetails.name,
+                  full_name: memberDetails.full_name || memberDetails.name,
+                  status: memberDetails.status || 'Active',
+                  balance: memberDetails.balance || 0,
+                  role: memberDetails.role || 'member',
+                  family: (memberDetails.family || memberDetails.cmo_family || undefined) as Family | undefined,
+                  cmo_family: memberDetails.cmo_family || memberDetails.family || undefined,
+                  familyUnit: memberDetails.familyUnit || memberDetails.family || undefined,
+                  phone: memberDetails.phone || memberDetails.phone_number || undefined,
+                  phone_number: memberDetails.phone_number || memberDetails.phone || undefined,
+                  email: memberDetails.email || undefined,
+                  profilePic: memberDetails.profilePic || null,
+                  office_title: officeName,
+                  is_assigned: true
+                });
+              } else {
+                setCurrentUser({
+                  id: targetId,
+                  official_member_id: targetId,
+                  name: `Assigned: ${assignment.official_member_id}`,
+                  full_name: `Assigned: ${assignment.official_member_id}`,
+                  status: 'Active',
+                  balance: 0,
+                  role: 'member',
+                  profilePic: null,
+                  office_title: officeName,
+                  is_assigned: true
+                });
+              }
+            } else {
+              setCurrentUser({
+                id: targetId,
+                official_member_id: targetId,
+                name: 'Vacant Position',
+                full_name: 'Vacant Position',
+                status: 'Inactive',
+                balance: 0,
+                role: 'member',
+                profilePic: null,
+                office_title: officeName,
+                is_assigned: false
+              });
+            }
+          } else {
+            // Check cmo_executives partition first
+            const execUser = loadedExecutivesList.find(
+              (ex) => ex.id === targetId || ex.official_member_id === targetId
             );
-            if (memberUser) {
-              setCurrentUser(memberUser);
+            if (execUser) {
+              setCurrentUser(execUser);
+            } else if (loadedMembersList.length > 0) {
+              const memberUser = loadedMembersList.find(
+                (m: Member) => m.id === targetId || m.official_member_id === targetId
+              );
+              if (memberUser) {
+                setCurrentUser(memberUser);
+              }
             }
           }
         }
@@ -825,6 +964,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return totalIncome - totalExpenses;
   }, [totalIncome, totalExpenses]);
 
+  const refreshUserContext = useCallback(async () => {
+    await refreshDatabase();
+  }, [refreshDatabase]);
+
   const contextValue = useMemo(() => ({
     members,
     setMembers,
@@ -860,7 +1003,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     totalIncome,
     totalExpenses,
     vaultBalance,
-    refreshDatabase
+    refreshDatabase,
+    refreshUserContext,
+    executives,
+    setExecutives
   }), [
     members,
     setMembers,
@@ -887,7 +1033,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     totalIncome,
     totalExpenses,
     vaultBalance,
-    refreshDatabase
+    refreshDatabase,
+    refreshUserContext,
+    executives
   ]);
 
   return (

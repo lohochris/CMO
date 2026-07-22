@@ -71,6 +71,64 @@ export default function ProvostDashboard() {
   // Fine Ledger Form States
   const [fineMemberId, setFineMemberId] = useState('');
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [searchedMembers, setSearchedMembers] = useState<any[]>([]);
+  const [isSearchingMembers, setIsSearchingMembers] = useState(false);
+
+  useEffect(() => {
+    const selectedMember = members.find(m => (m.official_member_id || m.id) === fineMemberId);
+    const selectedDisplayText = selectedMember ? `${selectedMember.name || selectedMember.full_name} (${fineMemberId})` : '';
+    if (selectedDisplayText && memberSearchQuery === selectedDisplayText) {
+      return;
+    }
+
+    const queryTerm = memberSearchQuery.trim();
+
+    const delayDebounce = setTimeout(async () => {
+      setIsSearchingMembers(true);
+      try {
+        let query = supabase
+          .from('members')
+          .select('*')
+          .neq('status', 'Deceased')
+          .order('full_name', { ascending: true })
+          .limit(1000);
+
+        if (queryTerm) {
+          query = query.or(`full_name.ilike.%${queryTerm}%,official_member_id.ilike.%${queryTerm}%,cmo_family.ilike.%${queryTerm}%`);
+        }
+
+        const { data, error } = await query;
+
+        if (!error && data) {
+          setSearchedMembers(data.map((m: any) => ({
+            id: m.official_member_id,
+            official_member_id: m.official_member_id,
+            name: m.full_name,
+            full_name: m.full_name,
+            phone: m.phone_number || undefined,
+            phone_number: m.phone_number || undefined,
+            status: m.status,
+            balance: Number(m.balance || 0),
+            role: m.role || 'member',
+            family: m.cmo_family || undefined,
+            cmo_family: m.cmo_family || undefined,
+            familyUnit: m.cmo_family || undefined,
+            profilePic: m.avatar_url || null,
+            createdAt: m.created_at,
+            updatedAt: m.updated_at
+          })));
+        } else {
+          setSearchedMembers([]);
+        }
+      } catch (err) {
+        console.error("Error searching members in ProvostDashboard:", err);
+      } finally {
+        setIsSearchingMembers(false);
+      }
+    }, queryTerm ? 300 : 0);
+
+    return () => clearTimeout(delayDebounce);
+  }, [memberSearchQuery, fineMemberId, members]);
   const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
   const [fineInfraction, setFineInfraction] = useState('Lateness');
   const [fineAmount, setFineAmount] = useState('500');
@@ -505,6 +563,9 @@ export default function ProvostDashboard() {
                   <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                     <p className="text-gray-400 text-xs uppercase tracking-wider">Name</p>
                     <p className="text-white font-bold text-sm truncate">{currentUser.name}</p>
+                    {currentUser.office_title && (
+                      <span className="text-[10px] text-gray-400 block mt-0.5">{currentUser.office_title}</span>
+                    )}
                   </div>
                   <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                     <p className="text-gray-400 text-xs uppercase tracking-wider">Role</p>
@@ -644,56 +705,36 @@ export default function ProvostDashboard() {
                         {/* Filtered Dropdown List */}
                         {isMemberDropdownOpen && (
                           <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-[#001a16] border-2 border-[#ffd700]/40 rounded-lg shadow-2xl max-h-56 overflow-y-auto divide-y divide-gray-800">
-                            {members
-                              .filter(m => m.status !== 'Deceased')
-                              .filter(m => {
-                                const q = memberSearchQuery.toLowerCase().trim();
-                                if (!q) return true;
-                                const nameMatch = (m.name || m.full_name || '').toLowerCase().includes(q);
-                                const idMatch = (m.official_member_id || m.id || '').toLowerCase().includes(q);
-                                const familyMatch = (m.family || m.cmo_family || '').toLowerCase().includes(q);
-                                return nameMatch || idMatch || familyMatch;
-                              })
-                              .length === 0 ? (
+                            {searchedMembers.length === 0 ? (
                               <div className="p-3 text-xs text-gray-400 text-center">No matching member found</div>
                             ) : (
-                              members
-                                .filter(m => m.status !== 'Deceased')
-                                .filter(m => {
-                                  const q = memberSearchQuery.toLowerCase().trim();
-                                  if (!q) return true;
-                                  const nameMatch = (m.name || m.full_name || '').toLowerCase().includes(q);
-                                  const idMatch = (m.official_member_id || m.id || '').toLowerCase().includes(q);
-                                  const familyMatch = (m.family || m.cmo_family || '').toLowerCase().includes(q);
-                                  return nameMatch || idMatch || familyMatch;
-                                })
-                                .map((m) => {
-                                  const mId = m.official_member_id || m.id;
-                                  const isSelected = mId === fineMemberId;
-                                  return (
-                                    <div
-                                      key={m.id}
-                                      onClick={() => {
-                                        setFineMemberId(mId);
-                                        setMemberSearchQuery(`${m.name || m.full_name} (${mId})`);
-                                        setIsMemberDropdownOpen(false);
-                                      }}
-                                      className={`p-2.5 cursor-pointer flex items-center justify-between text-xs transition-colors ${
-                                        isSelected ? 'bg-[#003830] text-[#ffd700]' : 'hover:bg-[#002a24] text-white'
-                                      }`}
-                                    >
-                                      <div>
-                                        <span className="font-bold block">{m.name || m.full_name}</span>
-                                        <span className="text-gray-400 font-mono text-[11px]">ID: {mId}</span>
-                                      </div>
-                                      {m.family && (
-                                        <span className="px-2 py-0.5 bg-[#002a24] text-[#ffd700] text-[10px] rounded border border-[#ffd700]/20 font-semibold">
-                                          {m.family}
-                                        </span>
-                                      )}
+                              searchedMembers.map((m) => {
+                                const mId = m.official_member_id || m.id;
+                                const isSelected = mId === fineMemberId;
+                                return (
+                                  <div
+                                    key={m.id}
+                                    onClick={() => {
+                                      setFineMemberId(mId);
+                                      setMemberSearchQuery(`${m.name || m.full_name} (${mId})`);
+                                      setIsMemberDropdownOpen(false);
+                                    }}
+                                    className={`p-2.5 cursor-pointer flex items-center justify-between text-xs transition-colors ${
+                                      isSelected ? 'bg-[#003830] text-[#ffd700]' : 'hover:bg-[#002a24] text-white'
+                                    }`}
+                                  >
+                                    <div>
+                                      <span className="font-bold block">{m.name || m.full_name}</span>
+                                      <span className="text-gray-400 font-mono text-[11px]">ID: {mId}</span>
                                     </div>
-                                  );
-                                })
+                                    {m.family && (
+                                      <span className="px-2 py-0.5 bg-[#002a24] text-[#ffd700] text-[10px] rounded border border-[#ffd700]/20 font-semibold">
+                                        {m.family}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })
                             )}
                           </div>
                         )}

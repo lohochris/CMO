@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
@@ -13,7 +13,33 @@ import { supabase } from '../../lib/supabaseClient';
 import { Member, Family, MemberStatus } from '../../types';
 import { GeneralGalleryManager } from '../../app/components/gallery/GeneralGalleryManager';
 import { ChairmanAttendanceAnalyticsWidget } from '../../app/components/attendance/ChairmanAttendanceAnalyticsWidget';
+import { Heading } from '../../app/components/common/Heading';
 
+const HARDCODED_OFFICES = [
+  { office_id: 'HCC-CMO-EXEC-CH', office_name: 'Chairman Office', category: 'Executive' },
+  { office_id: 'HCC-CMO-EXEC-FS', office_name: 'Financial Secretary', category: 'Executive' },
+  { office_id: 'HCC-CMO-EXEC-TR', office_name: 'Treasurer Office', category: 'Executive' },
+  { office_id: 'HCC-CMO-EXEC-WE', office_name: 'Welfare Office', category: 'Executive' },
+  { office_id: 'HCC-CMO-EXEC-PR', office_name: 'PRO Office', category: 'Executive' },
+  { office_id: 'HCC-CMO-EXEC-PV', office_name: 'Provost Marshall', category: 'Executive' },
+  { office_id: 'HCC-CMO-EXEC-SE', office_name: 'General Secretary', category: 'Executive' },
+  { office_id: 'HCC-CMO-EXEC-LT', office_name: 'Liturgist Office', category: 'Executive' },
+
+  { office_id: 'HCC-CMO-WIS-FH', office_name: 'Wisdom Family Head', category: 'Family' },
+  { office_id: 'HCC-CMO-WIS-FS', office_name: 'Wisdom Family Secretary', category: 'Family' },
+  { office_id: 'HCC-CMO-HON-FH', office_name: 'Honour Family Head', category: 'Family' },
+  { office_id: 'HCC-CMO-HON-FS', office_name: 'Honour Family Secretary', category: 'Family' },
+  { office_id: 'HCC-CMO-TAL-FH', office_name: 'Talent Family Head', category: 'Family' },
+  { office_id: 'HCC-CMO-TAL-FS', office_name: 'Talent Family Secretary', category: 'Family' },
+  { office_id: 'HCC-CMO-INT-FH', office_name: 'Integrity Family Head', category: 'Family' },
+  { office_id: 'HCC-CMO-INT-FS', office_name: 'Integrity Family Secretary', category: 'Family' },
+
+  { office_id: 'HCC-CMO-SPRT-DIR', office_name: 'Sports Director', category: 'Sports' },
+  { office_id: 'HCC-CMO-SPRT-TR', office_name: 'Sports Treasurer', category: 'Sports' },
+  { office_id: 'HCC-CMO-SPRT-MED', office_name: 'Sports Medical Officer', category: 'Sports' },
+  { office_id: 'HCC-CMO-SPRT-COACH', office_name: 'Sports Coach', category: 'Sports' },
+  { office_id: 'HCC-CMO-SPRT-REF', office_name: 'Sports Referee', category: 'Sports' }
+];
 
 export const ChairmanDashboard = () => {
   const {
@@ -29,12 +55,196 @@ export const ChairmanDashboard = () => {
     setSuccess,
     setError,
     rosterCount,
-    vaultBalance
+    vaultBalance,
+    refreshDatabase
   } = useApp();
 
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementContent, setAnnouncementContent] = useState('');
   const [registrySearch, setRegistrySearch] = useState('');
+
+  const [assignmentFamily, setAssignmentFamily] = useState<Family | ''>('');
+  const [assignmentRole, setAssignmentRole] = useState<'FAMILY_HEAD' | 'FAMILY_SEC' | ''>('');
+  const [assignmentMemberId, setAssignmentMemberId] = useState<string>('');
+  const [assignmentLoading, setAssignmentLoading] = useState(false);
+
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Member[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  useEffect(() => {
+    if (!assignmentFamily) {
+      setSearchResults([]);
+      return;
+    }
+
+    const selectedMember = members.find(m => (m.official_member_id || m.id) === assignmentMemberId);
+    if (selectedMember && (selectedMember.full_name || selectedMember.name) === memberSearchQuery.trim()) {
+      return;
+    }
+
+    const queryTerm = memberSearchQuery.trim();
+
+    const delayDebounce = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        let query = supabase
+          .from('members')
+          .select('*')
+          .eq('status', 'Active')
+          .ilike('cmo_family', assignmentFamily)
+          .order('full_name', { ascending: true })
+          .limit(1000);
+
+        if (queryTerm) {
+          query = query.ilike('full_name', `%${queryTerm}%`);
+        }
+
+        const { data, error } = await query;
+
+        if (!error && data) {
+          setSearchResults(
+            data
+              .map((m: any) => ({
+                id: m.official_member_id,
+                official_member_id: m.official_member_id,
+                name: m.full_name,
+                full_name: m.full_name,
+                phone: m.phone_number || undefined,
+                phone_number: m.phone_number || undefined,
+                status: m.status,
+                balance: Number(m.balance || 0),
+                role: m.role || 'member',
+                family: m.cmo_family || undefined,
+                cmo_family: m.cmo_family || undefined,
+                familyUnit: m.cmo_family || undefined,
+                profilePic: m.avatar_url || null,
+                createdAt: m.created_at,
+                updatedAt: m.updated_at
+              }))
+              .filter((m: any) => !isAdministrativeId(m.id || m.official_member_id || ''))
+          );
+        } else {
+          setSearchResults([]);
+        }
+      } catch (err) {
+        console.error("Error searching members in ChairmanDashboard:", err);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, queryTerm ? 300 : 0);
+
+    return () => clearTimeout(delayDebounce);
+  }, [memberSearchQuery, assignmentFamily, assignmentMemberId, members]);
+
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsSearchDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleAssignLeadership = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!assignmentFamily || !assignmentRole || !assignmentMemberId) {
+      setError('Please select a family unit, a leadership role, and a member.');
+      return;
+    }
+
+    setAssignmentLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const selectedMember = members.find(m => m.id === assignmentMemberId || m.official_member_id === assignmentMemberId);
+      if (!selectedMember) {
+        setError('Selected member not found.');
+        return;
+      }
+
+      const familyCodes = {
+        Wisdom: 'WIS',
+        Honour: 'HON',
+        Integrity: 'INT',
+        Talent: 'TAL'
+      };
+      const roleCodes = {
+        FAMILY_HEAD: 'FH',
+        FAMILY_SEC: 'FS'
+      };
+      const officeId = `HCC-CMO-${familyCodes[assignmentFamily as Family]}-${roleCodes[assignmentRole as 'FAMILY_HEAD' | 'FAMILY_SEC']}`;
+
+      const memberOfficialId = selectedMember.official_member_id || selectedMember.id || '';
+      const { error: upsertErr } = await supabase
+        .from('office_assignments')
+        .upsert({
+          office_id: officeId,
+          official_member_id: memberOfficialId,
+          assigned_at: new Date().toISOString()
+        }, {
+          onConflict: 'office_id'
+        });
+
+      if (upsertErr) throw upsertErr;
+
+      const previousOfficers = members.filter(
+        m => (m.family === assignmentFamily || m.cmo_family === assignmentFamily) && m.role === assignmentRole
+      );
+
+      for (const prev of previousOfficers) {
+        const queryField = prev.id.includes('-') && prev.id.length === 36 ? 'id' : 'official_member_id';
+        const { error: revertErr } = await supabase
+          .from('members')
+          .update({ role: 'member' })
+          .eq(queryField, prev.id);
+        if (revertErr) console.error("Failed to revert previous officer:", revertErr);
+      }
+
+      const queryField = selectedMember.id.includes('-') && selectedMember.id.length === 36 ? 'id' : 'official_member_id';
+      const { error: memberUpdateErr } = await supabase
+        .from('members')
+        .update({
+          role: assignmentRole,
+          cmo_family: assignmentFamily
+        })
+        .eq(queryField, selectedMember.id);
+
+      if (memberUpdateErr) throw memberUpdateErr;
+
+      const { error: execUpdateErr } = await supabase
+        .from('cmo_executives')
+        .update({ user_id: selectedMember.id })
+        .eq('executive_id', officeId);
+
+      if (execUpdateErr) throw execUpdateErr;
+
+      const successMsg = `✓ Assigned ${selectedMember.full_name || selectedMember.name} as ${assignmentRole === 'FAMILY_HEAD' ? 'Family Head' : 'Family Secretary'} for ${assignmentFamily} Family.`;
+
+      setSuccess(successMsg);
+      setAssignmentFamily('');
+      setAssignmentRole('');
+      setAssignmentMemberId('');
+      setMemberSearchQuery('');
+
+      await refreshDatabase();
+      setTimeout(() => setSuccess(''), 5000);
+    } catch (err: any) {
+      console.error("Assignment error:", err);
+      setError(err.message || 'Failed to complete leadership assignment.');
+    } finally {
+      setAssignmentLoading(false);
+    }
+  };
 
   const [spiritualCalendar, setSpiritualCalendar] = useState<any[]>([]);
   const [spiritualLoading, setSpiritualLoading] = useState(false);
@@ -621,7 +831,7 @@ export const ChairmanDashboard = () => {
     <div className="p-4 md:p-8">
       <div className="flex items-center gap-3 mb-6">
         <Shield className="w-8 h-8 text-[#ffd700]" />
-        <h2 className="text-2xl md:text-3xl font-bold text-[#ffd700]">Executive Chairman Dashboard</h2>
+        <Heading level={1}>Executive Chairman Dashboard</Heading>
       </div>
 
       {currentUser && (
@@ -774,6 +984,9 @@ export const ChairmanDashboard = () => {
             </TabsTrigger>
             <TabsTrigger value="roster" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
               CMO Roster
+            </TabsTrigger>
+            <TabsTrigger value="family_leadership" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Family Leadership
             </TabsTrigger>
             <TabsTrigger value="spiritual" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
               Spiritual Calendar
@@ -937,6 +1150,7 @@ export const ChairmanDashboard = () => {
               </div>
             </Card>
           </div>
+
         </TabsContent>
 
         <TabsContent value="announcements">
@@ -1264,6 +1478,119 @@ export const ChairmanDashboard = () => {
                 </TableBody>
               </Table>
             </div>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="family_leadership">
+          <Card className="bg-[#002520] border-2 border-[#ffd700]/30 p-6 rounded-xl shadow-lg">
+            <h3 className="text-xl font-bold text-[#ffd700] mb-2 flex items-center gap-2">
+              <ShieldCheck className="w-6 h-6" />
+              Family Leadership Assignments
+            </h3>
+            <p className="text-gray-300 text-sm mb-6">
+              Assign  members to executive roles (Family Head or Family Secretary) for Wisdom, Honour, Integrity, and Talent families.
+            </p>
+
+            <form
+              onSubmit={handleAssignLeadership}
+              className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"
+            >
+              <div>
+                <label className="block text-gray-400 text-xs font-semibold mb-2 uppercase tracking-wider">Select Family Unit</label>
+                <select
+                  title="Target Family Unit"
+                  value={assignmentFamily}
+                  onChange={(e) => setAssignmentFamily(e.target.value as Family)}
+                  className="w-full bg-[#001a16] border border-[#ffd700]/30 text-white rounded p-2.5 focus:outline-none focus:border-[#ffd700] text-sm cursor-pointer"
+                  required
+                >
+                  <option value="">Choose Family...</option>
+                  <option value="Wisdom">Wisdom</option>
+                  <option value="Honour">Honour</option>
+                  <option value="Integrity">Integrity</option>
+                  <option value="Talent">Talent</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-gray-400 text-xs font-semibold mb-2 uppercase tracking-wider">Select Leadership Role</label>
+                <select
+                  title="Executive Role"
+                  value={assignmentRole}
+                  onChange={(e) => setAssignmentRole(e.target.value as 'FAMILY_HEAD' | 'FAMILY_SEC')}
+                  className="w-full bg-[#001a16] border border-[#ffd700]/30 text-white rounded p-2.5 focus:outline-none focus:border-[#ffd700] text-sm cursor-pointer"
+                  required
+                >
+                  <option value="">Choose Role...</option>
+                  <option value="FAMILY_HEAD">Family Head</option>
+                  <option value="FAMILY_SEC">Family Secretary</option>
+                </select>
+              </div>
+
+              <div className="relative" ref={dropdownRef}>
+                <label className="block text-gray-400 text-xs font-semibold mb-2 uppercase tracking-wider">Select Registered Member</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder={!assignmentFamily ? "Select family unit first..." : "Type name to search..."}
+                    value={memberSearchQuery}
+                    onChange={(e) => {
+                      setMemberSearchQuery(e.target.value);
+                      setAssignmentMemberId('');
+                      setIsSearchDropdownOpen(true);
+                    }}
+                    onFocus={() => setIsSearchDropdownOpen(true)}
+                    className="w-full bg-[#001a16] border border-[#ffd700]/30 text-white rounded p-2.5 focus:outline-none focus:border-[#ffd700] text-sm pr-8"
+                    required
+                    disabled={!assignmentFamily}
+                  />
+                  {assignmentMemberId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAssignmentMemberId('');
+                        setMemberSearchQuery('');
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                      title="Clear selection"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {isSearchDropdownOpen && (
+                  <div className="absolute z-50 w-full mt-1 bg-[#001a16] border border-[#ffd700]/30 rounded shadow-lg max-h-60 overflow-y-auto custom-scrollbar">
+                    {searchResults.map(m => (
+                      <div
+                        key={m.id}
+                        onClick={() => {
+                          setAssignmentMemberId(m.id);
+                          setMemberSearchQuery(m.full_name || m.name);
+                          setIsSearchDropdownOpen(false);
+                        }}
+                        className="px-3 py-2 text-sm text-gray-200 hover:bg-[#ffd700]/10 hover:text-white cursor-pointer transition-colors"
+                      >
+                        {m.full_name || m.name}
+                      </div>
+                    ))}
+                    {searchResults.length === 0 && (
+                      <div className="px-3 py-2 text-sm text-gray-400 italic">
+                        {isSearching ? 'Searching...' : 'No active members found'}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <Button
+                type="submit"
+                disabled={assignmentLoading}
+                className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold h-[42px] w-full"
+              >
+                {assignmentLoading ? 'Processing...' : 'Confirm Assignment'}
+              </Button>
+            </form>
           </Card>
         </TabsContent>
 

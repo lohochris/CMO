@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
-import { Megaphone, CalendarDays, Bell, Users } from 'lucide-react';
+import { Megaphone, CalendarDays, Bell, Plus, Trash2, Edit, X } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { formatDate } from '../../utils/helpers';
 import { supabase } from '../../lib/supabaseClient';
 import { GeneralGalleryManager } from '../../app/components/gallery/GeneralGalleryManager';
-
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 
 export const PRODashboard = () => {
   // Lock Engine States
@@ -35,6 +35,17 @@ export const PRODashboard = () => {
   const [announcementContent, setAnnouncementContent] = useState('');
   const [totalMembers, setTotalMembers] = useState<number>(0);
   const { currentUser, announcements, setAnnouncements, members, setMembers, setCurrentUser, setSuccess, setError } = useApp();
+
+  // State for upcoming programs
+  const [programs, setPrograms] = useState([
+    { id: 'PROG-001', title: 'Youth Outreach', date: '2026-08-15', details: 'Coordinate volunteers for community outreach and member engagement.' },
+    { id: 'PROG-002', title: 'Parish Family Day', date: '2026-09-05', details: 'Prepare guest list, announcements, and logistics for the family day program.' },
+    { id: 'PROG-003', title: 'Leadership Workshop', date: '2026-10-10', details: 'Run a program for new leaders and church officers across departments.' }
+  ]);
+  const [editingProgram, setEditingProgram] = useState<any | null>(null);
+  const [programTitle, setProgramTitle] = useState('');
+  const [programDate, setProgramDate] = useState('');
+  const [programDetails, setProgramDetails] = useState('');
 
   useEffect(() => {
     const fetchMemberCount = async () => {
@@ -157,11 +168,54 @@ export const PRODashboard = () => {
     setTimeout(() => setSuccess(''), 3000);
   };
 
-  const upcomingPrograms = [
-    { id: 'PROG-001', title: 'Youth Outreach', date: '2026-08-15', details: 'Coordinate volunteers for community outreach and member engagement.' },
-    { id: 'PROG-002', title: 'Parish Family Day', date: '2026-09-05', details: 'Prepare guest list, announcements, and logistics for the family day program.' },
-    { id: 'PROG-003', title: 'Leadership Workshop', date: '2026-10-10', details: 'Run a program for new leaders and church officers across departments.' }
-  ];
+  // Program Handlers
+  const handleSaveProgram = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!programTitle || !programDate || !programDetails) {
+      setError('Please fill all program fields');
+      return;
+    }
+
+    if (editingProgram) {
+      // Edit existing
+      setPrograms(programs.map(p => p.id === editingProgram.id ? {
+        ...p,
+        title: programTitle,
+        date: programDate,
+        details: programDetails
+      } : p));
+      setEditingProgram(null);
+      setSuccess('Program updated successfully');
+    } else {
+      // Add new
+      const newProg = {
+        id: `PROG-${Date.now()}`,
+        title: programTitle,
+        date: programDate,
+        details: programDetails
+      };
+      setPrograms([...programs, newProg]);
+      setSuccess('New program scheduled successfully');
+    }
+
+    setProgramTitle('');
+    setProgramDate('');
+    setProgramDetails('');
+    setTimeout(() => setSuccess(''), 3000);
+  };
+
+  const handleEditClick = (program: any) => {
+    setEditingProgram(program);
+    setProgramTitle(program.title);
+    setProgramDate(program.date);
+    setProgramDetails(program.details);
+  };
+
+  const handleDeleteProgram = (id: string) => {
+    setPrograms(programs.filter(p => p.id !== id));
+    setSuccess('Program deleted successfully');
+    setTimeout(() => setSuccess(''), 3000);
+  };
 
   return (
     <div className="p-4 md:p-8">
@@ -234,6 +288,9 @@ export const PRODashboard = () => {
                 <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Name</p>
                   <p className="text-white font-bold text-sm truncate">{currentUser.name}</p>
+                  {currentUser.office_title && (
+                    <span className="text-[10px] text-gray-400 block mt-0.5">{currentUser.office_title}</span>
+                  )}
                 </div>
                 <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Role</p>
@@ -280,86 +337,217 @@ export const PRODashboard = () => {
           </form>
         </div>
       ) : (
-        <>
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
-        <Card className="bg-[#002520] border-2 border-[#ffd700] p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Megaphone className="w-6 h-6 text-[#ffd700]" />
-            <h3 className="text-xl font-bold text-[#ffd700]">Announcements</h3>
-          </div>
-          <div className="space-y-3">
-            {announcements.slice(0, 3).map(ann => (
-              <div key={ann.id} className="bg-[#001a16] border border-[#ffd700] p-4 rounded">
-                <p className="text-white font-semibold">{ann.title}</p>
-                <p className="text-gray-400 text-sm">{ann.content}</p>
-                <p className="text-xs text-gray-500 mt-2">{formatDate(ann.timestamp)}</p>
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList className="bg-[#002520] border border-[#ffd700]/20 w-full justify-start p-1 flex-wrap h-auto gap-1 mb-6">
+            <TabsTrigger value="overview" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="announcements" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Announcements & Broadcasts
+            </TabsTrigger>
+            <TabsTrigger value="programs" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Upcoming Programs
+            </TabsTrigger>
+            <TabsTrigger value="media" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Media & Gallery Pipeline
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="space-y-6">
+            {/* Quick overview summary cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className="bg-[#002520] border border-[#ffd700]/20 p-5 rounded-xl flex items-center justify-between shadow-lg">
+                <div>
+                  <p className="text-gray-400 text-xs uppercase tracking-wider font-semibold">Upcoming PRO Programs</p>
+                  <h4 className="text-2xl font-bold text-[#ffd700] mt-1">{programs.length} Events Scheduled</h4>
+                  <p className="text-xs text-gray-500 mt-1">Manage events in the "Upcoming Programs" tab</p>
+                </div>
+                <CalendarDays className="w-10 h-10 text-[#ffd700] opacity-80" />
+              </Card>
+              <Card className="bg-[#002520] border border-[#ffd700]/20 p-5 rounded-xl flex items-center justify-between shadow-lg">
+                <div>
+                  <p className="text-gray-400 text-xs uppercase tracking-wider font-semibold">Active Announcements</p>
+                  <h4 className="text-2xl font-bold text-white mt-1">{announcements.length} Published</h4>
+                  <p className="text-xs text-gray-500 mt-1">Post updates in the "Announcements & Broadcasts" tab</p>
+                </div>
+                <Megaphone className="w-10 h-10 text-[#ffd700] opacity-80" />
+              </Card>
+            </div>
+
+            {/* Action Items widget */}
+            <Card className="bg-[#002520] border-2 border-[#ffd700]/30 p-6 rounded-xl shadow-lg">
+              <div className="flex items-center gap-3 mb-4">
+                <Bell className="w-6 h-6 text-[#ffd700]" />
+                <h3 className="text-xl font-bold text-[#ffd700]">Action Items</h3>
               </div>
-            ))}
-            {announcements.length === 0 && <p className="text-gray-400">No announcements yet</p>}
-          </div>
-        </Card>
+              <ul className="list-disc list-inside space-y-3 text-gray-300 text-sm">
+                <li>Publish program announcements to members.</li>
+                <li>Coordinate with Welfare and Treasurer for events.</li>
+                <li>Create reminders for volunteer and outreach teams.</li>
+              </ul>
+            </Card>
+          </TabsContent>
 
-        <Card className="bg-[#002520] border-2 border-[#ffd700] p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <CalendarDays className="w-6 h-6 text-[#ffd700]" />
-            <h3 className="text-xl font-bold text-[#ffd700]">Upcoming Programs</h3>
-          </div>
-          <div className="space-y-4">
-            {upcomingPrograms.map(program => (
-              <div key={program.id} className="bg-[#001a16] border border-[#ffd700] p-4 rounded">
-                <p className="text-white font-semibold">{program.title}</p>
-                <p className="text-gray-400 text-sm">{formatDate(program.date)}</p>
-                <p className="text-gray-400 text-sm mt-2">{program.details}</p>
+          <TabsContent value="announcements" className="space-y-6">
+            {/* Publish Program Announcement form */}
+            <Card className="bg-[#002520] border-2 border-[#ffd700]/30 p-6 rounded-xl shadow-lg">
+              <h3 className="text-xl font-bold text-[#ffd700] mb-4">Publish Program Announcement</h3>
+              <div className="space-y-4">
+                <Input
+                  value={announcementTitle}
+                  onChange={(e) => setAnnouncementTitle(e.target.value)}
+                  placeholder="Announcement Title"
+                  className="bg-[#001a16] border-[#ffd700]/30 text-white focus:border-[#ffd700]"
+                />
+                <textarea
+                  value={announcementContent}
+                  onChange={(e) => setAnnouncementContent(e.target.value)}
+                  placeholder="Message to members"
+                  className="w-full bg-[#001a16] border border-[#ffd700]/30 text-white p-3 rounded min-h-[140px] focus:outline-none focus:border-[#ffd700] text-sm"
+                />
+                <Button
+                  onClick={postAnnouncement}
+                  className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold"
+                >
+                  Publish Announcement
+                </Button>
               </div>
-            ))}
-          </div>
-        </Card>
+            </Card>
 
-        <Card className="bg-[#002520] border-2 border-[#ffd700] p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Bell className="w-6 h-6 text-[#ffd700]" />
-            <h3 className="text-xl font-bold text-[#ffd700]">Action Items</h3>
-          </div>
-          <ul className="list-disc list-inside space-y-2 text-gray-300">
-            <li>Publish program announcements to members.</li>
-            <li>Coordinate with Welfare and Treasurer for events.</li>
-            <li>Create reminders for volunteer and outreach teams.</li>
-          </ul>
-        </Card>
-      </div>
+            {/* Announcements Feed list card */}
+            <Card className="bg-[#002520] border-2 border-[#ffd700]/30 p-6 rounded-xl shadow-lg">
+              <div className="flex items-center gap-3 mb-4">
+                <Megaphone className="w-6 h-6 text-[#ffd700]" />
+                <h3 className="text-xl font-bold text-[#ffd700]">Active Board Notices</h3>
+              </div>
+              <div className="space-y-4">
+                {announcements.map(ann => (
+                  <div key={ann.id} className="bg-[#001a16] border border-[#ffd700]/10 p-4 rounded-lg">
+                    <div className="flex justify-between items-start mb-1">
+                      <p className="text-white font-semibold">{ann.title}</p>
+                      <span className="text-xs text-gray-500">{formatDate(ann.timestamp)}</span>
+                    </div>
+                    <p className="text-gray-400 text-sm mt-1">{ann.content}</p>
+                    <p className="text-[10px] text-gray-500 mt-2 font-semibold">Posted by: {ann.author || 'PRO Office'}</p>
+                  </div>
+                ))}
+                {announcements.length === 0 && (
+                  <p className="text-gray-400 text-center py-6 italic text-sm">No announcements published yet.</p>
+                )}
+              </div>
+            </Card>
+          </TabsContent>
 
-      <Card className="bg-[#002520] border-2 border-[#ffd700] p-6">
-        <h3 className="text-xl font-bold text-[#ffd700] mb-4">Publish Program Announcement</h3>
-        <div className="space-y-4">
-          <Input
-            value={announcementTitle}
-            onChange={(e) => setAnnouncementTitle(e.target.value)}
-            placeholder="Announcement Title"
-            className="bg-[#001a16] border-[#ffd700] text-white"
-          />
-          <textarea
-            value={announcementContent}
-            onChange={(e) => setAnnouncementContent(e.target.value)}
-            placeholder="Message to members"
-            className="w-full bg-[#001a16] border border-[#ffd700] text-white p-3 rounded min-h-[140px]"
-          />
-          <Button
-            onClick={postAnnouncement}
-            className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700]"
-          >
-            Publish Announcement
-          </Button>
-        </div>
-      </Card>
+          <TabsContent value="programs" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Form to Add/Edit Program */}
+              <Card className="bg-[#002520] border-2 border-[#ffd700]/30 p-6 rounded-xl shadow-lg lg:col-span-1">
+                <h3 className="text-xl font-bold text-[#ffd700] mb-4">
+                  {editingProgram ? 'Edit Scheduled Program' : 'Schedule New Program'}
+                </h3>
+                <form onSubmit={handleSaveProgram} className="space-y-4">
+                  <div>
+                    <label className="block text-gray-400 text-xs font-semibold mb-1 uppercase">Program Title</label>
+                    <Input
+                      value={programTitle}
+                      onChange={(e) => setProgramTitle(e.target.value)}
+                      placeholder="e.g. Parish Youth Summit"
+                      className="bg-[#001a16] border-[#ffd700]/30 text-white focus:border-[#ffd700]"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-400 text-xs font-semibold mb-1 uppercase">Event Date</label>
+                    <Input
+                      type="date"
+                      value={programDate}
+                      onChange={(e) => setProgramDate(e.target.value)}
+                      className="bg-[#001a16] border-[#ffd700]/30 text-white focus:border-[#ffd700]"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-400 text-xs font-semibold mb-1 uppercase">Event Details</label>
+                    <textarea
+                      value={programDetails}
+                      onChange={(e) => setProgramDetails(e.target.value)}
+                      placeholder="Describe logistics, volunteers, and goals..."
+                      className="w-full bg-[#001a16] border border-[#ffd700]/30 text-white p-3 rounded min-h-[100px] focus:outline-none focus:border-[#ffd700] text-sm"
+                      required
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="submit"
+                      className="flex-1 bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold cursor-pointer"
+                    >
+                      {editingProgram ? 'Save Changes' : 'Schedule Program'}
+                    </Button>
+                    {editingProgram && (
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          setEditingProgram(null);
+                          setProgramTitle('');
+                          setProgramDate('');
+                          setProgramDetails('');
+                        }}
+                        className="bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 font-bold cursor-pointer"
+                      >
+                        Cancel
+                      </Button>
+                    )}
+                  </div>
+                </form>
+              </Card>
 
-      {/* General Non-Sports Gallery & Video Link Pipeline */}
-      <div className="mt-8">
-        <GeneralGalleryManager
-          currentUserName={currentUser?.name || 'PRO Officer'}
-          isExecutive={isExecutiveUnlocked}
-        />
-      </div>
-        </>
+              {/* List of Programs */}
+              <Card className="bg-[#002520] border-2 border-[#ffd700]/30 p-6 rounded-xl shadow-lg lg:col-span-2">
+                <div className="flex items-center gap-3 mb-4">
+                  <CalendarDays className="w-6 h-6 text-[#ffd700]" />
+                  <h3 className="text-xl font-bold text-[#ffd700]">Scheduled Programs</h3>
+                </div>
+                <div className="space-y-4">
+                  {programs.map(program => (
+                    <div key={program.id} className="bg-[#001a16] border border-[#ffd700]/10 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                      <div className="flex-1">
+                        <p className="text-white font-semibold text-lg">{program.title}</p>
+                        <p className="text-[#ffd700] text-xs font-semibold mt-0.5">{formatDate(program.date)}</p>
+                        <p className="text-gray-400 text-sm mt-2">{program.details}</p>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <Button
+                          onClick={() => handleEditClick(program)}
+                          className="p-2 bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 border border-teal-500/20 rounded cursor-pointer"
+                          title="Edit Program"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          onClick={() => handleDeleteProgram(program.id)}
+                          className="p-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 rounded cursor-pointer"
+                          title="Delete Program"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  {programs.length === 0 && (
+                    <p className="text-gray-400 text-center py-10 italic text-sm">No upcoming programs scheduled.</p>
+                  )}
+                </div>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="media" className="space-y-6">
+            <GeneralGalleryManager
+              currentUserName={currentUser?.name || 'PRO Officer'}
+              isExecutive={isExecutiveUnlocked}
+            />
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );

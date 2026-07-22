@@ -1,16 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
-import { FileEdit, Mic, Download } from 'lucide-react';
+import { FileEdit, Mic, Download, Megaphone } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { supabase } from '../../lib/supabaseClient';
 import { GeneralGalleryManager } from '../../app/components/gallery/GeneralGalleryManager';
-import { FinesEscrowVerificationLedger } from '../../app/components/common/FinesEscrowVerificationLedger';
-
-
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 
 export const SecretaryDashboard = () => {
   // Lock Engine States
@@ -37,6 +35,27 @@ export const SecretaryDashboard = () => {
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementContent, setAnnouncementContent] = useState('');
   const { currentUser, members, setMembers, setCurrentUser, announcements, setAnnouncements, setSuccess, setError } = useApp();
+
+  // Saved Minutes State
+  const [savedMinutes, setSavedMinutes] = useState<any[]>([]);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('cmo_meeting_minutes');
+    if (stored) {
+      try {
+        setSavedMinutes(JSON.parse(stored));
+      } catch (e) {
+        console.error('Failed to parse meeting minutes', e);
+      }
+    } else {
+      const mock = [
+        { id: 'MIN-001', date: '2026-06-10', title: 'Monthly General Assembly Meeting', author: 'Eze, Chukwuma' },
+        { id: 'MIN-002', date: '2026-07-08', title: 'Executive Council Review Session', author: 'Eze, Chukwuma' }
+      ];
+      setSavedMinutes(mock);
+      localStorage.setItem('cmo_meeting_minutes', JSON.stringify(mock));
+    }
+  }, []);
 
   const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
     if (!currentUser) return;
@@ -165,7 +184,27 @@ Recorded by: ${currentUser?.name}`;
     a.href = url;
     a.download = `CMO_Minutes_${new Date().toISOString().split('T')[0]}.txt`;
     a.click();
-    setSuccess('Minutes exported successfully!');
+
+    // Save to archives
+    const newMinute = {
+      id: `MIN-${Date.now()}`,
+      date: new Date().toISOString().split('T')[0],
+      title: minutesText.split('\n')[0] || 'Published Minutes',
+      author: currentUser?.name || 'General Secretary'
+    };
+    const updated = [newMinute, ...savedMinutes];
+    setSavedMinutes(updated);
+    localStorage.setItem('cmo_meeting_minutes', JSON.stringify(updated));
+
+    setSuccess('Minutes exported and saved to archives!');
+    setTimeout(() => setSuccess(''), 3000);
+  };
+
+  const handleDeleteMinute = (id: string) => {
+    const updated = savedMinutes.filter(m => m.id !== id);
+    setSavedMinutes(updated);
+    localStorage.setItem('cmo_meeting_minutes', JSON.stringify(updated));
+    setSuccess('Minute record deleted from archives');
     setTimeout(() => setSuccess(''), 3000);
   };
 
@@ -263,6 +302,9 @@ Recorded by: ${currentUser?.name}`;
                 <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Name</p>
                   <p className="text-white font-bold text-sm truncate">{currentUser.name}</p>
+                  {currentUser.office_title && (
+                    <span className="text-[10px] text-gray-400 block mt-0.5">{currentUser.office_title}</span>
+                  )}
                 </div>
                 <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Role</p>
@@ -302,78 +344,153 @@ Recorded by: ${currentUser?.name}`;
           </form>
         </div>
       ) : (
-        <>
-          <Card className="bg-[#002520] border-2 border-[#ffd700] p-6">
-        <h3 className="text-xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
-          <FileEdit className="w-5 h-5" />
-          Meeting Minutes Editor
-        </h3>
+        <Tabs defaultValue="minutes" className="w-full">
+          <TabsList className="bg-[#002520] border border-[#ffd700]/20 w-full justify-start p-1 flex-wrap h-auto gap-1 mb-6">
+            <TabsTrigger value="minutes" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Meeting Minutes & Records
+            </TabsTrigger>
+            <TabsTrigger value="announcements" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Announcements & Broadcasts
+            </TabsTrigger>
+            <TabsTrigger value="media" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Media & Gallery Pipeline
+            </TabsTrigger>
+          </TabsList>
 
-        <div className="space-y-4">
-          <div className="flex gap-4">
-            <Button
-              onClick={simulateAITranscription}
-              disabled={isRecording}
-              className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700]"
-            >
-              <Mic className="w-4 h-4 mr-2" />
-              {isRecording ? 'Recording...' : 'AI Voice-to-Text Listener'}
-            </Button>
-            <Button
-              onClick={exportMinutes}
-              disabled={!minutesText}
-              variant="outline"
-              className="border-[#ffd700] text-[#ffd700] hover:bg-[#ffd700] hover:text-[#001a16]"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Export & Publish Minutes
-            </Button>
-          </div>
+          <TabsContent value="minutes" className="space-y-6">
+            {/* Meeting Minutes Editor card */}
+            <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-xl shadow-lg">
+              <h3 className="text-xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
+                <FileEdit className="w-5 h-5" />
+                Meeting Minutes Editor
+              </h3>
 
-          <textarea
-            value={minutesText}
-            onChange={(e) => setMinutesText(e.target.value)}
-            placeholder="Minutes will appear here after AI transcription, or type manually..."
-            className="w-full bg-[#001a16] border border-[#ffd700] text-white p-4 rounded min-h-[500px] font-mono text-sm"
-          />
-        </div>
-      </Card>
+              <div className="space-y-4">
+                <div className="flex gap-4">
+                  <Button
+                    onClick={simulateAITranscription}
+                    disabled={isRecording}
+                    className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold cursor-pointer"
+                  >
+                    <Mic className="w-4 h-4 mr-2" />
+                    {isRecording ? 'Recording...' : 'AI Voice-to-Text Listener'}
+                  </Button>
+                  <Button
+                    onClick={exportMinutes}
+                    disabled={!minutesText}
+                    variant="outline"
+                    className="border-[#ffd700] text-[#ffd700] hover:bg-[#ffd700] hover:text-[#001a16] font-bold cursor-pointer"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Export & Publish Minutes
+                  </Button>
+                </div>
 
-      <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 mt-6">
-        <h3 className="text-xl font-bold text-[#ffd700] mb-4">Publish Announcement</h3>
-        <div className="space-y-4">
-          <Input
-            value={announcementTitle}
-            onChange={(e) => setAnnouncementTitle(e.target.value)}
-            placeholder="Announcement Title"
-            className="bg-[#001a16] border-[#ffd700] text-white"
-          />
-          <textarea
-            value={announcementContent}
-            onChange={(e) => setAnnouncementContent(e.target.value)}
-            placeholder="Announcement details..."
-            className="w-full bg-[#001a16] border border-[#ffd700] text-white p-3 rounded min-h-[120px]"
-          />
-          <Button
-            onClick={postAnnouncement}
-            className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700]"
-          >
-            Publish Announcement
-          </Button>
-        </div>
-      </Card>
+                <textarea
+                  value={minutesText}
+                  onChange={(e) => setMinutesText(e.target.value)}
+                  placeholder="Minutes will appear here after AI transcription, or type manually..."
+                  className="w-full bg-[#001a16] border border-[#ffd700]/30 text-white p-4 rounded-lg min-h-[400px] font-mono text-sm focus:outline-none focus:border-[#ffd700]"
+                />
+              </div>
+            </Card>
 
-      {/* Fines Escrow & Treasury Verification Sub-Ledger */}
-      <FinesEscrowVerificationLedger />
+            {/* Saved Minutes History / Archive table */}
+            <Card className="bg-[#002520] border-2 border-[#ffd700]/30 p-6 rounded-xl shadow-lg">
+              <h3 className="text-xl font-bold text-[#ffd700] mb-4">Minutes Archive</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-[#ffd700]/10 text-gray-400 font-semibold">
+                      <th className="py-2.5 px-4">Date</th>
+                      <th className="py-2.5 px-4">Title</th>
+                      <th className="py-2.5 px-4">Author</th>
+                      <th className="py-2.5 px-4 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {savedMinutes.map((minute) => (
+                      <tr key={minute.id} className="border-b border-[#ffd700]/5 hover:bg-[#001a16]/40 transition-colors">
+                        <td className="py-3 px-4 font-mono text-gray-300 text-xs">{minute.date}</td>
+                        <td className="py-3 px-4 text-white font-semibold text-xs">{minute.title}</td>
+                        <td className="py-3 px-4 text-gray-400 text-xs font-semibold">{minute.author}</td>
+                        <td className="py-3 px-4 text-center">
+                          <Button
+                            onClick={() => handleDeleteMinute(minute.id)}
+                            className="bg-red-500/10 hover:bg-red-600 hover:text-white border border-red-500/30 text-red-400 text-xs px-2.5 py-1 h-auto cursor-pointer"
+                          >
+                            Delete
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {savedMinutes.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="py-6 text-center text-gray-400 italic text-xs">No archived minute records found.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </TabsContent>
 
-      {/* General Non-Sports Gallery & Video Link Pipeline */}
-      <div className="mt-8">
-        <GeneralGalleryManager
-          currentUserName={currentUser?.name || 'General Secretary'}
-          isExecutive={isExecutiveUnlocked}
-        />
-      </div>
-        </>
+          <TabsContent value="announcements" className="space-y-6">
+            {/* Publish Announcement widget */}
+            <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-xl shadow-lg">
+              <h3 className="text-xl font-bold text-[#ffd700] mb-4">Publish Announcement</h3>
+              <div className="space-y-4 mb-6">
+                <Input
+                  value={announcementTitle}
+                  onChange={(e) => setAnnouncementTitle(e.target.value)}
+                  placeholder="Announcement Title"
+                  className="bg-[#001a16] border-[#ffd700]/30 text-white focus:border-[#ffd700]"
+                />
+                <textarea
+                  value={announcementContent}
+                  onChange={(e) => setAnnouncementContent(e.target.value)}
+                  placeholder="Announcement details..."
+                  className="w-full bg-[#001a16] border border-[#ffd700]/30 text-white p-3 rounded-lg min-h-[120px] focus:outline-none focus:border-[#ffd700] text-sm"
+                />
+                <Button
+                  onClick={postAnnouncement}
+                  className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold cursor-pointer"
+                >
+                  Publish Announcement
+                </Button>
+              </div>
+
+              <div className="border-t border-[#ffd700]/20 my-6" />
+
+              <h3 className="text-xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
+                <Megaphone className="w-5 h-5 text-[#ffd700]" />
+                Secretary Announcement Feed
+              </h3>
+              <div className="space-y-4">
+                {announcements.map(ann => (
+                  <div key={ann.id} className="bg-[#001a16] border border-[#ffd700]/10 p-4 rounded-lg">
+                    <div className="flex justify-between items-start mb-1">
+                      <p className="text-[#ffd700] font-semibold">{ann.title}</p>
+                      <span className="text-xs text-gray-500 font-mono">{new Date(ann.timestamp || Date.now()).toLocaleDateString()}</span>
+                    </div>
+                    <p className="text-gray-300 text-sm mt-1">{ann.content}</p>
+                    <p className="text-[10px] text-gray-500 mt-2 font-semibold">Posted by: {ann.author || 'General Secretary'}</p>
+                  </div>
+                ))}
+                {announcements.length === 0 && (
+                  <p className="text-gray-400 text-center py-8 italic text-sm">No announcements posted yet.</p>
+                )}
+              </div>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="media" className="space-y-6">
+            <GeneralGalleryManager
+              currentUserName={currentUser?.name || 'General Secretary'}
+              isExecutive={isExecutiveUnlocked}
+            />
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );

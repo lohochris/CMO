@@ -19,6 +19,7 @@ import { useApp } from '../../contexts/AppContext';
 import { generalGalleryService } from '../../utils/generalGalleryService';
 import { GeneralAlbum, GeneralGalleryItem } from '../../types';
 import { parseVideoUrl } from '../../utils/videoUtils';
+import { Heading } from '../../app/components/common/Heading';
 
 const CATEGORY_PILLS = [
   { id: 'All', label: 'All Media' },
@@ -186,10 +187,10 @@ export const PublicGallery: React.FC = () => {
             <ArrowLeft className="w-5 h-5"/>
             Return to Main Portal
           </button>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-[#ffd700] flex items-center gap-3 tracking-wide">
+          <Heading level={1} className="flex items-center gap-3 tracking-wide">
             <ImageIcon className="w-8 h-8 text-[#ffd700]" />
             Public CMO Media Gallery
-          </h1>
+          </Heading>
           <p className="text-gray-300 text-sm md:text-base mt-1">
             Open-access archive for Holy Cross CMO parish events, Harvest, Father&apos;s Day, and community activities.
           </p>
@@ -237,7 +238,7 @@ export const PublicGallery: React.FC = () => {
       ) : filteredItems.length === 0 ? (
         <Card className="bg-[#002520] border border-[#ffd700]/20 p-12 text-center rounded-xl">
           <Layers className="w-12 h-12 text-gray-500 mx-auto mb-3 opacity-60" />
-          <h3 className="text-lg font-bold text-[#ffd700]">No Media Found</h3>
+          <Heading level={2} className="text-lg font-bold text-[#ffd700]">No Media Found</Heading>
           <p className="text-gray-400 text-xs mt-1">
             No public photos or videos match the selected category &quot;{selectedCategory}&quot;.
           </p>
@@ -282,9 +283,9 @@ export const PublicGallery: React.FC = () => {
                 {/* Media Details Footer */}
                 <div className="p-4 flex-grow flex flex-col justify-between">
                   <div>
-                    <h3 className="font-bold text-white text-sm line-clamp-1 truncate group-hover:text-[#ffd700] transition-colors mb-1.5" title={item.title}>
+                    <Heading level={3} className="text-sm line-clamp-1 truncate group-hover:text-[#ffd700] transition-colors mb-1.5" title={item.title}>
                       {item.title}
-                    </h3>
+                    </Heading>
                     <p className="text-xs text-gray-400 flex items-center gap-1.5 mb-2 truncate">
                       <Tag className="w-3.5 h-3.5 text-[#ffd700] flex-shrink-0" />
                       <span className="truncate">{item.album_name}</span>
@@ -321,9 +322,9 @@ export const PublicGallery: React.FC = () => {
                 <span className="backdrop-blur-md bg-black/50 text-[#ffd700] border border-[#ffd700]/30 text-xs font-semibold px-2.5 py-1 rounded-md flex-shrink-0">
                   {activeMedia.category || 'General'}
                 </span>
-                <h3 className="font-bold text-white text-base truncate" title={activeMedia.title}>
+                <Heading level={2} className="text-base truncate" title={activeMedia.title}>
                   {activeMedia.title}
-                </h3>
+                </Heading>
               </div>
               <button
                 onClick={() => setActiveMedia(null)}

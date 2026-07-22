@@ -411,6 +411,9 @@ export const TreasurerDashboard = () => {
                 <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Name</p>
                   <p className="text-white font-bold text-sm truncate">{currentUser.name}</p>
+                  {currentUser.office_title && (
+                    <span className="text-[10px] text-gray-400 block mt-0.5">{currentUser.office_title}</span>
+                  )}
                 </div>
                 <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Role</p>
