@@ -1,10 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
-import { Heart } from 'lucide-react';
+import { Heart, Megaphone } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
-import { generateTicketId } from '../../utils/idGenerators';
 import { formatCurrency, formatDateTime, isAdministrativeId } from '../../utils/helpers';
 import { WELFARE_CATEGORIES } from '../../utils/constants';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
@@ -12,7 +11,7 @@ import { ProfilePictureUploader } from '../../app/components/common/ProfilePictu
 import { supabase } from '../../lib/supabaseClient';
 import { WelfareTicket } from '../../types';
 import { GeneralGalleryManager } from '../../app/components/gallery/GeneralGalleryManager';
-
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 
 export const WelfareDashboard = () => {
   const [isExecutiveUnlocked, setIsExecutiveUnlocked] = useState<boolean>(() => {
@@ -41,12 +40,13 @@ export const WelfareDashboard = () => {
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementContent, setAnnouncementContent] = useState('');
   const [reasonDetails, setReasonDetails] = useState('');
+
+  // Welfare Ticket Filter State
+  const [ticketFilter, setTicketFilter] = useState<'All' | 'Pending' | 'Completed' | 'Declined'>('All');
   
   const {
     members, setMembers,
-    transactions, setTransactions,
     welfareTickets, setWelfareTickets,
-    expenses, setExpenses,
     announcements, setAnnouncements,
     currentUser, setCurrentUser,
     setError, setSuccess
@@ -131,16 +131,69 @@ export const WelfareDashboard = () => {
     }
   };
 
-  const query = memberSearchQuery.toLowerCase().trim();
-  const suggestions = query 
-    ? members.filter(m => {
-        const id = m.official_member_id || m.id || '';
-        const isNotDeceased = m.status !== 'Deceased';
-        const isNotAdmin = id.startsWith('HCC-') ? true : !isAdministrativeId(id);
-        const matchesQuery = (m.full_name || m.name || "").toLowerCase().includes(query) || id.toLowerCase().includes(query);
-        return isNotDeceased && isNotAdmin && matchesQuery;
-      })
-    : [];
+  const [suggestions, setSuggestions] = useState<WelfareTicket[] | any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  useEffect(() => {
+    const queryTerm = memberSearchQuery.trim();
+    if (!queryTerm) {
+      setSuggestions([]);
+      return;
+    }
+
+    const selectedMember = members.find(m => (m.official_member_id || m.id) === welfareFormMemberId);
+    if (selectedMember && (selectedMember.full_name || selectedMember.name) === queryTerm) {
+      return;
+    }
+
+    const delayDebounce = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const { data, error } = await supabase
+          .from('members')
+          .select('*')
+          .neq('status', 'Deceased')
+          .or(`full_name.ilike.%${queryTerm}%,official_member_id.ilike.%${queryTerm}%`)
+          .order('full_name', { ascending: true })
+          .limit(1000);
+
+        if (!error && data) {
+          const mapped = data
+            .map((m: any) => ({
+              id: m.official_member_id,
+              official_member_id: m.official_member_id,
+              name: m.full_name,
+              full_name: m.full_name,
+              phone: m.phone_number || undefined,
+              phone_number: m.phone_number || undefined,
+              status: m.status,
+              balance: Number(m.balance || 0),
+              role: m.role || 'member',
+              family: m.cmo_family || undefined,
+              cmo_family: m.cmo_family || undefined,
+              familyUnit: m.cmo_family || undefined,
+              profilePic: m.avatar_url || null,
+              createdAt: m.created_at,
+              updatedAt: m.updated_at
+            }))
+            .filter((m: any) => {
+              const id = m.official_member_id || m.id || '';
+              return id.startsWith('HCC-') ? true : !isAdministrativeId(id);
+            });
+          setSuggestions(mapped);
+        } else {
+          setSuggestions([]);
+        }
+      } catch (err) {
+        console.error("Error searching members in WelfareDashboard:", err);
+        setSuggestions([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounce);
+  }, [memberSearchQuery, welfareFormMemberId, members]);
 
   const showMemberSearchResults = Boolean(
     memberSearchQuery.trim() && suggestions.length > 0 && !suggestions.some(m => (m.official_member_id || m.id) === welfareFormMemberId)
@@ -171,15 +224,10 @@ export const WelfareDashboard = () => {
       return;
     }
 
-    // 1. Cap Check: Maximum standard welfare disbursement is ₦50,000
     if (amount > 50000) {
       setError(`Constitutional Policy Violation: Welfare request of ₦${amount.toLocaleString()} exceeds the maximum disbursement cap of ₦50,000.`);
       return;
     }
-
-    // 2. Member Balance Check bypassed: Welfare assistance request creation is permitted for all members regardless of ledger clearance.
-
-    // 3. Member Tenure Check bypassed: Any member is constitutionally eligible for welfare assistance regardless of registered duration.
 
     const finalCategory = (welfareCategory === "Wife's Death" || welfareCategory === "Others") && reasonDetails.trim()
       ? `${welfareCategory} (${reasonDetails.trim()})`
@@ -254,6 +302,20 @@ export const WelfareDashboard = () => {
     setSuccess('Announcement published to the community');
     setTimeout(() => setSuccess(''), 3000);
   };
+
+  const filteredTickets = welfareTickets.filter(t => {
+    if (ticketFilter === 'All') return true;
+    if (ticketFilter === 'Pending') {
+      return t.status === 'Pending' || t.status === 'Awaiting Financial Audit' || t.status === 'Awaiting Disbursement';
+    }
+    if (ticketFilter === 'Completed') {
+      return t.status === 'Completed' || t.status === 'Settled & Cleared';
+    }
+    if (ticketFilter === 'Declined') {
+      return t.status === 'Declined';
+    }
+    return true;
+  });
 
   return (
     <div className="p-4 md:p-8">
@@ -346,6 +408,9 @@ export const WelfareDashboard = () => {
                 <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Name</p>
                   <p className="text-white font-bold text-sm truncate">{currentUser.name}</p>
+                  {currentUser.office_title && (
+                    <span className="text-[10px] text-gray-400 block mt-0.5">{currentUser.office_title}</span>
+                  )}
                 </div>
                 <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Role</p>
@@ -392,210 +457,258 @@ export const WelfareDashboard = () => {
           </form>
         </div>
       ) : (
-        <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* New Ticket Form */}
-        <Card className="bg-[#002520] border-2 border-[#ffd700] p-6">
-          <h3 className="text-xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
-            <Heart className="w-5 h-5" />
-            Create Assistance Request
-          </h3>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="welfare-member-search" className="text-gray-300 text-sm block mb-2">Search Member Name or ID</label>
-              <div className="relative">
-                <Input
-                  id="welfare-member-search"
-                  value={memberSearchQuery}
-                  onChange={(e) => {
-                    setMemberSearchQuery(e.target.value);
-                    setMemberSearchIndex(-1);
-                    setWelfareFormMemberId('');
-                  }}
-                  onKeyDown={(e) => {
-                    if (suggestions.length === 0) return;
-                    if (e.key === 'ArrowDown') {
-                      e.preventDefault();
-                      setMemberSearchIndex((prev) => Math.min(prev + 1, suggestions.length - 1));
-                    }
-                    if (e.key === 'ArrowUp') {
-                      e.preventDefault();
-                      setMemberSearchIndex((prev) => Math.max(prev - 1, 0));
-                    }
-                     if (e.key === 'Enter') {
-                       e.preventDefault();
-                       const selected = suggestions[memberSearchIndex >= 0 ? memberSearchIndex : 0];
-                       if (selected) {
-                         selectMember(selected.official_member_id, selected.full_name || selected.name);
-                       }
-                     }
-                     if (e.key === 'Escape') {
-                       setMemberSearchIndex(-1);
-                     }
-                   }}
-                   placeholder="Search by name or ID"
-                   className="bg-[#001a16] border-[#ffd700] text-white"
-                   autoComplete="off"
-                   data-lpignore="true"
-                   data-1pignore="true"
-                 />
-                 {showMemberSearchResults && (
-                   <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded border border-[#ffd700]/50 bg-[#001a16] shadow-lg">
-                     {suggestions.map((m, index) => (
-                       <button
-                         key={m.id}
-                         type="button"
-                         onClick={() => {
-                           setWelfareFormMemberId(m.official_member_id || '');
-                           setMemberSearchQuery(m.full_name || m.name);
-                         }}
-                         className={`w-full text-left px-3 py-2 text-sm ${memberSearchIndex === index ? 'bg-[#ffd700]/30 text-white' : 'text-white hover:bg-[#ffd700]/20'}`}
-                       >
-                         {(m.full_name || m.name)?.toUpperCase()} — {m.official_member_id}
-                       </button>
-                     ))}
-                   </div>
-                 )}
-              </div>
-            </div>
-            <div>
-              <label htmlFor="welfare-member-id" className="text-gray-300 text-sm block mb-2">Member ID</label>
-              <Input
-                id="welfare-member-id"
-                value={welfareFormMemberId}
-                onChange={(e) => setWelfareFormMemberId(e.target.value.toUpperCase())}
-                placeholder="HCC-CMO-26-XXXX"
-                className="bg-[#001a16] border-[#ffd700] text-white"
-              />
-            </div>
-            <div>
-              <label htmlFor="welfare-category" className="text-gray-300 text-sm block mb-2">Package Category</label>
-              <select
-                id="welfare-category"
-                value={welfareCategory}
-                onChange={(e) => setWelfareCategory(e.target.value)}
-                className="w-full bg-[#001a16] border border-[#ffd700] text-white p-2 rounded cursor-pointer"
-              >
-                <option value="">Select category</option>
-                {WELFARE_CATEGORIES.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-                <option value="Wife's Death">Wife's Death</option>
-                <option value="Others">Others</option>
-              </select>
-              {(welfareCategory === "Wife's Death" || welfareCategory === "Others") && (
-                <div className="mt-4 flex flex-col space-y-2">
-                  <label className="text-sm font-bold text-yellow-400">Provide Specific Details / Reason</label>
-                  <textarea 
-                    className="w-full p-2 bg-[#001a16] border border-[#ffd700] rounded text-white focus:outline-none focus:ring-1 focus:ring-[#ffd700]"
-                    rows={3}
-                    placeholder="Enter specific details regarding the case here..."
-                    value={reasonDetails}
-                    onChange={(e) => setReasonDetails(e.target.value)}
-                  />
-                </div>
-              )}
-            </div>
-            <div>
-              <label className="text-gray-300 text-sm block mb-2">Requested Amount (₦)</label>
-              <Input
-                type="number"
-                value={welfareAmount}
-                onChange={(e) => setWelfareAmount(e.target.value)}
-                placeholder="0.00"
-                className="bg-[#001a16] border-[#ffd700] text-white"
-              />
-            </div>
-            <Button
-              onClick={handleWelfareTicketSubmit}
-              className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700]"
-            >
-              <Heart className="w-4 h-4 mr-2" />
-              Submit Request
-            </Button>
-          </div>
-        </Card>
+        <Tabs defaultValue="tickets" className="w-full">
+          <TabsList className="bg-[#002520] border border-[#ffd700]/20 w-full justify-start p-1 flex-wrap h-auto gap-1 mb-6">
+            <TabsTrigger value="tickets" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Ticket Management
+            </TabsTrigger>
+            <TabsTrigger value="announcements" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Welfare Announcements
+            </TabsTrigger>
+            <TabsTrigger value="media" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Media & Gallery Pipeline
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Active Tickets */}
-        <Card className="bg-[#002520] border-2 border-[#ffd700] p-6">
-          <h3 className="text-xl font-bold text-[#ffd700] mb-4">All Welfare Tickets</h3>
-          <div className="space-y-3 max-h-[500px] overflow-y-auto">
-            {welfareTickets.slice().reverse().map(ticket => (
-              <div key={ticket.ticketId} className="bg-[#001a16] border border-[#ffd700] p-4 rounded">
-                <div className="flex justify-between items-start mb-2">
+          <TabsContent value="tickets" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* New Ticket Form */}
+              <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-xl shadow-lg">
+                <h3 className="text-xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
+                  <Heart className="w-5 h-5" />
+                  Create Assistance Request
+                </h3>
+                <div className="space-y-4">
                   <div>
-                    <p className="text-white font-semibold">{ticket.ticketId}</p>
-                    <p className="text-gray-400 text-sm">{ticket.memberName}</p>
+                    <label htmlFor="welfare-member-search" className="text-gray-300 text-sm block mb-2">Search Member Name or ID</label>
+                    <div className="relative">
+                      <Input
+                        id="welfare-member-search"
+                        value={memberSearchQuery}
+                        onChange={(e) => {
+                          setMemberSearchQuery(e.target.value);
+                          setMemberSearchIndex(-1);
+                          setWelfareFormMemberId('');
+                        }}
+                        onKeyDown={(e) => {
+                          if (suggestions.length === 0) return;
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setMemberSearchIndex((prev) => Math.min(prev + 1, suggestions.length - 1));
+                          }
+                          if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setMemberSearchIndex((prev) => Math.max(prev - 1, 0));
+                          }
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const selected = suggestions[memberSearchIndex >= 0 ? memberSearchIndex : 0];
+                            if (selected) {
+                              selectMember(selected.official_member_id, selected.full_name || selected.name);
+                            }
+                          }
+                          if (e.key === 'Escape') {
+                            setMemberSearchIndex(-1);
+                          }
+                        }}
+                        placeholder="Search by name or ID"
+                        className="bg-[#001a16] border-[#ffd700] text-white"
+                        autoComplete="off"
+                        data-lpignore="true"
+                        data-1pignore="true"
+                      />
+                      {showMemberSearchResults && (
+                        <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded border border-[#ffd700]/50 bg-[#001a16] shadow-lg">
+                          {suggestions.map((m, index) => (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => {
+                                setWelfareFormMemberId(m.official_member_id || '');
+                                setMemberSearchQuery(m.full_name || m.name);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-sm ${memberSearchIndex === index ? 'bg-[#ffd700]/30 text-white' : 'text-white hover:bg-[#ffd700]/20'}`}
+                            >
+                              {(m.full_name || m.name)?.toUpperCase()} — {m.official_member_id}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    ticket.status === 'Awaiting Financial Audit' || ticket.status === 'Pending' ? 'bg-yellow-500/20 text-yellow-500' :
-                    ticket.status === 'Awaiting Disbursement' ? 'bg-blue-500/20 text-blue-500' :
-                    ticket.status === 'Declined' ? 'bg-red-500/20 text-red-500' :
-                    'bg-green-500/20 text-green-500'
-                  }`}>
-                    {ticket.status}
-                  </span>
+                  <div>
+                    <label htmlFor="welfare-member-id" className="text-gray-300 text-sm block mb-2">Member ID</label>
+                    <Input
+                      id="welfare-member-id"
+                      value={welfareFormMemberId}
+                      onChange={(e) => setWelfareFormMemberId(e.target.value.toUpperCase())}
+                      placeholder="HCC-CMO-26-XXXX"
+                      className="bg-[#001a16] border-[#ffd700] text-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="welfare-category" className="text-gray-300 text-sm block mb-2">Package Category</label>
+                    <select
+                      id="welfare-category"
+                      value={welfareCategory}
+                      onChange={(e) => setWelfareCategory(e.target.value)}
+                      className="w-full bg-[#001a16] border border-[#ffd700] text-white p-2 rounded cursor-pointer focus:outline-none"
+                    >
+                      <option value="">Select category</option>
+                      {WELFARE_CATEGORIES.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                      <option value="Wife's Death">Wife's Death</option>
+                      <option value="Others">Others</option>
+                    </select>
+                    {(welfareCategory === "Wife's Death" || welfareCategory === "Others") && (
+                      <div className="mt-4 flex flex-col space-y-2">
+                        <label className="text-sm font-bold text-[#ffd700]">Provide Specific Details / Reason</label>
+                        <textarea 
+                          className="w-full p-2 bg-[#001a16] border border-[#ffd700] rounded text-white focus:outline-none focus:ring-1 focus:ring-[#ffd700] text-sm"
+                          rows={3}
+                          placeholder="Enter specific details regarding the case here..."
+                          value={reasonDetails}
+                          onChange={(e) => setReasonDetails(e.target.value)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-gray-300 text-sm block mb-2">Requested Amount (₦)</label>
+                    <Input
+                      type="number"
+                      value={welfareAmount}
+                      onChange={(e) => setWelfareAmount(e.target.value)}
+                      placeholder="0.00"
+                      className="bg-[#001a16] border-[#ffd700] text-white"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleWelfareTicketSubmit}
+                    className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold"
+                  >
+                    <Heart className="w-4 h-4 mr-2" />
+                    Submit Request
+                  </Button>
                 </div>
-                <p className="text-gray-300 text-sm mb-1">{ticket.category}</p>
-                <p className="text-[#ffd700] font-bold">{formatCurrency(ticket.requestedAmount)}</p>
-                {ticket.status === 'Declined' && ticket.declineReason && (
-                  <p className="text-xs italic text-red-400 mt-2 bg-red-950/20 border border-red-500/20 p-2 rounded">
-                    Reason: {ticket.declineReason}
-                  </p>
-                )}
-                <p className="text-xs text-gray-500 mt-2">
-                  Created: {formatDateTime(ticket.createdAt)}
-                </p>
-              </div>
-            ))}
-            {welfareTickets.length === 0 && (
-              <p className="text-gray-400 text-center py-8">No tickets created yet</p>
-            )}
-          </div>
-        </Card>
-      </div>
+              </Card>
 
-      <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 mt-6">
-        <h3 className="text-xl font-bold text-[#ffd700] mb-4">Welfare Announcements</h3>
-        <div className="space-y-4 mb-4">
-          <Input
-            value={announcementTitle}
-            onChange={(e) => setAnnouncementTitle(e.target.value)}
-            placeholder="Announcement Title"
-            className="bg-[#001a16] border-[#ffd700] text-white"
-          />
-          <textarea
-            value={announcementContent}
-            onChange={(e) => setAnnouncementContent(e.target.value)}
-            placeholder="Announcement Content"
-            className="w-full bg-[#001a16] border border-[#ffd700] text-white p-3 rounded min-h-[120px]"
-          />
-          <Button
-            onClick={postAnnouncement}
-            className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700]"
-          >
-            Publish Announcement
-          </Button>
-        </div>
-        <div className="space-y-3">
-          {announcements.slice(0, 3).map(ann => (
-            <div key={ann.id} className="bg-[#001a16] border border-[#ffd700] p-4 rounded">
-              <p className="text-[#ffd700] font-semibold">{ann.title}</p>
-              <p className="text-gray-300 text-sm mb-2">{ann.content}</p>
-              <p className="text-xs text-gray-500">{formatDateTime(ann.timestamp)}</p>
+              {/* All Welfare Tickets List */}
+              <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-xl shadow-lg">
+                <div className="flex justify-between items-center flex-wrap gap-4 mb-4">
+                  <h3 className="text-xl font-bold text-[#ffd700]">All Welfare Tickets</h3>
+                  
+                  {/* Status Filters */}
+                  <div className="flex gap-1.5 flex-wrap">
+                    {(['All', 'Pending', 'Completed', 'Declined'] as const).map(filter => (
+                      <button
+                        key={filter}
+                        onClick={() => setTicketFilter(filter)}
+                        className={`px-2.5 py-1 rounded text-[11px] font-bold border transition-all cursor-pointer ${
+                          ticketFilter === filter
+                            ? 'bg-[#ffd700] text-[#001a16] border-[#ffd700]'
+                            : 'bg-[#001a16] text-[#ffd700] border-[#ffd700]/20 hover:border-[#ffd700]/50'
+                        }`}
+                      >
+                        {filter}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar pr-1">
+                  {filteredTickets.slice().reverse().map(ticket => (
+                    <div key={ticket.ticketId} className="bg-[#001a16] border border-[#ffd700]/10 p-4 rounded-lg hover:border-[#ffd700]/30 transition-all">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <p className="text-white font-semibold">{ticket.ticketId}</p>
+                          <p className="text-gray-400 text-xs">{ticket.memberName}</p>
+                        </div>
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${
+                          ticket.status === 'Awaiting Financial Audit' || ticket.status === 'Pending' ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30' :
+                          ticket.status === 'Awaiting Disbursement' ? 'bg-blue-500/20 text-blue-500 border border-blue-500/30' :
+                          ticket.status === 'Declined' ? 'bg-red-500/20 text-red-500 border border-red-500/30' :
+                          'bg-green-500/20 text-green-500 border border-green-500/30'
+                        }`}>
+                          {ticket.status}
+                        </span>
+                      </div>
+                      <p className="text-gray-300 text-sm mb-1">{ticket.category}</p>
+                      <p className="text-[#ffd700] font-bold text-base">{formatCurrency(ticket.requestedAmount)}</p>
+                      {ticket.status === 'Declined' && ticket.declineReason && (
+                        <p className="text-xs italic text-red-400 mt-2 bg-red-950/20 border border-red-500/20 p-2 rounded">
+                          Reason: {ticket.declineReason}
+                        </p>
+                      )}
+                      <p className="text-[10px] text-gray-500 mt-2 font-mono">
+                        Created: {formatDateTime(ticket.createdAt)}
+                      </p>
+                    </div>
+                  ))}
+                  {filteredTickets.length === 0 && (
+                    <p className="text-gray-400 text-center py-10 italic text-sm">No tickets found for status '{ticketFilter}'.</p>
+                  )}
+                </div>
+              </Card>
             </div>
-          ))}
-        </div>
-      </Card>
+          </TabsContent>
 
-      {/* General Non-Sports Gallery & Video Link Pipeline */}
-      <div className="mt-8">
-        <GeneralGalleryManager
-          currentUserName={currentUser?.name || 'Welfare Officer'}
-          isExecutive={isExecutiveUnlocked}
-        />
-      </div>
-        </>
+          <TabsContent value="announcements" className="space-y-6">
+            <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-xl shadow-lg">
+              <h3 className="text-xl font-bold text-[#ffd700] mb-4">Publish Welfare Announcement</h3>
+              <div className="space-y-4 mb-6">
+                <Input
+                  value={announcementTitle}
+                  onChange={(e) => setAnnouncementTitle(e.target.value)}
+                  placeholder="Announcement Title"
+                  className="bg-[#001a16] border-[#ffd700]/30 text-white focus:border-[#ffd700]"
+                />
+                <textarea
+                  value={announcementContent}
+                  onChange={(e) => setAnnouncementContent(e.target.value)}
+                  placeholder="Announcement Content"
+                  className="w-full bg-[#001a16] border border-[#ffd700]/30 text-white p-3 rounded min-h-[120px] focus:outline-none focus:border-[#ffd700] text-sm"
+                />
+                <Button
+                  onClick={postAnnouncement}
+                  className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold"
+                >
+                  Publish Announcement
+                </Button>
+              </div>
+
+              <div className="border-t border-[#ffd700]/20 my-6" />
+
+              <h3 className="text-xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
+                <Megaphone className="w-5 h-5 text-[#ffd700]" />
+                Welfare Broadcast Feed
+              </h3>
+              <div className="space-y-4">
+                {announcements.map(ann => (
+                  <div key={ann.id} className="bg-[#001a16] border border-[#ffd700]/10 p-4 rounded-lg">
+                    <div className="flex justify-between items-start mb-1">
+                      <p className="text-[#ffd700] font-semibold">{ann.title}</p>
+                      <span className="text-xs text-gray-500 font-mono">{formatDateTime(ann.timestamp)}</span>
+                    </div>
+                    <p className="text-gray-300 text-sm mt-1">{ann.content}</p>
+                    <p className="text-[10px] text-gray-500 mt-2 font-semibold">Broadcast Author: {ann.author || 'Welfare Office'}</p>
+                  </div>
+                ))}
+                {announcements.length === 0 && (
+                  <p className="text-gray-400 text-center py-8 italic text-sm">No welfare announcements published yet.</p>
+                )}
+              </div>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="media" className="space-y-6">
+            <GeneralGalleryManager
+              currentUserName={currentUser?.name || 'Welfare Officer'}
+              isExecutive={isExecutiveUnlocked}
+            />
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );

@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { Page } from '../../types';
+import { Heading } from '../../app/components/common/Heading';
 
 // ── 1. EXECUTIVE OFFICES DATA MATRIX (10 CARDS) ─────────────────────────────────
 interface ExecOffice {
@@ -380,9 +381,9 @@ export const Home = () => {
           <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ffd700]/10 border border-[#ffd700]/30 text-[#ffd700] text-xs font-extrabold uppercase tracking-widest mb-4">
             <Sparkles className="w-3.5 h-3.5" /> Holy Cross Catholic Church CMO Portal
           </span>
-          <h1 className="text-3xl md:text-5xl font-extrabold text-[#ffd700] tracking-tight mb-4 leading-tight">
+          <Heading level={1} className="tracking-tight mb-4 leading-tight">
             Integrated Portal System
-          </h1>
+          </Heading>
           <p className="text-gray-300 text-base md:text-lg max-w-3xl mx-auto font-medium leading-relaxed">
             Centralized digital ecosystem for member management, executive administration, sports department, open media gallery, and parish family units.
           </p>
@@ -393,10 +394,10 @@ export const Home = () => {
       <div>
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-2xl md:text-3xl font-extrabold text-[#ffd700] flex items-center gap-3">
+            <Heading level={2} className="flex items-center gap-3">
               <Building2 className="w-7 h-7 text-[#ffd700]" />
               Primary System Portals
-            </h2>
+            </Heading>
             <p className="text-xs md:text-sm text-gray-400 mt-1">
               Select your required portal below to access role-based features and public media.
             </p>
@@ -413,9 +414,9 @@ export const Home = () => {
               <div className="w-14 h-14 rounded-2xl bg-[#ffd700]/10 border border-[#ffd700]/40 flex items-center justify-center text-[#ffd700] mb-5 group-hover:scale-110 group-hover:bg-[#ffd700] group-hover:text-[#001a16] transition-all duration-300 shadow-md">
                 <UserCheck className="w-7 h-7" />
               </div>
-              <h3 className="text-xl font-bold text-white group-hover:text-[#ffd700] transition-colors mb-2">
+              <Heading level={3} className="text-xl font-bold text-white group-hover:text-[#ffd700] transition-colors mb-2">
                 Member Portal
-              </h3>
+              </Heading>
               <p className="text-gray-300 text-xs leading-relaxed">
                 Personal member profile, meeting attendance, payment ledger, and excuse submissions.
               </p>
@@ -435,9 +436,9 @@ export const Home = () => {
               <div className="w-14 h-14 rounded-2xl bg-[#ffd700]/10 border border-[#ffd700]/40 flex items-center justify-center text-[#ffd700] mb-5 group-hover:scale-110 group-hover:bg-[#ffd700] group-hover:text-[#001a16] transition-all duration-300 shadow-md">
                 <ShieldCheck className="w-7 h-7" />
               </div>
-              <h3 className="text-xl font-bold text-white group-hover:text-[#ffd700] transition-colors mb-2">
+              <Heading level={3} className="text-xl font-bold text-white group-hover:text-[#ffd700] transition-colors mb-2">
                 Executive Portals
-              </h3>
+              </Heading>
               <p className="text-gray-300 text-xs leading-relaxed">
                 Role-based administrative portals for elected central executive officers (8 Offices).
               </p>
@@ -457,9 +458,9 @@ export const Home = () => {
               <div className="w-14 h-14 rounded-2xl bg-[#ffd700]/10 border border-[#ffd700]/40 flex items-center justify-center text-[#ffd700] mb-5 group-hover:scale-110 group-hover:bg-[#ffd700] group-hover:text-[#001a16] transition-all duration-300 shadow-md">
                 <Trophy className="w-7 h-7" />
               </div>
-              <h3 className="text-xl font-bold text-white group-hover:text-[#ffd700] transition-colors mb-2">
+              <Heading level={3} className="text-xl font-bold text-white group-hover:text-[#ffd700] transition-colors mb-2">
                 Sports Department
-              </h3>
+              </Heading>
               <p className="text-gray-300 text-xs leading-relaxed">
                 Sports administration, tournament rosters, fixtures, medicals, and equipment ledgers (8 Offices).
               </p>
@@ -484,9 +485,9 @@ export const Home = () => {
                   Open Access
                 </span>
               </div>
-              <h3 className="text-xl font-bold text-white group-hover:text-[#ffd700] transition-colors mb-2">
+              <Heading level={3} className="text-xl font-bold text-white group-hover:text-[#ffd700] transition-colors mb-2">
                 Public Media Gallery
-              </h3>
+              </Heading>
               <p className="text-gray-300 text-xs leading-relaxed">
                 Open-access public album for parish events, harvest, Father&apos;s Day, and welfare activities.
               </p>
@@ -506,9 +507,9 @@ export const Home = () => {
               <div className="w-14 h-14 rounded-2xl bg-[#ffd700]/10 border border-[#ffd700]/40 flex items-center justify-center text-[#ffd700] mb-5 group-hover:scale-110 group-hover:bg-[#ffd700] group-hover:text-[#001a16] transition-all duration-300 shadow-md">
                 <Users className="w-7 h-7" />
               </div>
-              <h3 className="text-xl font-bold text-white group-hover:text-[#ffd700] transition-colors mb-2">
+              <Heading level={3} className="text-xl font-bold text-white group-hover:text-[#ffd700] transition-colors mb-2">
                 CMO Family Units
-              </h3>
+              </Heading>
               <p className="text-gray-300 text-xs leading-relaxed">
                 Explore Wisdom, Honour, Integrity, and Talent family rosters, ledgers, and activities.
               </p>
@@ -535,10 +536,10 @@ export const Home = () => {
                   <ArrowLeft className="w-4 h-4"/>
                   Return to Main Portal
                 </button>
-                <h2 className="text-2xl font-bold text-[#ffd700] flex items-center gap-2 mt-1">
+                <Heading level={2} className="flex items-center gap-2 mt-1">
                   <ShieldCheck className="w-6 h-6 text-[#ffd700]" />
                   Central Executive Offices Directory (8 Offices)
-                </h2>
+                </Heading>
                 <p className="text-xs text-gray-300 mt-0.5">
                   Select an administrative office below to authenticate and enter executive workspace.
                 </p>
@@ -613,10 +614,10 @@ export const Home = () => {
                   <ArrowLeft className="w-4 h-4"/>
                   Return to Main Portal
                 </button>
-                <h2 className="text-2xl font-bold text-[#ffd700] flex items-center gap-2 mt-1">
+                <Heading level={2} className="flex items-center gap-2 mt-1">
                   <Trophy className="w-6 h-6 text-[#ffd700]" />
                   Sports Department Portals (8 Offices)
-                </h2>
+                </Heading>
                 <p className="text-xs text-gray-300 mt-0.5">
                   Select a specialized sports office below to open rosters, fixtures, medicals, or equipment ledgers.
                 </p>
@@ -689,7 +690,7 @@ export const Home = () => {
                 <Lock className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-[#ffd700]">{selectedOfficeForAuth.title}</h3>
+                <Heading level={3} className="text-lg font-bold text-[#ffd700]">{selectedOfficeForAuth.title}</Heading>
                 <p className="text-xs text-gray-300">Official Role Authentication Prompt</p>
               </div>
             </div>

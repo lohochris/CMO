@@ -619,7 +619,9 @@ export const SportsMedicalPortal = () => {
             </div>
             <div className="text-center md:text-left">
               <h3 className="text-lg font-bold text-white">{currentUser.full_name || currentUser.name}</h3>
-              <p className="text-[#ffd700] text-xs font-semibold uppercase tracking-wider mt-1">Medical Officer Workspace</p>
+              <p className="text-[#ffd700] text-xs font-semibold uppercase tracking-wider mt-1">
+                {currentUser.office_title || 'Medical Officer Workspace'}
+              </p>
             </div>
           </div>
         </Card>

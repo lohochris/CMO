@@ -332,8 +332,8 @@ function AppContent() {
       return <SportsFinancialHub />;
     }
     if (currentPage === 'familyHub') return <FamilyHub />;
-    if (currentPage === 'familyChairman' || currentPage === 'familyWisdomChairman' || currentPage === 'familyHonourChairman' || currentPage === 'familyIntegrityChairman' || currentPage === 'familyTalentChairman') return <FamilyHeadDashboard />;
-    if (currentPage === 'familySecretary' || currentPage === 'familyWisdomSecretary' || currentPage === 'familyHonourSecretary' || currentPage === 'familyIntegritySecretary' || currentPage === 'familyTalentSecretary') return <FamilySecDashboard />;
+    if ((currentPage as string) === 'familyChairman' || currentPage === 'familyWisdomChairman' || currentPage === 'familyHonourChairman' || currentPage === 'familyIntegrityChairman' || currentPage === 'familyTalentChairman') return <FamilyHeadDashboard />;
+    if ((currentPage as string) === 'familySecretary' || currentPage === 'familyWisdomSecretary' || currentPage === 'familyHonourSecretary' || currentPage === 'familyIntegritySecretary' || currentPage === 'familyTalentSecretary') return <FamilySecDashboard />;
 
     if (currentPage === 'publicGallery') return <PublicGallery />;
 

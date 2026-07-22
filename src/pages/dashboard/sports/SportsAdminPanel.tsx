@@ -23,6 +23,7 @@ import { Card } from '../../../app/components/ui/card';
 import { toast } from 'sonner';
 import { ProfilePictureUploader } from '../../../app/components/common/ProfilePictureUploader';
 import { uploadProfilePicture } from '../../../utils/supabaseHelpers';
+import { Heading } from '../../../app/components/common/Heading';
 
 // ──────────────────────────────────────────────
 // Types
@@ -361,7 +362,7 @@ export const SportsAdminPanel = () => {
             <Trophy className="w-5 h-5 text-[#ffd700]" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Sports Admin Panel</h1>
+            <Heading level={1} className="tracking-tight">Sports Admin Panel</Heading>
             <p className="text-xs text-gray-400 mt-0.5">Seasonal schedule & tournament configuration</p>
           </div>
         </div>
@@ -450,7 +451,9 @@ export const SportsAdminPanel = () => {
             </div>
             <div className="text-center md:text-left">
               <h3 className="text-lg font-bold text-white">{currentUser.full_name || currentUser.name}</h3>
-              <p className="text-[#ffd700] text-xs font-semibold uppercase tracking-wider mt-1">Sports Director Workspace</p>
+              <p className="text-[#ffd700] text-xs font-semibold uppercase tracking-wider mt-1">
+                {currentUser.office_title || 'Sports Director Workspace'}
+              </p>
             </div>
           </div>
         </Card>

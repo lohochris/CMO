@@ -7,6 +7,7 @@ import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
+import { Heading } from '../../app/components/common/Heading';
 import { toast } from 'sonner';
 import { Calendar, ClipboardList, Clock, Shield, Plus, Save, Megaphone, FileText, Banknote, BookOpen, Users, CalendarCheck, TrendingUp, Receipt, DollarSign, Printer, ArrowUpRight } from 'lucide-react';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
@@ -25,8 +26,27 @@ export default function FamilySecDashboard() {
     familyExpenses: appFamilyExps,
     setFamilyExpenses: setAppFamilyExps,
     familyAnnouncements: appFamilyAnnouncements,
-    setFamilyAnnouncements: setAppFamilyAnnouncements
+    setFamilyAnnouncements: setAppFamilyAnnouncements,
+    executives
   } = useApp();
+
+  const getFamilyHeadName = (familyName: string) => {
+    const officer = members.find(m => m.family === familyName && (m.role === 'FAMILY_HEAD' || m.role === 'family_head')) ||
+                    executives?.find(e => e.family === familyName && (e.role === 'FAMILY_HEAD' || e.role === 'family_head'));
+    if (officer && officer.name && officer.name !== officer.id && !officer.name.startsWith('HCC-CMO-')) {
+      return officer.full_name || officer.name;
+    }
+    return 'Unassigned';
+  };
+
+  const getFamilySecName = (familyName: string) => {
+    const officer = members.find(m => m.family === familyName && (m.role === 'FAMILY_SEC' || m.role === 'family_secretary' || m.role === 'family_sec')) ||
+                    executives?.find(e => e.family === familyName && (e.role === 'FAMILY_SEC' || e.role === 'family_secretary' || e.role === 'family_sec'));
+    if (officer && officer.name && officer.name !== officer.id && !officer.name.startsWith('HCC-CMO-')) {
+      return officer.full_name || officer.name;
+    }
+    return 'Unassigned';
+  };
 
   const resolveUnitFromUser = (user: any): string => {
     let unit = user?.familyUnit || user?.cmo_family || user?.family;
@@ -804,7 +824,7 @@ export default function FamilySecDashboard() {
               )}
             </div>
 
-            <h1 className="text-3xl font-extrabold text-white">{familyDisplayName} Secretariat</h1>
+            <Heading level={1}>{familyDisplayName} Secretariat</Heading>
             <p className="text-gray-400 text-sm mt-1">
               Family Secretary: <span className="text-white font-medium">{currentUser?.name}</span>
             </p>
@@ -892,6 +912,9 @@ export default function FamilySecDashboard() {
                   <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                     <p className="text-gray-400 text-xs uppercase tracking-wider">Name</p>
                     <p className="text-white font-bold text-sm truncate">{currentUser.name}</p>
+                    {currentUser.office_title && (
+                      <span className="text-[10px] text-gray-400 block mt-0.5">{currentUser.office_title}</span>
+                    )}
                   </div>
                   <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                     <p className="text-gray-400 text-xs uppercase tracking-wider">Designation</p>
@@ -999,6 +1022,25 @@ export default function FamilySecDashboard() {
 
             {/* TAB 1: OVERVIEW */}
             <TabsContent value="overview" className="space-y-6">
+              {/* Family Overview Cards */}
+              <Card className="bg-[#002520] border border-[#ffd700]/20 p-6 rounded-xl">
+                <h3 className="text-lg font-bold text-[#ffd700] mb-4">Family Overview</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-[#001a16] border border-[#ffd700]/10 p-4 rounded-lg">
+                    <p className="text-gray-400 text-xs uppercase tracking-wider">Family Name</p>
+                    <p className="text-white font-bold text-lg mt-1">{familyDisplayName}</p>
+                  </div>
+                  <div className="bg-[#001a16] border border-[#ffd700]/10 p-4 rounded-lg">
+                    <p className="text-gray-400 text-xs uppercase tracking-wider">Family Head</p>
+                    <p className="text-white font-bold text-lg mt-1">{getFamilyHeadName(cleanFamilyName)}</p>
+                  </div>
+                  <div className="bg-[#001a16] border border-[#ffd700]/10 p-4 rounded-lg">
+                    <p className="text-gray-400 text-xs uppercase tracking-wider">Secretary</p>
+                    <p className="text-white font-bold text-lg mt-1">{getFamilySecName(cleanFamilyName)}</p>
+                  </div>
+                </div>
+              </Card>
+
               {/* Metrics Header Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card className="bg-[#002520] border border-[#ffd700]/10 p-6 rounded-xl hover:scale-102 transition-transform duration-300">

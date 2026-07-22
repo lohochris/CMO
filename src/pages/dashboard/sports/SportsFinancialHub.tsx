@@ -605,7 +605,9 @@ export const SportsFinancialHub = () => {
             </div>
             <div className="text-center md:text-left">
               <h3 className="text-lg font-bold text-white">{currentUser.full_name || currentUser.name}</h3>
-              <p className="text-[#ffd700] text-xs font-semibold uppercase tracking-wider mt-1">Treasurer Workspace</p>
+              <p className="text-[#ffd700] text-xs font-semibold uppercase tracking-wider mt-1">
+                {currentUser.office_title || 'Treasurer Workspace'}
+              </p>
             </div>
           </div>
         </Card>

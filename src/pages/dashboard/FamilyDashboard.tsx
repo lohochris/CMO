@@ -9,6 +9,7 @@ import { useApp } from '../../contexts/AppContext';
 import { Family, FamilyWelfareTicket, FamilyTransaction, FamilyExpense, FamilyAnnouncement } from '../../types';
 import { calculateTotal, formatCurrency, formatDate, getCombinedTransactions, formatDateTime } from '../../utils/helpers';
 import { generateTicketId, generateExpenseId, generateAnnouncementId } from '../../utils/idGenerators';
+import { Heading } from '../../app/components/common/Heading';
 
 const familyList: Family[] = ['Wisdom', 'Honour', 'Integrity', 'Talent'];
 const familyColors: Record<Family, string> = {
@@ -38,12 +39,30 @@ const FAMILY_ROLES = {
 };
 
 export const FamilyHub = () => {
-  const { members, currentUser, setCurrentPage, setCurrentUser, setSuccess } = useApp();
+  const { members, executives, currentUser, setCurrentPage, setCurrentUser, setSuccess } = useApp();
 
   const [selectedFamilyForAuth, setSelectedFamilyForAuth] = useState<{ family: Family; mode: 'chairman' | 'secretary' } | null>(null);
   const [inputCredential, setInputCredential] = useState('');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+
+  const getFamilyHeadName = (familyName: string) => {
+    const officer = members.find(m => m.family === familyName && (m.role === 'FAMILY_HEAD' || m.role === 'family_head')) ||
+                    executives.find(e => e.family === familyName && (e.role === 'FAMILY_HEAD' || e.role === 'family_head'));
+    if (officer && officer.name && officer.name !== officer.id && !officer.name.startsWith('HCC-CMO-')) {
+      return officer.full_name || officer.name;
+    }
+    return 'Unassigned';
+  };
+
+  const getFamilySecName = (familyName: string) => {
+    const officer = members.find(m => m.family === familyName && (m.role === 'FAMILY_SEC' || m.role === 'family_secretary' || m.role === 'family_sec')) ||
+                    executives.find(e => e.family === familyName && (e.role === 'FAMILY_SEC' || e.role === 'family_secretary' || e.role === 'family_sec'));
+    if (officer && officer.name && officer.name !== officer.id && !officer.name.startsWith('HCC-CMO-')) {
+      return officer.full_name || officer.name;
+    }
+    return 'Unassigned';
+  };
 
   const handleOpenAuth = (family: Family, mode: 'chairman' | 'secretary') => {
     const targetPage = familyDashboardPages[family][mode];
@@ -108,10 +127,10 @@ export const FamilyHub = () => {
           <ArrowLeft className="w-5 h-5" />
           Return to Main Portal
         </button>
-        <h2 className="text-2xl md:text-3xl font-extrabold text-[#ffd700] mb-2 flex items-center gap-3">
+        <Heading level={1} className="mb-2 flex items-center gap-3">
           <Users className="w-8 h-8 text-[#ffd700]" />
           CMO Family Units Hub
-        </h2>
+        </Heading>
         <p className="text-gray-300 text-sm md:text-base">
           Explore the four parish family units and authenticate to access your subgroup workspace.
         </p>
@@ -120,8 +139,6 @@ export const FamilyHub = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {familyList.map((family) => {
           const familyMembers = members.filter(m => m.family === family);
-          const chairman = familyMembers.find(m => m.role === 'family_chairman');
-          const secretary = familyMembers.find(m => m.role === 'family_secretary');
 
           const borderColors = {
             Wisdom: 'border-blue-500/40 hover:border-blue-400',
@@ -154,8 +171,8 @@ export const FamilyHub = () => {
                 </div>
                 <p className="text-gray-300 text-xs leading-relaxed mb-4">{familyDescriptions[family]}</p>
                 <div className="space-y-1 text-xs text-gray-300 mb-6 bg-[#001a16]/60 p-3 rounded-lg border border-[#ffd700]/10">
-                  <p><span className="text-gray-400">Chairman:</span> <strong className="text-white">{chairman?.name || 'Assigned Officer'}</strong></p>
-                  <p><span className="text-gray-400">Secretary:</span> <strong className="text-white">{secretary?.name || 'Assigned Officer'}</strong></p>
+                  <p><span className="text-gray-400">Family Head:</span> <strong className="text-white">{getFamilyHeadName(family)}</strong></p>
+                  <p><span className="text-gray-400">Family Sec:</span> <strong className="text-white">{getFamilySecName(family)}</strong></p>
                 </div>
               </div>
 
@@ -633,12 +650,16 @@ const FamilyDashboardBase = ({ mode, family: dashboardFamily }: { mode: 'chairma
                 <p className="text-white font-semibold text-lg">{family}</p>
               </div>
               <div className="bg-[#001a16] border border-[#ffd700] p-4 rounded">
-                <p className="text-gray-400 text-sm">Chairman</p>
-                <p className="text-white font-semibold text-lg">{familyMembers.find(m => m.role === 'family_chairman')?.name || 'Unassigned'}</p>
+                <p className="text-gray-400 text-sm">Family Head</p>
+                <p className="text-white font-semibold text-lg">
+                  {familyMembers.find(m => m.role === 'FAMILY_HEAD' || m.role === 'family_head' || m.role === 'family_chairman')?.name || 'Unassigned'}
+                </p>
               </div>
               <div className="bg-[#001a16] border border-[#ffd700] p-4 rounded">
                 <p className="text-gray-400 text-sm">Secretary</p>
-                <p className="text-white font-semibold text-lg">{familyMembers.find(m => m.role === 'family_secretary')?.name || 'Unassigned'}</p>
+                <p className="text-white font-semibold text-lg">
+                  {familyMembers.find(m => m.role === 'FAMILY_SEC' || m.role === 'family_secretary' || m.role === 'family_sec')?.name || 'Unassigned'}
+                </p>
               </div>
             </div>
           </Card>
@@ -1115,9 +1136,9 @@ export const FamilyPortal = ({ family }: { family: Family }) => {
                     <TableCell className="text-white font-semibold py-4">{member.name}</TableCell>
                     <TableCell className="text-gray-400 text-sm py-4">{member.phone_number || 'N/A'}</TableCell>
                     <TableCell className="text-gray-300 text-sm py-4">
-                      {member.role === 'family_chairman' ? (
-                        <span className="text-yellow-400 font-bold">Chairman</span>
-                      ) : member.role === 'family_secretary' ? (
+                      {member.role === 'family_chairman' || member.role === 'FAMILY_HEAD' || member.role === 'family_head' ? (
+                        <span className="text-yellow-400 font-bold">Family Head</span>
+                      ) : member.role === 'family_secretary' || member.role === 'FAMILY_SEC' || member.role === 'family_sec' ? (
                         <span className="text-yellow-400 font-bold">Secretary</span>
                       ) : (
                         <span>Member</span>

@@ -6,6 +6,7 @@ import { LogIn, UserCheck, ShieldCheck } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { supabase } from '../../lib/supabaseClient';
 import { Member } from '../../types';
+import { Heading } from '../../app/components/common/Heading';
 
 export const Login = () => {
   const [loginType, setLoginType] = useState<'member' | 'executive'>('member');
@@ -294,10 +295,10 @@ export const Login = () => {
   return (
     <div className="p-4 md:p-8 max-w-md mx-auto">
       <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 md:p-8 shadow-2xl">
-        <h2 className="text-xl md:text-2xl font-bold text-[#ffd700] mb-5 flex items-center gap-2">
+        <Heading level={1} className="flex items-center gap-2 mb-5">
           <LogIn className="w-6 h-6" />
           {loginType === 'executive' ? 'Executive Login' : 'Member Login'}
-        </h2>
+        </Heading>
 
         {/* Sleek Tab Selector / Toggle Switch */}
         <div className="flex rounded-lg bg-[#001a16] p-1 border border-[#ffd700]/30 mb-6">
