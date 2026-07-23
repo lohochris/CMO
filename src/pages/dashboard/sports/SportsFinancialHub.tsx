@@ -323,14 +323,26 @@ export const SportsFinancialHub = () => {
     }
   };
 
-  const role = currentUser?.role?.toLowerCase();
+  const ALLOWED_FINANCIAL_ROLES = [
+    'HCC-CMO-EXEC-TR',
+    'HCC-CMO-EXEC-FS',
+    'HCC-CMO-SPRT-TR', 
+    'HCC-CMO-SPRT-FS',
+    'HCC-CMO-SPRT-DIR',
+    'TREASURER',
+    'SPORTS_TREASURER',
+    'FINANCIAL_SECRETARY'
+  ];
+
+  const role = currentUser?.role?.toUpperCase();
+  const officialId = (currentUser?.official_member_id || currentUser?.id || '').toUpperCase();
   const isAuthorised =
-    role === 'sports_director' ||
-    role === 'treasurer' ||
-    role === 'fin_sec' ||
-    role === 'financial_secretary' ||
-    role === 'chairman' ||
-    role === 'cmo_chairman';
+    ALLOWED_FINANCIAL_ROLES.includes(officialId) ||
+    ALLOWED_FINANCIAL_ROLES.includes(role || '') ||
+    role === 'SPORTS_DIRECTOR' ||
+    role === 'FIN_SEC' ||
+    role === 'CHAIRMAN' ||
+    role === 'CMO_CHAIRMAN';
 
   const [isExecutiveUnlocked, setIsExecutiveUnlocked] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {

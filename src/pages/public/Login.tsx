@@ -263,7 +263,11 @@ export const Login = () => {
 
       // Secure Gateway Forwarding: map role directly to administrative page
       const roleLower = (member.role || '').toLowerCase();
-      if (roleLower === 'fin_sec' || roleLower === 'financial_secretary') setCurrentPage('fin_sec');
+      const officialId = member.official_member_id || member.id || '';
+
+      if (officialId.includes('SPRT') || officialId.includes('SPORTS')) {
+        setCurrentPage('dashboard/sports');
+      } else if (roleLower === 'fin_sec' || roleLower === 'financial_secretary') setCurrentPage('fin_sec');
       else if (roleLower === 'welfare') setCurrentPage('welfare');
       else if (roleLower === 'treasurer' && member.official_member_id === 'HCC-CMO-SPRT-TR') setCurrentPage('sports_finance');
       else if (roleLower === 'treasurer') setCurrentPage('treasurer');
