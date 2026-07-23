@@ -48,6 +48,7 @@ import { TournamentStandingsBoard } from '../pages/dashboard/sports/TournamentSt
 import { SportsMedicalPortal } from '../pages/dashboard/sports/SportsMedicalPortal';
 import { EquipmentInventoryLedger } from '../pages/dashboard/sports/EquipmentInventoryLedger';
 import { SportsFinancialHub } from '../pages/dashboard/sports/SportsFinancialHub';
+import { SportsHub } from '../pages/dashboard/sports/SportsHub';
 
 const matchFamily = (param: string): import('../types').Family | null => {
   const normalized = param.toLowerCase();
@@ -78,7 +79,7 @@ function AppContent() {
     const initialPath = window.location.pathname;
     if (initialPath !== '/') {
       const cleanPath = initialPath.startsWith('/') ? initialPath.substring(1) : initialPath;
-      if (['about', 'services', 'register', 'login', 'dashboard', 'familyHub'].includes(cleanPath) || cleanPath.startsWith('family/')) {
+      if (['about', 'services', 'register', 'login', 'dashboard', 'familyHub', 'dashboard/sports'].includes(cleanPath) || cleanPath.startsWith('family/')) {
         setCurrentPage(cleanPath as any);
       }
     }
@@ -259,7 +260,8 @@ function AppContent() {
       if (currentPage === 'provost' || userRole === 'provost') return <ProvostDashboard />;
       if (currentPage === 'pro' || userRole === 'pro') return <PRODashboard />;
       if (currentPage === 'welfare' || userRole === 'welfare') return <WelfareDashboard />;
-      if (currentPage === 'treasurer' || userRole === 'treasurer') return <TreasurerDashboard />;
+      if (currentPage === 'treasurer' || (userRole === 'treasurer' && officialId !== 'HCC-CMO-SPRT-TR')) return <TreasurerDashboard />;
+      if (userRole === 'treasurer' && officialId === 'HCC-CMO-SPRT-TR') return <SportsFinancialHub />;
       if (currentPage === 'secretary' || userRole === 'gen_sec' || userRole === 'secretary') return <SecretaryDashboard />;
       if (currentPage === 'fin_sec' || userRole === 'fin_sec' || userRole === 'financial_secretary') return <FinanceDashboard />;
       if (currentPage === 'chairman' || userRole === 'chairman' || userRole === 'cmo_chairman') return <ChairmanDashboard />;
@@ -294,42 +296,75 @@ function AppContent() {
     }
 
 
-    // Sports department routing
-    if (currentPage === 'sports_admin') {
-      const uRole = currentUser?.role?.toLowerCase();
+    if (currentPage === 'dashboard/sports') {
       if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
-      if (uRole === 'sports_director' || uRole === 'chairman' || uRole === 'cmo_chairman') {
-        return <SportsAdminPanel />;
+      return <SportsHub />;
+    }
+
+    // Sports department routing with redirection wrapper to master SportsHub tabs
+    if (currentPage === 'sports_admin') {
+      if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('sports_hub_active_tab', 'admin');
       }
-      return <MemberDashboard />;
+      setTimeout(() => setCurrentPage('dashboard/sports'), 10);
+      return <SportsHub />;
     }
     if (currentPage === 'coach_workspace') {
       if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
-      return <CoachRosterWorkspace />;
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('sports_hub_active_tab', 'rosters');
+      }
+      setTimeout(() => setCurrentPage('dashboard/sports'), 10);
+      return <SportsHub />;
     }
     if (currentPage === 'athlete_hub') {
       if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
-      return <AthleteProfileHub />;
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('sports_hub_active_tab', 'overview');
+      }
+      setTimeout(() => setCurrentPage('dashboard/sports'), 10);
+      return <SportsHub />;
     }
     if (currentPage === 'referee_center') {
       if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
-      return <RefereeMatchCenter />;
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('sports_hub_active_tab', 'rosters');
+      }
+      setTimeout(() => setCurrentPage('dashboard/sports'), 10);
+      return <SportsHub />;
     }
     if (currentPage === 'standings_board') {
       if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
-      return <TournamentStandingsBoard />;
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('sports_hub_active_tab', 'overview');
+      }
+      setTimeout(() => setCurrentPage('dashboard/sports'), 10);
+      return <SportsHub />;
     }
     if (currentPage === 'medical_portal') {
       if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
-      return <SportsMedicalPortal />;
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('sports_hub_active_tab', 'medical');
+      }
+      setTimeout(() => setCurrentPage('dashboard/sports'), 10);
+      return <SportsHub />;
     }
     if (currentPage === 'equipment_ledger') {
       if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
-      return <EquipmentInventoryLedger />;
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('sports_hub_active_tab', 'equipment');
+      }
+      setTimeout(() => setCurrentPage('dashboard/sports'), 10);
+      return <SportsHub />;
     }
     if (currentPage === 'sports_finance') {
       if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
-      return <SportsFinancialHub />;
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('sports_hub_active_tab', 'financial');
+      }
+      setTimeout(() => setCurrentPage('dashboard/sports'), 10);
+      return <SportsHub />;
     }
     if (currentPage === 'familyHub') return <FamilyHub />;
     if ((currentPage as string) === 'familyChairman' || currentPage === 'familyWisdomChairman' || currentPage === 'familyHonourChairman' || currentPage === 'familyIntegrityChairman' || currentPage === 'familyTalentChairman') return <FamilyHeadDashboard />;

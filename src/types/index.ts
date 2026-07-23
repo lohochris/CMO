@@ -42,6 +42,7 @@ export type Page =
   | 'medical_portal'
   | 'equipment_ledger'
   | 'sports_finance'
+  | 'dashboard/sports'
   | 'publicGallery';
 
 export interface Member {

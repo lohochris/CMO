@@ -100,7 +100,7 @@ function computeLeagueTable(fixtures: CompletedFixture[]): LeagueRow[] {
   };
 
   for (const f of fixtures) {
-    if (f.status !== 'Completed') continue;
+    if (f.status !== 'Completed' && f.status !== 'FINISHED') continue;
 
     const homeTeamId = f.home_team_id;
     const awayTeamId = f.away_team_id;
@@ -145,7 +145,7 @@ function computeLeagueTable(fixtures: CompletedFixture[]): LeagueRow[] {
   const headToHead = (a: LeagueRow, b: LeagueRow): number => {
     const h2h = fixtures.filter(
       f =>
-        f.status === 'Completed' &&
+        (f.status === 'Completed' || f.status === 'FINISHED') &&
         ((f.home_team_id === a.teamId && f.away_team_id === b.teamId) ||
           (f.home_team_id === b.teamId && f.away_team_id === a.teamId)),
     );
@@ -211,7 +211,7 @@ function buildBracketRounds(fixtures: CompletedFixture[]): BracketRound[] {
       const hs = f.home_score ?? 0;
       const as_ = f.away_score ?? 0;
       let winnerTeamId: string | null = null;
-      if (f.status === 'Completed') {
+      if (f.status === 'Completed' || f.status === 'FINISHED') {
         winnerTeamId = hs > as_
           ? f.home_team_id
           : as_ > hs
@@ -373,7 +373,7 @@ const BracketVisualizer = ({
               flex: 1,
             }}>
               {round.matches.map((match) => {
-                const isCompleted = match.status === 'Completed';
+                const isCompleted = match.status === 'Completed' || match.status === 'FINISHED';
                 const homeWon = match.winnerTeamId === match.homeTeamId;
                 const awayWon = match.winnerTeamId === match.awayTeamId;
                 const isTBD = !match.homeTeamId && !match.awayTeamId;
@@ -487,7 +487,7 @@ const FixtureList = ({ fixtures, selectedFixtureId, onSelectFixture }: FixtureLi
           const matchDate = f.match_date
             ? new Date(f.match_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
             : '';
-          const isCompleted = f.status === 'Completed';
+          const isCompleted = f.status === 'Completed' || f.status === 'FINISHED';
 
           return (
             <button
