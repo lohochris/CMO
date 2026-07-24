@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Trophy,
   PlusCircle,
@@ -14,6 +14,14 @@ import {
   X,
   Flame,
   ArrowLeft,
+  Plus,
+  Clock,
+  MapPin,
+  UserCheck,
+  ShieldAlert,
+  Search,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
 import { useApp } from '../../../contexts/AppContext';
@@ -229,6 +237,105 @@ export const SportsAdminPanel = () => {
   const [endDate, setEndDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Create Fixture form states
+  const [showCreateFixtureModal, setShowCreateFixtureModal] = useState(false);
+  const [fixtureTournamentId, setFixtureTournamentId] = useState('');
+  const [fixtureHomeTeamId, setFixtureHomeTeamId] = useState('');
+  const [fixtureAwayTeamId, setFixtureAwayTeamId] = useState('');
+  const [fixtureVenue, setFixtureVenue] = useState('');
+  const [fixtureDate, setFixtureDate] = useState('');
+  const [fixtureTime, setFixtureTime] = useState('');
+  const [fixtureRefereeId, setFixtureRefereeId] = useState('');
+  const [fixtureSubmitting, setFixtureSubmitting] = useState(false);
+  const [fixtureError, setFixtureError] = useState('');
+  const [fixtureSuccess, setFixtureSuccess] = useState('');
+
+  // Combobox states
+  const [refereeSearchQuery, setRefereeSearchQuery] = useState('');
+  const [showRefereePopover, setShowRefereePopover] = useState(false);
+  const refereeComboboxRef = useRef<HTMLDivElement>(null);
+
+  // Click outside listener for Referee Assignment Combobox
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        refereeComboboxRef.current &&
+        !refereeComboboxRef.current.contains(event.target as Node)
+      ) {
+        setShowRefereePopover(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Clear query on modal close
+  useEffect(() => {
+    if (!showCreateFixtureModal) {
+      setRefereeSearchQuery('');
+      setShowRefereePopover(false);
+    }
+  }, [showCreateFixtureModal]);
+
+  const [availableTeams, setAvailableTeams] = useState<any[]>([]);
+  const [refereesList, setRefereesList] = useState<any[]>([]);
+  const [loadingTeams, setLoadingTeams] = useState(false);
+
+  // Fetch teams for the selected tournament
+  useEffect(() => {
+    if (!fixtureTournamentId) {
+      setAvailableTeams([]);
+      setFixtureHomeTeamId('');
+      setFixtureAwayTeamId('');
+      return;
+    }
+
+    const fetchTeamsForTournament = async () => {
+      setLoadingTeams(true);
+      try {
+        const { data, error } = await supabase
+          .from('sports_teams')
+          .select('id, team_name')
+          .eq('tournament_id', fixtureTournamentId)
+          .order('team_name');
+        if (error) throw error;
+        setAvailableTeams(data || []);
+      } catch (err: any) {
+        console.error('Error fetching tournament teams:', err);
+        toast.error('Failed to load teams for selection.');
+      } finally {
+        setLoadingTeams(false);
+      }
+    };
+
+    fetchTeamsForTournament();
+  }, [fixtureTournamentId]);
+
+  // Fetch referees / members
+  useEffect(() => {
+    const fetchReferees = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('members')
+          .select('id, full_name, role, official_member_id')
+          .order('full_name');
+        if (error) throw error;
+        setRefereesList(data || []);
+      } catch (err: any) {
+        console.error('Error fetching referees:', err);
+      }
+    };
+    fetchReferees();
+  }, []);
+
+  const filteredReferees = refereesList.filter(ref => {
+    const search = refereeSearchQuery.trim().toLowerCase();
+    if (!search) return true;
+    const nameMatch = ref.full_name?.toLowerCase().includes(search);
+    const idMatch = ref.official_member_id?.toLowerCase().includes(search);
+    return nameMatch || idMatch;
+  });
+
   // ── Data fetching ──────────────────────────
   const fetchTournaments = useCallback(async () => {
     setLoading(true);
@@ -301,6 +408,124 @@ export const SportsAdminPanel = () => {
       setFormError(err?.message ?? 'An unexpected error occurred.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleCreateFixture = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFixtureError('');
+    setFixtureSuccess('');
+
+    if (!fixtureTournamentId) {
+      setFixtureError('Tournament is required.');
+      return;
+    }
+    if (!fixtureHomeTeamId) {
+      setFixtureError('Home Team is required.');
+      return;
+    }
+    if (!fixtureAwayTeamId) {
+      setFixtureError('Away Team is required.');
+      return;
+    }
+    if (fixtureHomeTeamId === fixtureAwayTeamId) {
+      setFixtureError('Home and Away teams must be different.');
+      return;
+    }
+    if (!fixtureDate) {
+      setFixtureError('Match date is required.');
+      return;
+    }
+    if (!fixtureTime) {
+      setFixtureError('Kick-off time is required.');
+      return;
+    }
+
+    setFixtureSubmitting(true);
+    try {
+      // 1. Query existing fixtures for the tournament to calculate the next round number
+      const { data: existingFixtures, error: fixturesError } = await supabase
+        .from('sports_fixtures')
+        .select('round_number')
+        .eq('tournament_id', fixtureTournamentId);
+      
+      if (fixturesError) throw fixturesError;
+
+      let roundNumber = 1;
+      if (existingFixtures && existingFixtures.length > 0) {
+        roundNumber = Math.max(...existingFixtures.map(f => f.round_number || 1));
+      }
+
+      // 2. Format match date (combine date and time)
+      const combinedDateTime = `${fixtureDate}T${fixtureTime}:00`;
+      const matchDateISO = new Date(combinedDateTime).toISOString();
+
+      // 3. Setup payload
+      const payload = {
+        tournament_id: fixtureTournamentId,
+        home_team_id: fixtureHomeTeamId,
+        away_team_id: fixtureAwayTeamId,
+        venue: fixtureVenue.trim() || 'To Be Determined',
+        match_date: matchDateISO,
+        status: 'Scheduled',
+        referee_id: fixtureRefereeId || null,
+        round_number: roundNumber,
+        home_score: 0,
+        away_score: 0,
+        current_match_minute: 0
+      };
+
+      const { error: insertError } = await supabase
+        .from('sports_fixtures')
+        .insert([payload]);
+
+      if (insertError) throw insertError;
+
+      // 4. Notify assigned referee via cmo_notifications
+      if (fixtureRefereeId) {
+        const homeTeam = availableTeams.find(t => t.id === fixtureHomeTeamId);
+        const awayTeam = availableTeams.find(t => t.id === fixtureAwayTeamId);
+        const homeLabel = homeTeam?.team_name ?? 'Home Team';
+        const awayLabel = awayTeam?.team_name ?? 'Away Team';
+        const referee = refereesList.find(r => r.id === fixtureRefereeId);
+        await supabase.from('cmo_notifications').insert([{
+          member_id: fixtureRefereeId,
+          official_member_id: referee?.official_member_id ?? fixtureRefereeId,
+          title: 'Match Official Duty Assigned',
+          message: `You have been assigned as the referee for ${homeLabel} vs ${awayLabel}. Match date: ${new Date(matchDateISO).toLocaleDateString()}.`,
+          type: 'sports_duty',
+          read_status: false,
+          created_at: new Date().toISOString()
+        }]);
+      }
+
+      setFixtureSuccess('Fixture scheduled successfully!');
+      
+      // Reset form fields
+      setFixtureHomeTeamId('');
+      setFixtureAwayTeamId('');
+      setFixtureVenue('');
+      setFixtureDate('');
+      setFixtureTime('');
+      setFixtureRefereeId('');
+      
+      setTimeout(() => {
+        setShowCreateFixtureModal(false);
+        setFixtureSuccess('');
+      }, 1500);
+
+      toast.success('Fixture scheduled successfully!', {
+        style: { background: '#002520', border: '1px solid rgba(255,215,0,0.3)', color: '#ffd700' },
+      });
+
+      // Dispatch global window event
+      window.dispatchEvent(new CustomEvent('sports-fixtures-changed'));
+
+    } catch (err: any) {
+      console.error('Error creating fixture:', err);
+      setFixtureError(err?.message || 'An error occurred while scheduling the fixture.');
+    } finally {
+      setFixtureSubmitting(false);
     }
   };
 
@@ -385,6 +610,16 @@ export const SportsAdminPanel = () => {
             >
               <PlusCircle className="w-4 h-4 mr-1.5" />
               New Tournament
+            </Button>
+          )}
+          {isExecutiveUnlocked && (
+            <Button
+              size="sm"
+              onClick={() => { setShowCreateFixtureModal(true); setFixtureError(''); setFixtureSuccess(''); }}
+              className="bg-[#002520] border border-[#ffd700]/30 text-[#ffd700] hover:bg-[#ffd700]/10 font-bold shadow-lg transition-all duration-200"
+            >
+              <Plus className="w-4 h-4 mr-1.5" />
+              Create Fixture
             </Button>
           )}
           {isExecutiveUnlocked && (
@@ -683,6 +918,280 @@ export const SportsAdminPanel = () => {
             )}
           </Card>
         </>
+      )}
+
+      {showCreateFixtureModal && (
+        <div className="fixed inset-0 z-50 p-4 sm:p-6 md:p-8 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+          <form
+            onSubmit={handleCreateFixture}
+            className="w-full max-w-lg md:max-w-xl max-h-[90vh] bg-slate-900 rounded-2xl border border-emerald-900/80 shadow-2xl flex flex-col overflow-hidden text-gray-200"
+          >
+            {/* Header */}
+            <div className="p-4 sm:p-6 shrink-0 border-b border-emerald-900/50 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-[#ffd700]" />
+                Schedule New Fixture
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowCreateFixtureModal(false)}
+                className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto custom-scrollbar grow text-left">
+              {/* Tournament Selection */}
+              <div>
+                <label className="text-xs font-bold text-gray-400 block mb-1.5 uppercase tracking-wider">Tournament *</label>
+                <div className="relative">
+                  <select
+                    value={fixtureTournamentId}
+                    onChange={e => setFixtureTournamentId(e.target.value)}
+                    className="w-full h-10 px-3 rounded-md bg-[#002520] border border-[#ffd700]/20 text-white text-sm focus:outline-none focus:border-[#ffd700]/60 focus:ring-2 focus:ring-[#ffd700]/20 transition-colors"
+                    required
+                  >
+                    <option value="" className="bg-[#001a16]">Select Tournament...</option>
+                    {tournaments
+                      .filter(t => t.status !== 'Completed' && t.status !== 'Cancelled')
+                      .map(t => (
+                        <option key={t.id} value={t.id} className="bg-[#001a16]">{t.title}</option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Home & Away Selectors */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-400 block mb-1.5 uppercase tracking-wider">Home Team *</label>
+                  <select
+                    value={fixtureHomeTeamId}
+                    onChange={e => setFixtureHomeTeamId(e.target.value)}
+                    disabled={!fixtureTournamentId || loadingTeams}
+                    className="w-full h-10 px-3 rounded-md bg-[#002520] border border-[#ffd700]/20 text-white text-sm focus:outline-none focus:border-[#ffd700]/60 focus:ring-2 focus:ring-[#ffd700]/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    required
+                  >
+                    <option value="" className="bg-[#001a16]">Select Home Team...</option>
+                    {availableTeams.map(t => (
+                      <option key={t.id} value={t.id} className="bg-[#001a16]">{t.team_name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-gray-400 block mb-1.5 uppercase tracking-wider">Away Team *</label>
+                  <select
+                    value={fixtureAwayTeamId}
+                    onChange={e => setFixtureAwayTeamId(e.target.value)}
+                    disabled={!fixtureTournamentId || loadingTeams}
+                    className="w-full h-10 px-3 rounded-md bg-[#002520] border border-[#ffd700]/20 text-white text-sm focus:outline-none focus:border-[#ffd700]/60 focus:ring-2 focus:ring-[#ffd700]/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    required
+                  >
+                    <option value="" className="bg-[#001a16]">Select Away Team...</option>
+                    {availableTeams
+                      .filter(t => t.id !== fixtureHomeTeamId)
+                      .map(t => (
+                        <option key={t.id} value={t.id} className="bg-[#001a16]">{t.team_name}</option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Date & Time Selector */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-400 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-[#ffd700]" />
+                    Match Date *
+                  </label>
+                  <input
+                    type="date"
+                    value={fixtureDate}
+                    onChange={e => setFixtureDate(e.target.value)}
+                    className="w-full h-10 px-3 rounded-md bg-[#002520] border border-[#ffd700]/20 text-white text-sm focus:outline-none focus:border-[#ffd700]/60 focus:ring-2 focus:ring-[#ffd700]/20 transition-colors [color-scheme:dark]"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-gray-400 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-[#ffd700]" />
+                    Kick-Off Time *
+                  </label>
+                  <input
+                    type="time"
+                    value={fixtureTime}
+                    onChange={e => setFixtureTime(e.target.value)}
+                    className="w-full h-10 px-3 rounded-md bg-[#002520] border border-[#ffd700]/20 text-white text-sm focus:outline-none focus:border-[#ffd700]/60 focus:ring-2 focus:ring-[#ffd700]/20 transition-colors [color-scheme:dark]"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Venue */}
+              <div>
+                <label className="text-xs font-bold text-gray-400 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-[#ffd700]" />
+                  Venue
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., Main Pitch 1 or Kano Stadium"
+                  value={fixtureVenue}
+                  onChange={e => setFixtureVenue(e.target.value)}
+                  className="w-full h-10 px-3 rounded-md bg-[#002520] border border-[#ffd700]/20 text-white text-sm placeholder:text-gray-600 focus:outline-none focus:border-[#ffd700]/60 focus:ring-2 focus:ring-[#ffd700]/20 transition-colors"
+                />
+              </div>
+
+              {/* Referee Selection */}
+              <div ref={refereeComboboxRef} className="relative">
+                <label className="text-xs font-bold text-gray-400 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                  <UserCheck className="w-3.5 h-3.5 text-[#ffd700]" />
+                  Referee Assignment (Optional)
+                </label>
+                
+                {/* Trigger Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowRefereePopover(!showRefereePopover)}
+                  className="w-full h-10 px-3 rounded-md bg-[#002520] border border-[#ffd700]/20 text-white text-sm text-left flex items-center justify-between focus:outline-none focus:border-[#ffd700]/60 focus:ring-2 focus:ring-[#ffd700]/20 transition-all duration-200 cursor-pointer"
+                >
+                  <span className="truncate">
+                    {refereesList.find(r => r.id === fixtureRefereeId)?.full_name ?? 'Select Match Official / Staff...'}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 shrink-0 ${showRefereePopover ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Popover Dropdown */}
+                {showRefereePopover && (
+                  <div className="absolute bottom-full left-0 right-0 mb-2 z-50 rounded-lg bg-slate-950 border border-emerald-900/60 shadow-2xl p-2.5 flex flex-col max-h-52 animate-in fade-in slide-in-from-bottom-1 duration-150">
+                    {/* Type-to-Search input */}
+                    <div className="relative flex items-center bg-[#002520] rounded-md border border-[#ffd700]/20 px-2.5 py-2 mb-2 focus-within:border-[#ffd700]/50 transition-colors">
+                      <Search className="w-4 h-4 text-gray-500 mr-2 shrink-0" />
+                      <input
+                        type="text"
+                        autoFocus
+                        placeholder="Search by Name or Official Member ID..."
+                        value={refereeSearchQuery}
+                        onChange={e => setRefereeSearchQuery(e.target.value)}
+                        className="bg-transparent text-white text-xs placeholder:text-gray-600 focus:outline-none w-full"
+                      />
+                      {refereeSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setRefereeSearchQuery('')}
+                          className="text-gray-500 hover:text-white transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Scrollable list */}
+                    <div className="overflow-y-auto max-h-36 flex-1 space-y-0.5 pr-1 scrollbar-thin scrollbar-thumb-emerald-950 scrollbar-track-transparent">
+                      {/* Unassigned option */}
+                      <div
+                        onClick={() => {
+                          setFixtureRefereeId('');
+                          setRefereeSearchQuery('');
+                          setShowRefereePopover(false);
+                        }}
+                        className={`w-full text-left text-xs px-2.5 py-2.5 rounded-md hover:bg-[#002520] transition-colors flex items-center justify-between cursor-pointer ${
+                          !fixtureRefereeId ? 'bg-[#002520]/40 text-[#ffd700] font-semibold' : 'text-red-400'
+                        }`}
+                      >
+                        <span>Unassigned (None)</span>
+                        {!fixtureRefereeId && <Check className="w-3.5 h-3.5 text-[#ffd700]" />}
+                      </div>
+
+                      {/* Filtered list of referees */}
+                      {filteredReferees.length > 0 ? (
+                        filteredReferees.map(ref => {
+                          const isSelected = fixtureRefereeId === ref.id;
+                          const details: string[] = [];
+                          if (ref.official_member_id) details.push(ref.official_member_id);
+                          if (ref.role) details.push(ref.role);
+                          return (
+                            <div
+                              key={ref.id}
+                              onClick={() => {
+                                setFixtureRefereeId(ref.id);
+                                setRefereeSearchQuery('');
+                                setShowRefereePopover(false);
+                              }}
+                              className={`w-full text-left text-xs px-2.5 py-2.5 rounded-md hover:bg-[#002520] hover:text-[#ffd700] transition-colors flex items-center justify-between cursor-pointer ${
+                                isSelected ? 'bg-[#002520] text-[#ffd700] font-semibold' : 'text-gray-200'
+                              }`}
+                            >
+                              <div className="flex flex-col gap-0.5 truncate">
+                                <span className="font-medium truncate">{ref.full_name}</span>
+                                {details.length > 0 && (
+                                  <span className="text-[10px] text-gray-500 truncate">
+                                    {details.join(' • ')}
+                                  </span>
+                                )}
+                              </div>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-[#ffd700]" />}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="text-center text-xs text-gray-500 py-4 font-medium">
+                          No officials found
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Feedback messages */}
+              {fixtureError && (
+                <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-red-400 text-sm">
+                  <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span>{fixtureError}</span>
+                </div>
+              )}
+              {fixtureSuccess && (
+                <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-4 py-3 text-emerald-400 text-sm">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{fixtureSuccess}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 sm:p-6 shrink-0 border-t border-emerald-900/50 flex justify-end gap-3 bg-slate-900/50">
+              <button
+                type="button"
+                onClick={() => setShowCreateFixtureModal(false)}
+                className="px-4 py-2 text-sm font-semibold rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={fixtureSubmitting}
+                className="px-5 py-2 text-sm font-bold rounded-lg bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] shadow-lg shadow-[#ffd700]/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer"
+              >
+                {fixtureSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Scheduling...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4" />
+                    Schedule Fixture
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
       )}
     </div>
   );

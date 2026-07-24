@@ -1,0 +1,9 @@
+{
+  "cols": null,
+  "cErr": {
+    "code": "PGRST205",
+    "details": null,
+    "hint": "Perhaps you meant the table 'public.cmo_meeting_sessions'",
+    "message": "Could not find the table 'public.information_schema.columns' in the schema cache"
+  }
+}

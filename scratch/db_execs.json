@@ -1,0 +1,236 @@
+{
+  "execs": [
+    {
+      "id": "6d9eb12a-a653-4aee-8bc8-209a63d3e478",
+      "user_id": null,
+      "executive_id": "HCC-CMO-EXEC-CH",
+      "office_name": "Executive Chairman Office",
+      "department": "Executive",
+      "role_key": "chairman",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "0a830c6d-0a52-420b-a73d-ef84d06be5e6",
+      "user_id": null,
+      "executive_id": "HCC-CMO-EXEC-FS",
+      "office_name": "Financial Secretary Office",
+      "department": "Executive",
+      "role_key": "fin_sec",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "71b20484-35ba-46f1-80a9-ec058533ab46",
+      "user_id": null,
+      "executive_id": "HCC-CMO-EXEC-TR",
+      "office_name": "Treasurer Office",
+      "department": "Executive",
+      "role_key": "treasurer",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "c3e6f035-a575-4a89-8df3-dc141af56684",
+      "user_id": null,
+      "executive_id": "HCC-CMO-EXEC-WE",
+      "office_name": "Welfare Officer Office",
+      "department": "Executive",
+      "role_key": "welfare",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "0cc0961c-81a4-4f11-9aeb-73305390058b",
+      "user_id": null,
+      "executive_id": "HCC-CMO-EXEC-PR",
+      "office_name": "Public Relations Office",
+      "department": "Executive",
+      "role_key": "pro",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "0cd5b6e9-823c-4ce7-943d-e1b20e3ae84f",
+      "user_id": null,
+      "executive_id": "HCC-CMO-EXEC-PV",
+      "office_name": "Provost Marshall Office",
+      "department": "Executive",
+      "role_key": "provost",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "68a396d2-5b86-4bf3-97f4-e62de55881a0",
+      "user_id": null,
+      "executive_id": "HCC-CMO-EXEC-SE",
+      "office_name": "General Secretariat Office",
+      "department": "Executive",
+      "role_key": "secretary",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "e6c7b59b-5fd7-491e-a425-f01b6bd57277",
+      "user_id": null,
+      "executive_id": "HCC-CMO-EXEC-LT",
+      "office_name": "Liturgical Coordinator Office",
+      "department": "Executive",
+      "role_key": "liturgist",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "8298841b-1066-4ade-8ed4-29aa9da82b15",
+      "user_id": null,
+      "executive_id": "HCC-CMO-WIS-FH",
+      "office_name": "Wisdom Family Head",
+      "department": "Wisdom Family",
+      "role_key": "family_head",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "36e4607a-4763-4072-9244-a53e533f9493",
+      "user_id": null,
+      "executive_id": "HCC-CMO-WIS-FS",
+      "office_name": "Wisdom Family Secretary",
+      "department": "Wisdom Family",
+      "role_key": "family_secretary",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "9bb251e7-0ba9-4504-80a5-890fc241d0f8",
+      "user_id": null,
+      "executive_id": "HCC-CMO-TAL-FH",
+      "office_name": "Talent Family Head",
+      "department": "Talent Family",
+      "role_key": "family_head",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "e4029da9-2703-4f70-8cff-50aa0516195b",
+      "user_id": null,
+      "executive_id": "HCC-CMO-TAL-FS",
+      "office_name": "Talent Family Secretary",
+      "department": "Talent Family",
+      "role_key": "family_secretary",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "90558cb4-82f2-48b7-b8e6-76c1d816e01d",
+      "user_id": null,
+      "executive_id": "HCC-CMO-HON-FH",
+      "office_name": "Honour Family Head",
+      "department": "Honour Family",
+      "role_key": "family_head",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "1086dfb2-abb8-45f5-a6f0-a8c3624140b8",
+      "user_id": null,
+      "executive_id": "HCC-CMO-HON-FS",
+      "office_name": "Honour Family Secretary",
+      "department": "Honour Family",
+      "role_key": "family_secretary",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "4f4cd2d8-4287-4aa9-a8fa-db30b1cf65e1",
+      "user_id": null,
+      "executive_id": "HCC-CMO-INT-FH",
+      "office_name": "Integrity Family Head",
+      "department": "Integrity Family",
+      "role_key": "family_head",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "8d72554c-1517-477a-9269-e0e9b6a0647d",
+      "user_id": null,
+      "executive_id": "HCC-CMO-INT-FS",
+      "office_name": "Integrity Family Secretary",
+      "department": "Integrity Family",
+      "role_key": "family_secretary",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "b02f8180-54b9-41a2-9579-32b723112cd7",
+      "user_id": null,
+      "executive_id": "HCC-CMO-SPRT-DIR",
+      "office_name": "Sports Director Office",
+      "department": "Sports",
+      "role_key": "sports_director",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "1ba10d72-cb62-494b-8d45-17474b3ff21f",
+      "user_id": null,
+      "executive_id": "HCC-CMO-SPRT-TR",
+      "office_name": "Sports Treasurer Office",
+      "department": "Sports",
+      "role_key": "sports_treasurer",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "5e1c9107-c942-44c8-8cb6-e092d92cadf4",
+      "user_id": null,
+      "executive_id": "HCC-CMO-SPRT-MED",
+      "office_name": "Medical Officer Office",
+      "department": "Sports",
+      "role_key": "medical_officer",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "95dc6614-011b-46cd-bc1d-0bde303e4bd5",
+      "user_id": null,
+      "executive_id": "HCC-CMO-SPRT-COACH",
+      "office_name": "Head Coach Office",
+      "department": "Sports",
+      "role_key": "coach",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    },
+    {
+      "id": "dc1e5afe-ca80-44ec-893c-845d455882af",
+      "user_id": null,
+      "executive_id": "HCC-CMO-SPRT-REF",
+      "office_name": "Match Referee Office",
+      "department": "Sports",
+      "role_key": "referee",
+      "status": "Active",
+      "created_at": "2026-07-19T11:04:36.516166+00:00",
+      "office_id": null
+    }
+  ],
+  "error": null
+}

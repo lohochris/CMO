@@ -663,6 +663,19 @@ export const TournamentStandingsBoard = () => {
     return () => { supabase.removeChannel(channel); };
   }, [selectedTournamentId, fetchFixtures]);
 
+  // Listen to custom event when fixtures are created/modified
+  useEffect(() => {
+    const handleRefresh = () => {
+      if (selectedTournamentId) {
+        fetchFixtures(selectedTournamentId);
+      }
+    };
+    window.addEventListener('sports-fixtures-changed', handleRefresh);
+    return () => {
+      window.removeEventListener('sports-fixtures-changed', handleRefresh);
+    };
+  }, [selectedTournamentId, fetchFixtures]);
+
   // ── Determine if this tournament has knockout or league format ─────────────
   const hasMultipleRounds = fixtures.some(f => f.round_number > 1) &&
     new Set(fixtures.map(f => f.round_number)).size > 1;
@@ -892,19 +905,40 @@ export const TournamentStandingsBoard = () => {
 
       {/* ── Fullscreen Media Preview Modal ── */}
       {previewImageUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#001a16]/95 backdrop-blur-sm p-4">
-          <button
-            onClick={() => setPreviewImageUrl(null)}
-            className="absolute top-4 right-4 p-2 rounded-full bg-[#002520] border border-[#ffd700]/20 text-white hover:text-[#ffd700] hover:bg-[#002520]/80 transition-all duration-200 shadow-lg cursor-pointer"
-          >
-            <X className="w-6 h-6" />
-          </button>
-          <div className="max-w-4xl max-h-[90vh] w-full flex items-center justify-center relative rounded-2xl overflow-hidden border border-[#ffd700]/10 bg-[#002520]/40 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <img
-              src={previewImageUrl}
-              alt="Match Media Preview"
-              className="max-w-full max-h-[85vh] object-contain"
-            />
+        <div className="fixed inset-0 z-50 p-4 sm:p-6 md:p-8 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-4xl max-h-[90vh] bg-slate-900 rounded-2xl border border-emerald-900/80 shadow-2xl flex flex-col overflow-hidden text-gray-200 text-left">
+            {/* Header */}
+            <div className="p-4 sm:p-6 shrink-0 border-b border-emerald-900/50 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Eye className="w-4 h-4 text-[#ffd700]" />
+                Media Preview
+              </h3>
+              <button
+                onClick={() => setPreviewImageUrl(null)}
+                className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto custom-scrollbar grow flex items-center justify-center bg-[#001a16]/40">
+              <img
+                src={previewImageUrl}
+                alt="Match Media Preview"
+                className="max-w-full max-h-[65vh] object-contain rounded-lg shadow-inner"
+              />
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 sm:p-6 shrink-0 border-t border-emerald-900/50 flex justify-end bg-slate-900/50">
+              <Button
+                onClick={() => setPreviewImageUrl(null)}
+                className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold rounded-lg"
+              >
+                Close Preview
+              </Button>
+            </div>
           </div>
         </div>
       )}

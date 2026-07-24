@@ -1,0 +1,16 @@
+{
+  "d1": null,
+  "e1": {
+    "code": "PGRST200",
+    "details": "Searched for a foreign key relationship between 'sports_fixtures' and 'members' in the schema 'public', but no matches were found.",
+    "hint": null,
+    "message": "Could not find a relationship between 'sports_fixtures' and 'members' in the schema cache"
+  },
+  "d2": null,
+  "e2": {
+    "code": "PGRST200",
+    "details": "Searched for a foreign key relationship between 'sports_fixtures' and 'members' using the hint 'sports_fixtures_referee_id_fkey' in the schema 'public', but no matches were found.",
+    "hint": null,
+    "message": "Could not find a relationship between 'sports_fixtures' and 'members' in the schema cache"
+  }
+}

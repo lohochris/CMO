@@ -143,9 +143,10 @@ const EntryForm = ({ onClose, onSaved, loggerName, tournaments }: EntryFormProps
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <Card className="w-full max-w-lg bg-[#001a16] border border-[#ffd700]/20 rounded-2xl shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#ffd700]/10 bg-[#002520]">
+    <div className="fixed inset-0 z-50 p-4 sm:p-6 md:p-8 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+      <div className="w-full max-w-lg bg-slate-900 border border-emerald-900/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-gray-200 text-left">
+        {/* Header */}
+        <div className="p-4 sm:p-6 shrink-0 border-b border-emerald-900/50 flex items-center justify-between">
           <h3 className="text-sm font-bold text-[#ffd700] flex items-center gap-2">
             <Receipt className="w-4 h-4" />
             New Ledger Entry
@@ -154,12 +155,14 @@ const EntryForm = ({ onClose, onSaved, loggerName, tournaments }: EntryFormProps
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="px-6 py-5 space-y-4">
+
+        {/* Body */}
+        <div className="p-4 sm:p-6 space-y-4 overflow-y-auto custom-scrollbar grow">
 
           {/* Transaction type toggle */}
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Transaction Type *</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 onClick={() => { setTxType('Revenue'); setCategory('Registration_Fee'); }}
                 className={`flex items-center justify-center gap-2 py-3 rounded-xl border text-sm font-bold transition-all duration-150 ${
@@ -185,7 +188,7 @@ const EntryForm = ({ onClose, onSaved, loggerName, tournaments }: EntryFormProps
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">Category *</label>
               <select value={category} onChange={e => setCategory(e.target.value as LedgerCategory)} className={selectStyle}>
@@ -221,7 +224,7 @@ const EntryForm = ({ onClose, onSaved, loggerName, tournaments }: EntryFormProps
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">Transaction Date</label>
               <input
@@ -245,17 +248,18 @@ const EntryForm = ({ onClose, onSaved, loggerName, tournaments }: EntryFormProps
           <p className="text-xs text-gray-600">Logged by: <span className="text-gray-400">{loggerName}</span> · Ref auto-generated</p>
         </div>
 
-        <div className="flex gap-3 px-6 pb-5">
+        {/* Footer */}
+        <div className="p-4 sm:p-6 shrink-0 border-t border-emerald-900/50 flex justify-end gap-3 bg-slate-900/50">
+          <Button variant="outline" onClick={onClose} className="border-[#ffd700]/20 text-gray-400 hover:text-white bg-transparent">Cancel</Button>
           <Button
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold shadow-lg shadow-[#ffd700]/20"
+            className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold shadow-lg shadow-[#ffd700]/20"
           >
             {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Recording…</> : <><Save className="w-4 h-4 mr-2" />Record Entry</>}
           </Button>
-          <Button variant="outline" onClick={onClose} className="border-[#ffd700]/20 text-gray-400 hover:text-white bg-transparent">Cancel</Button>
         </div>
-      </Card>
+      </div>
     </div>
   );
 };

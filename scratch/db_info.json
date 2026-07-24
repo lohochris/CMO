@@ -1,0 +1,129 @@
+{
+  "fixtures": [
+    {
+      "id": "eed8498e-1df5-41e4-844d-c60d388fbb05",
+      "tournament_id": "211a5c8f-7bf9-46ef-ab6b-9ceb0932b986",
+      "tenant_id": "00000000-0000-0000-0000-000000000000",
+      "home_team_id": "481ca11d-df0d-4a25-88b1-9ed58c8b5ed8",
+      "away_team_id": "88f48362-3343-47c6-9423-2ce989a5dc4b",
+      "match_date": "2026-07-23T20:31:55.244771+00:00",
+      "venue": "Stadium Court B",
+      "status": "Live",
+      "home_score": 0,
+      "away_score": 0,
+      "referee_id": null,
+      "created_at": "2026-07-23T20:31:55.244771+00:00",
+      "updated_at": "2026-07-23T20:31:55.244771+00:00",
+      "round_number": 1,
+      "current_match_minute": 12,
+      "created_by": null
+    },
+    {
+      "id": "a8fd8577-7885-4e21-801d-7cc3e8c6b506",
+      "tournament_id": "211a5c8f-7bf9-46ef-ab6b-9ceb0932b986",
+      "tenant_id": "00000000-0000-0000-0000-000000000000",
+      "home_team_id": "1c9a0c7b-0d30-4f67-a6e5-d83678bdf0b8",
+      "away_team_id": "88f48362-3343-47c6-9423-2ce989a5dc4b",
+      "match_date": "2026-07-24T20:31:55.244771+00:00",
+      "venue": "Main Arena pitch 2",
+      "status": "Scheduled",
+      "home_score": 0,
+      "away_score": 0,
+      "referee_id": null,
+      "created_at": "2026-07-23T20:31:55.244771+00:00",
+      "updated_at": "2026-07-23T20:31:55.244771+00:00",
+      "round_number": 1,
+      "current_match_minute": 0,
+      "created_by": null
+    },
+    {
+      "id": "c2064f63-416f-40b6-9090-cf41a8b59cb3",
+      "tournament_id": "211a5c8f-7bf9-46ef-ab6b-9ceb0932b986",
+      "tenant_id": "00000000-0000-0000-0000-000000000000",
+      "home_team_id": "1c9a0c7b-0d30-4f67-a6e5-d83678bdf0b8",
+      "away_team_id": "7aa9e6cb-4246-441a-87ae-6b7a13a320e0",
+      "match_date": "2026-07-23T20:31:55.244771+00:00",
+      "venue": "Main Arena pitch 1",
+      "status": "Scheduled",
+      "home_score": 0,
+      "away_score": 0,
+      "referee_id": null,
+      "created_at": "2026-07-23T20:31:55.244771+00:00",
+      "updated_at": "2026-07-23T20:31:55.244771+00:00",
+      "round_number": 1,
+      "current_match_minute": 0,
+      "created_by": null
+    }
+  ],
+  "fixturesError": null,
+  "tournaments": [
+    {
+      "id": "211a5c8f-7bf9-46ef-ab6b-9ceb0932b986",
+      "tenant_id": "00000000-0000-0000-0000-000000000000",
+      "title": "GRAND PILLAR FOOTBALL CUP",
+      "sport_type": "Football",
+      "status": "Registration_Open",
+      "start_date": "2026-08-08",
+      "end_date": "2026-09-26",
+      "rules": {},
+      "created_at": "2026-07-23T19:12:44.524893+00:00",
+      "updated_at": "2026-07-23T19:12:44.524893+00:00"
+    },
+    {
+      "id": "11cc52ac-b02e-4cfe-9b3d-03915eabc6cf",
+      "tenant_id": "00000000-0000-0000-0000-000000000000",
+      "title": "CMO-INTER FOOTBALL CUP 2026",
+      "sport_type": "Football",
+      "status": "Completed",
+      "start_date": "2026-07-25",
+      "end_date": "2026-09-25",
+      "rules": {},
+      "created_at": "2026-07-18T12:20:50.682962+00:00",
+      "updated_at": "2026-07-18T12:20:50.682962+00:00"
+    }
+  ],
+  "tournamentsError": null,
+  "teams": [
+    {
+      "id": "d55b8614-8264-418e-bdca-548292311342",
+      "tournament_id": "11cc52ac-b02e-4cfe-9b3d-03915eabc6cf",
+      "tenant_id": "00000000-0000-0000-0000-000000000000",
+      "team_name": "WISDOM",
+      "coach_id": "b3570a8e4385fee374b1fffce54b8b0a",
+      "captain_id": null,
+      "age_category": "U-21",
+      "gender": "Male",
+      "created_at": "2026-07-18T20:52:09.782361+00:00"
+    },
+    {
+      "id": "4606ab78-497b-4faa-8f33-a59545e15a33",
+      "tournament_id": "11cc52ac-b02e-4cfe-9b3d-03915eabc6cf",
+      "tenant_id": "00000000-0000-0000-0000-000000000000",
+      "team_name": "Talent",
+      "coach_id": "b3570a8e4385fee374b1fffce54b8b0a",
+      "captain_id": null,
+      "age_category": "U-21",
+      "gender": "Male",
+      "created_at": "2026-07-18T21:10:30.502669+00:00"
+    },
+    {
+      "id": "f6286095-a47e-49a9-ba21-4bdef56e5e9b",
+      "tournament_id": "11cc52ac-b02e-4cfe-9b3d-03915eabc6cf",
+      "tenant_id": "00000000-0000-0000-0000-000000000000",
+      "team_name": "Honour",
+      "coach_id": "b3570a8e4385fee374b1fffce54b8b0a",
+      "captain_id": null,
+      "age_category": "U-21",
+      "gender": "Male",
+      "created_at": "2026-07-23T14:57:39.593059+00:00"
+    }
+  ],
+  "teamsError": null,
+  "referees": null,
+  "refereesError": {
+    "code": "42703",
+    "details": null,
+    "hint": null,
+    "message": "column members.name does not exist"
+  }
+}

@@ -1201,29 +1201,41 @@ export const RefereeMatchCenter = () => {
 
           {/* Conclude Match confirmation modal */}
           {concludeConfirm && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-              <div className="w-full max-w-md bg-[#001a16] border border-red-500/30 rounded-2xl p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-200">
-                <div className="flex items-center gap-3 text-red-400">
-                  <AlertCircle className="w-6 h-6 shrink-0" />
-                  <h3 className="text-lg font-bold">Conclude Match and Lock?</h3>
+            <div className="fixed inset-0 z-50 p-4 sm:p-6 md:p-8 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+              <div className="w-full max-w-md bg-slate-900 border border-red-500/30 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-gray-200 text-left">
+                {/* Header */}
+                <div className="p-4 sm:p-6 shrink-0 border-b border-red-500/20 flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-red-400">
+                    <AlertCircle className="w-6 h-6 shrink-0" />
+                    <h3 className="text-lg font-bold">Conclude Match and Lock?</h3>
+                  </div>
+                  <button onClick={() => setConcludeConfirm(false)} className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
-                <p className="text-sm text-gray-400">
-                  This action sets the status to <strong className="text-white">FINISHED</strong>. The clock will be paused and event logging will be locked permanently. Are you sure you want to end the match?
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    onClick={handleConcludeMatch}
-                    disabled={concluding}
-                    className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold"
-                  >
-                    {concluding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : 'Yes, Conclude'}
-                  </Button>
+
+                {/* Body */}
+                <div className="p-4 sm:p-6 space-y-4 overflow-y-auto custom-scrollbar grow">
+                  <p className="text-sm text-gray-400">
+                    This action sets the status to <strong className="text-white">FINISHED</strong>. The clock will be paused and event logging will be locked permanently. Are you sure you want to end the match?
+                  </p>
+                </div>
+
+                {/* Footer */}
+                <div className="p-4 sm:p-6 shrink-0 border-t border-red-500/20 flex justify-end gap-3 bg-slate-900/50">
                   <Button
                     variant="outline"
                     onClick={() => setConcludeConfirm(false)}
-                    className="flex-1 border-gray-600 text-gray-400 hover:bg-gray-800 bg-transparent"
+                    className="border-gray-600 text-gray-400 hover:bg-gray-800 bg-transparent"
                   >
                     Cancel
+                  </Button>
+                  <Button
+                    onClick={handleConcludeMatch}
+                    disabled={concluding}
+                    className="bg-red-500 hover:bg-red-600 text-white font-bold"
+                  >
+                    {concluding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : 'Yes, Conclude'}
                   </Button>
                 </div>
               </div>
@@ -1242,14 +1254,16 @@ export const RefereeMatchCenter = () => {
 
       {/* ── Goal Modal ── */}
       {showGoalModal && selectedFixture && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-[#001a16] border border-[#ffd700]/25 rounded-2xl p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-200 text-gray-200">
-            <div className="flex items-center justify-between border-b border-[#ffd700]/10 pb-3">
+        <div className="fixed inset-0 z-50 p-4 sm:p-6 md:p-8 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-md bg-slate-900 border border-emerald-900/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-gray-200 text-left">
+            {/* Header */}
+            <div className="p-4 sm:p-6 shrink-0 border-b border-emerald-900/50 flex items-center justify-between">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <CircleDot className="w-5 h-5 text-emerald-400" />
                 Log Goal Event
               </h3>
               <button
+                type="button"
                 onClick={() => setShowGoalModal(false)}
                 className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-gray-850 transition-colors"
               >
@@ -1257,7 +1271,8 @@ export const RefereeMatchCenter = () => {
               </button>
             </div>
 
-            <div className="space-y-4">
+            {/* Body */}
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto custom-scrollbar grow">
               <div>
                 <label className="text-xs font-bold text-gray-400 block mb-1.5 uppercase">Scoring Team</label>
                 <select
@@ -1315,24 +1330,25 @@ export const RefereeMatchCenter = () => {
                   className={selectStyle}
                 />
               </div>
+            </div>
 
-              <div className="flex gap-2 pt-2">
-                <Button
-                  onClick={handleGoalSubmit}
-                  disabled={goalSubmitting || !goalScorer}
-                  className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold"
-                >
-                  {goalSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CircleDot className="w-4 h-4 mr-2" />}
-                  Log Goal
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowGoalModal(false)}
-                  className="border-gray-600 text-gray-400 hover:bg-gray-800 bg-transparent"
-                >
-                  Cancel
-                </Button>
-              </div>
+            {/* Footer */}
+            <div className="p-4 sm:p-6 shrink-0 border-t border-emerald-900/50 flex justify-end gap-3 bg-slate-900/50">
+              <Button
+                variant="outline"
+                onClick={() => setShowGoalModal(false)}
+                className="border-gray-600 text-gray-400 hover:bg-gray-800 bg-transparent"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleGoalSubmit}
+                disabled={goalSubmitting || !goalScorer}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold"
+              >
+                {goalSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CircleDot className="w-4 h-4 mr-2" />}
+                Log Goal
+              </Button>
             </div>
           </div>
         </div>
@@ -1340,14 +1356,16 @@ export const RefereeMatchCenter = () => {
 
       {/* ── Card Modal ── */}
       {showCardModal && selectedFixture && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-[#001a16] border border-[#ffd700]/25 rounded-2xl p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-200 text-gray-200">
-            <div className="flex items-center justify-between border-b border-[#ffd700]/10 pb-3">
+        <div className="fixed inset-0 z-50 p-4 sm:p-6 md:p-8 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-md bg-slate-900 border border-emerald-900/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-gray-200 text-left">
+            {/* Header */}
+            <div className="p-4 sm:p-6 shrink-0 border-b border-emerald-900/50 flex items-center justify-between">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Square className={`w-5 h-5 ${cardType === 'Yellow_Card' ? 'fill-yellow-400 text-yellow-400' : 'fill-red-500 text-red-500'}`} />
                 Log Disciplinary Card
               </h3>
               <button
+                type="button"
                 onClick={() => setShowCardModal(false)}
                 className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-gray-850 transition-colors"
               >
@@ -1355,7 +1373,8 @@ export const RefereeMatchCenter = () => {
               </button>
             </div>
 
-            <div className="space-y-4">
+            {/* Body */}
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto custom-scrollbar grow">
               <div>
                 <label className="text-xs font-bold text-gray-400 block mb-1.5 uppercase">Team</label>
                 <select
@@ -1418,24 +1437,25 @@ export const RefereeMatchCenter = () => {
                   className={selectStyle}
                 />
               </div>
+            </div>
 
-              <div className="flex gap-2 pt-2">
-                <Button
-                  onClick={handleCardSubmit}
-                  disabled={cardSubmitting || !cardAthlete}
-                  className={`flex-1 font-bold text-black ${cardType === 'Yellow_Card' ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-red-500 hover:bg-red-650 text-white'}`}
-                >
-                  {cardSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
-                  Log Card Penalty
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowCardModal(false)}
-                  className="border-gray-600 text-gray-400 hover:bg-gray-800 bg-transparent"
-                >
-                  Cancel
-                </Button>
-              </div>
+            {/* Footer */}
+            <div className="p-4 sm:p-6 shrink-0 border-t border-emerald-900/50 flex justify-end gap-3 bg-slate-900/50">
+              <Button
+                variant="outline"
+                onClick={() => setShowCardModal(false)}
+                className="border-gray-600 text-gray-400 hover:bg-gray-800 bg-transparent"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCardSubmit}
+                disabled={cardSubmitting || !cardAthlete}
+                className={`font-bold text-black ${cardType === 'Yellow_Card' ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-red-500 hover:bg-red-650 text-white'}`}
+              >
+                {cardSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+                Log Card Penalty
+              </Button>
             </div>
           </div>
         </div>
@@ -1443,14 +1463,16 @@ export const RefereeMatchCenter = () => {
 
       {/* ── Substitution Modal ── */}
       {showSubModal && selectedFixture && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-[#001a16] border border-[#ffd700]/25 rounded-2xl p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-200 text-gray-200">
-            <div className="flex items-center justify-between border-b border-[#ffd700]/10 pb-3">
+        <div className="fixed inset-0 z-50 p-4 sm:p-6 md:p-8 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-md bg-slate-900 border border-emerald-900/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-gray-200 text-left">
+            {/* Header */}
+            <div className="p-4 sm:p-6 shrink-0 border-b border-emerald-900/50 flex items-center justify-between">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <ArrowLeftRight className="w-5 h-5 text-blue-400" />
                 Log Substitution
               </h3>
               <button
+                type="button"
                 onClick={() => setShowSubModal(false)}
                 className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-gray-855 transition-colors"
               >
@@ -1458,7 +1480,8 @@ export const RefereeMatchCenter = () => {
               </button>
             </div>
 
-            <div className="space-y-4">
+            {/* Body */}
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto custom-scrollbar grow">
               <div>
                 <label className="text-xs font-bold text-gray-400 block mb-1.5 uppercase">Team</label>
                 <select
@@ -1516,24 +1539,25 @@ export const RefereeMatchCenter = () => {
                   className={selectStyle}
                 />
               </div>
+            </div>
 
-              <div className="flex gap-2 pt-2">
-                <Button
-                  onClick={handleSubSubmit}
-                  disabled={subSubmitting || !subOut || !subIn}
-                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-bold"
-                >
-                  {subSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ArrowLeftRight className="w-4 h-4 mr-2" />}
-                  Confirm Substitution
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowSubModal(false)}
-                  className="border-gray-600 text-gray-400 hover:bg-gray-800 bg-transparent"
-                >
-                  Cancel
-                </Button>
-              </div>
+            {/* Footer */}
+            <div className="p-4 sm:p-6 shrink-0 border-t border-emerald-900/50 flex justify-end gap-3 bg-slate-900/50">
+              <Button
+                variant="outline"
+                onClick={() => setShowSubModal(false)}
+                className="border-gray-600 text-gray-400 hover:bg-gray-800 bg-transparent"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSubSubmit}
+                disabled={subSubmitting || !subOut || !subIn}
+                className="bg-blue-500 hover:bg-blue-600 text-white font-bold"
+              >
+                {subSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ArrowLeftRight className="w-4 h-4 mr-2" />}
+                Confirm Substitution
+              </Button>
             </div>
           </div>
         </div>

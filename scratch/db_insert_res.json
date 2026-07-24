@@ -1,0 +1,9 @@
+{
+  "data": null,
+  "error": {
+    "code": "PGRST204",
+    "details": null,
+    "hint": null,
+    "message": "Could not find the 'description' column of 'sports_match_events' in the schema cache"
+  }
+}

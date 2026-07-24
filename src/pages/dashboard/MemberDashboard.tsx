@@ -3,7 +3,7 @@ import type { WeddingStatus, Family } from '../../types';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
-import { CheckCircle, FileText, Settings, X, Users, BookOpen, Sparkles } from 'lucide-react';
+import { CheckCircle, FileText, Settings, X, Users, BookOpen, Sparkles, UserCheck, Calendar, MapPin, ArrowRight, Bell, Clock, LayoutDashboard, Trophy, CreditCard, Church } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { formatCurrency, formatDateTime } from '../../utils/helpers';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
@@ -12,10 +12,10 @@ import { supabase } from '../../lib/supabaseClient';
 import { toast } from 'sonner';
 import { MemberAttendanceAndNotificationWidget } from '../../app/components/attendance/MemberAttendanceAndNotificationWidget';
 
-
 export const MemberDashboard = () => {
-  const { currentUser, members, transactions, setMembers, setCurrentUser, setSuccess, setError, setCurrentPage } = useApp();
+  const { currentUser, members, transactions, setMembers, setCurrentUser, setSuccess, setError, setCurrentPage, announcements } = useApp();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'sports' | 'financials' | 'spiritual'>('overview');
   const [editName, setEditName] = useState(currentUser?.name || '');
   const [editPhone, setEditPhone] = useState(currentUser?.phone || '');
   const [editEmail, setEditEmail] = useState(currentUser?.email || '');
@@ -80,7 +80,6 @@ export const MemberDashboard = () => {
   };
 
   const [settingsLoading, setSettingsLoading] = useState(false);
-
   const [liveTransactions, setLiveTransactions] = useState<any[]>([]);
   const [txLoading, setTxLoading] = useState(false);
   const [pastoralMessages, setPastoralMessages] = useState<any[]>([]);
@@ -144,7 +143,6 @@ export const MemberDashboard = () => {
 
     fetchTransactions();
 
-    // Realtime Postgres changes subscription on 'transactions' table to refresh transaction history feed instantly
     const txChannel = supabase
       .channel(`member-tx-${currentUser.id}`)
       .on(
@@ -220,6 +218,117 @@ export const MemberDashboard = () => {
   const [assignments, setAssignments] = useState<any[]>([]);
   const [assignmentsLoading, setAssignmentsLoading] = useState(false);
 
+  // ── Referee Duty State ──
+  const [refereeDuties, setRefereeDuties] = useState<any[]>([]);
+
+  const fetchRefereeDuties = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const memberId = currentUser.id;
+      const officialId = (currentUser as any).official_member_id;
+
+      let query = supabase
+        .from('sports_fixtures')
+        .select(`
+          id, match_date, venue, status,
+          home_team:home_team_id ( team_name ),
+          away_team:away_team_id ( team_name )
+        `)
+        .in('status', ['Scheduled', 'Live', 'Ongoing'])
+        .order('match_date', { ascending: true });
+
+      if (officialId && officialId !== memberId) {
+        query = query.or(`referee_id.eq.${memberId},referee_id.eq.${officialId}`);
+      } else {
+        query = query.eq('referee_id', memberId);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setRefereeDuties(data || []);
+    } catch (err) {
+      console.error('Error fetching referee duties:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    fetchRefereeDuties();
+    const channel = supabase
+      .channel(`member-referee-duties-${currentUser.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sports_fixtures' }, fetchRefereeDuties)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [currentUser?.id]);
+
+  // ── Active Squad Roster State ──
+  const [squadData, setSquadData] = useState<any>(null);
+  const [squadLoading, setSquadLoading] = useState(false);
+
+  const fetchActiveSquad = async () => {
+    if (!currentUser?.id) return;
+    setSquadLoading(true);
+    try {
+      const officialId = currentUser.official_member_id || currentUser.id;
+
+      let { data, error } = await supabase
+        .from('sports_team_rosters')
+        .select(`
+          id,
+          jersey_number,
+          position,
+          sports_teams!inner (
+            id,
+            team_name,
+            cmo_family,
+            sports_tournaments (title)
+          )
+        `)
+        .eq('member_id', officialId)
+        .maybeSingle();
+
+      if (!data) {
+        // Fallback check via sports_athletes_registry
+        const { data: regData } = await supabase
+          .from('sports_athletes_registry')
+          .select('id')
+          .or(`member_id.eq.${currentUser.id},member_id.eq.${officialId}`)
+          .maybeSingle();
+
+        if (regData?.id) {
+          const { data: fallbackData } = await supabase
+            .from('sports_team_rosters')
+            .select(`
+              id,
+              jersey_number,
+              position,
+              sports_teams!inner (
+                id,
+                team_name,
+                cmo_family,
+                sports_tournaments (title)
+              )
+            `)
+            .eq('athlete_id', regData.id)
+            .maybeSingle();
+
+          if (fallbackData) data = fallbackData;
+        }
+      }
+
+      setSquadData(data || null);
+    } catch (err) {
+      console.error('Error fetching active squad roster:', err);
+    } finally {
+      setSquadLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    fetchActiveSquad();
+  }, [currentUser?.id]);
+
   const fetchSpiritualAssignments = async () => {
     if (!currentUser) return;
     setAssignmentsLoading(true);
@@ -251,7 +360,6 @@ export const MemberDashboard = () => {
     if (!currentUser?.id) return;
     fetchSpiritualAssignments();
     
-    // Subscribe to changes on liturgical_assignments table to dynamic sync
     const spiritualChannel = supabase
       .channel(`member-spiritual-${currentUser.id}`)
       .on(
@@ -324,7 +432,7 @@ export const MemberDashboard = () => {
       const updatePayload = {
         full_name: editName,
         phone_number: editPhone,
-        phone: editPhone, // Alignment safeguard mapping
+        phone: editPhone,
         email: editEmail,
         address: editResidentialAddress,
         home_town_address: editHomeTownAddress,
@@ -345,7 +453,6 @@ export const MemberDashboard = () => {
         nok_phone: editNokPhone?.trim() || null
       };
 
-      // A. Update the Active Profiles Table ('members') in Supabase
       const { error: membersErr } = await supabase
         .from('members')
         .update(updatePayload)
@@ -379,7 +486,6 @@ export const MemberDashboard = () => {
         } : m
       );
 
-      // setMembers updates AppContext state
       setMembers(updatedMembers);
 
       setCurrentUser({
@@ -417,12 +523,18 @@ export const MemberDashboard = () => {
 
   if (!currentUser) return null;
 
-  const userTransactions = transactions.filter(t => t.memberId === currentUser.id);
   const profileNeedsUpdate = !currentUser.full_name?.trim() || !currentUser.phone_number?.trim() || !currentUser.family;
 
+  const duesPaidTotal = liveTransactions.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  const duesCount = liveTransactions.filter(t => t.purpose?.toLowerCase().includes('due')).length;
+  const leviesCount = liveTransactions.filter(t => t.purpose?.toLowerCase().includes('levy') || t.purpose?.toLowerCase().includes('fine')).length;
+
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto">
-      <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 md:p-8">
+    <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 1. ALWAYS VISIBLE TOP SECTION: Profile Card & Tab Navigation  */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 md:p-8 shadow-xl rounded-2xl">
         <div className="flex flex-col gap-4 justify-between items-start md:flex-row md:items-center mb-6">
           <div>
             <h2 className="text-2xl font-bold text-[#ffd700]">Member Dashboard</h2>
@@ -436,49 +548,15 @@ export const MemberDashboard = () => {
             onClick={handleSettingsOpen}
             title="Edit profile settings"
             aria-label="Edit profile settings"
-            className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] p-2 rounded transition-all"
+            className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] p-2.5 rounded-xl font-bold transition-all shadow-md flex items-center gap-2"
           >
-            <Settings className="w-6 h-6" />
+            <Settings className="w-5 h-5" />
+            <span className="text-xs font-bold uppercase tracking-wider hidden sm:inline">Edit Profile</span>
           </button>
         </div>
 
-        {/* Pastoral Messages Card */}
-        {pastoralMessages.length > 0 && (
-          <Card className="bg-[#002520] border-2 border-[#ffd700] p-5 mb-6 rounded-xl shadow-lg relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-2 h-full bg-[#ffd700]" />
-            <div className="flex items-start gap-4 pl-2">
-              <div className="p-2.5 bg-[#ffd700]/10 rounded-lg text-[#ffd700] border border-[#ffd700]/25">
-                <Sparkles className="w-5 h-5 text-[#ffd700]" />
-              </div>
-              <div className="flex-grow">
-                <h4 className="text-sm font-extrabold text-[#ffd700] uppercase tracking-wider mb-2">Pastoral Office Message</h4>
-                <div className="space-y-4">
-                  {pastoralMessages.map((msg) => (
-                    <div key={msg.id} className="border-b border-[#ffd700]/10 pb-3 last:border-0 last:pb-0">
-                      <p className="text-white text-xs leading-relaxed italic">
-                        "{msg.message || msg.content}"
-                      </p>
-                      <div className="flex justify-between items-center mt-2.5">
-                        <span className="text-[10px] text-gray-400 font-mono">
-                          Received: {new Date(msg.created_at || msg.timestamp || new Date()).toLocaleDateString()}
-                        </span>
-                        <Button
-                          onClick={() => handleAcknowledgeMessage(msg.id)}
-                          className="bg-[#ffd700]/15 hover:bg-[#ffd700] hover:text-[#001a16] text-[#ffd700] text-[10px] font-bold px-3 py-1 h-auto"
-                        >
-                          Mark as Read
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </Card>
-        )}
-
-        {/* Master Header: Full-Width Member Identity Profile Card */}
-        <Card className="bg-[#002520] border border-[#ffd700]/20 p-4 mb-6 rounded-xl shadow-lg">
+        {/* User Profile Card (NAME, MEMBER ID, STATUS, PHONE) */}
+        <div className="bg-[#001a16] border border-[#ffd700]/20 p-4 rounded-xl shadow-inner mb-6">
           <div className="flex flex-col md:flex-row items-center gap-6">
             <div className="flex-shrink-0">
               <ProfilePictureUploader
@@ -490,110 +568,387 @@ export const MemberDashboard = () => {
             </div>
             <div className="flex-grow w-full">
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-center">
-                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
-                  <p className="text-gray-400 text-xs uppercase tracking-wider">Name</p>
+                <div className="bg-[#002520] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider font-semibold">NAME</p>
                   <p className="text-white font-bold text-sm truncate">{currentUser.name}</p>
                 </div>
-                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
-                  <p className="text-gray-400 text-xs uppercase tracking-wider">Member ID</p>
+                <div className="bg-[#002520] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider font-semibold">MEMBER ID</p>
                   <p className="text-white font-bold text-sm truncate">{currentUser.id}</p>
                 </div>
-                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
-                  <p className="text-gray-400 text-xs uppercase tracking-wider">Status</p>
-                  <p className="text-green-500 font-bold text-sm flex items-center gap-1.5">
+                <div className="bg-[#002520] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider font-semibold">STATUS</p>
+                  <p className="text-green-400 font-bold text-sm flex items-center gap-1.5">
                     <CheckCircle className="w-4 h-4" />
                     {currentUser.status}
                   </p>
                 </div>
-                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
-                  <p className="text-gray-400 text-xs uppercase tracking-wider">Phone</p>
+                <div className="bg-[#002520] border border-[#ffd700]/10 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider font-semibold">PHONE</p>
                   <p className="text-white font-bold text-sm truncate">{currentUser.phone || 'Not provided'}</p>
                 </div>
               </div>
             </div>
           </div>
-        </Card>
-
-        {/* Member Attendance & Real-Time Executive Notification Center */}
-        <div className="mb-6">
-          <MemberAttendanceAndNotificationWidget currentUser={currentUser} />
         </div>
 
-        <div className="mb-6">
-          {currentUser.family ? (
-            <Button
-              onClick={() => setCurrentPage(`family/${currentUser.family?.toLowerCase()}` as any)}
-              className="w-full bg-gradient-to-r from-[#ffd700] to-[#ffd700]/80 text-[#001a16] font-bold py-3 px-6 rounded-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg"
-            >
-              <Users className="w-5 h-5" />
-              Enter My {currentUser.family?.replace(/\s*Family\s*/gi, '').trim()} Family Portal
-            </Button>
-          ) : (
-            <div className="bg-[#001a16] border border-yellow-500/30 p-4 rounded text-center text-sm text-gray-300">
-              You do not have an assigned family yet. Please edit your Profile Settings below to join a family.
-            </div>
-          )}
+        {/* Tab Navigation Bar (Overview, Sports & Duties, Financials, Spiritual & Welfare) */}
+        <div className="flex flex-wrap gap-2 pt-4 border-t border-[#ffd700]/20">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 transition-all ${
+              activeTab === 'overview'
+                ? 'bg-[#ffd700] text-[#001a16] shadow-lg font-bold'
+                : 'bg-[#001a16] text-[#ffd700] hover:bg-[#ffd700]/10 border border-[#ffd700]/20'
+            }`}
+          >
+            <LayoutDashboard className="w-4 h-4" /> Overview
+          </button>
+          <button
+            onClick={() => setActiveTab('sports')}
+            className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 transition-all ${
+              activeTab === 'sports'
+                ? 'bg-[#ffd700] text-[#001a16] shadow-lg font-bold'
+                : 'bg-[#001a16] text-[#ffd700] hover:bg-[#ffd700]/10 border border-[#ffd700]/20'
+            }`}
+          >
+            <UserCheck className="w-4 h-4" /> Sports & Duties
+          </button>
+          <button
+            onClick={() => setActiveTab('financials')}
+            className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 transition-all ${
+              activeTab === 'financials'
+                ? 'bg-[#ffd700] text-[#001a16] shadow-lg font-bold'
+                : 'bg-[#001a16] text-[#ffd700] hover:bg-[#ffd700]/10 border border-[#ffd700]/20'
+            }`}
+          >
+            <CreditCard className="w-4 h-4" /> Financials
+          </button>
+          <button
+            onClick={() => setActiveTab('spiritual')}
+            className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 transition-all ${
+              activeTab === 'spiritual'
+                ? 'bg-[#ffd700] text-[#001a16] shadow-lg font-bold'
+                : 'bg-[#001a16] text-[#ffd700] hover:bg-[#ffd700]/10 border border-[#ffd700]/20'
+            }`}
+          >
+            <Church className="w-4 h-4" /> Spiritual & Welfare
+          </button>
         </div>
+      </Card>
 
-        <div className="mt-8">
-          <h3 className="text-xl text-[#ffd700] mb-4 flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            Your Transaction History
-          </h3>
-          <div className="bg-[#001a16] border border-[#ffd700] rounded p-4">
-            {txLoading ? (
-              <p className="text-gray-400 text-center py-4">Loading transactions...</p>
-            ) : liveTransactions.length === 0 ? (
-              <p className="text-gray-400 text-center py-4">No transactions yet</p>
-            ) : (
-              <div className="space-y-2">
-                {liveTransactions.map((txn, idx) => {
-                  const paymentDate = new Date(txn.created_at || txn.timestamp || new Date());
-                  const formattedTimestamp = paymentDate.toLocaleDateString('en-US', { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                  }) + ' at ' + paymentDate.toLocaleTimeString('en-US', { 
-                    hour: '2-digit', 
-                    minute: '2-digit', 
-                    second: '2-digit' 
-                  });
-
-                  const displayPurpose = txn.purpose === 'Other Levy' && txn.notes
-                    ? `Other Levy (${txn.notes})`
-                    : txn.purpose;
-
-                  return (
-                    <div key={idx} className="flex justify-between items-center py-2 border-b border-[#ffd700]/30">
-                      <div>
-                        <p className="text-white font-semibold">{displayPurpose}</p>
-                        <p className="text-gray-400 text-xs">{formattedTimestamp}</p>
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 2. activeTab === 'overview' Panel                             */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {activeTab === 'overview' && (
+        <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 md:p-8 space-y-6 rounded-2xl">
+          {/* Pastoral Office Messages Alert */}
+          {pastoralMessages.length > 0 && (
+            <Card className="bg-[#001a16] border-2 border-[#ffd700] p-5 rounded-xl shadow-lg relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-2 h-full bg-[#ffd700]" />
+              <div className="flex items-start gap-4 pl-2">
+                <div className="p-2.5 bg-[#ffd700]/10 rounded-lg text-[#ffd700] border border-[#ffd700]/25">
+                  <Sparkles className="w-5 h-5 text-[#ffd700]" />
+                </div>
+                <div className="flex-grow">
+                  <h4 className="text-sm font-extrabold text-[#ffd700] uppercase tracking-wider mb-2">Pastoral Office Message</h4>
+                  <div className="space-y-4">
+                    {pastoralMessages.map((msg) => (
+                      <div key={msg.id} className="border-b border-[#ffd700]/10 pb-3 last:border-0 last:pb-0">
+                        <p className="text-white text-xs leading-relaxed italic">
+                          "{msg.message || msg.content}"
+                        </p>
+                        <div className="flex justify-between items-center mt-2.5">
+                          <span className="text-[10px] text-gray-400 font-mono">
+                            Received: {new Date(msg.created_at || msg.timestamp || new Date()).toLocaleDateString()}
+                          </span>
+                          <Button
+                            onClick={() => handleAcknowledgeMessage(msg.id)}
+                            className="bg-[#ffd700]/15 hover:bg-[#ffd700] hover:text-[#001a16] text-[#ffd700] text-[10px] font-bold px-3 py-1 h-auto"
+                          >
+                            Mark as Read
+                          </Button>
+                        </div>
                       </div>
-                      <p className="text-green-500 font-semibold">{formatCurrency(txn.amount)}</p>
-                    </div>
-                  );
-                })}
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* Absence Excuse Request Form & Attendance Ledger */}
+          <div>
+            <MemberAttendanceAndNotificationWidget currentUser={currentUser} />
+          </div>
+
+          {/* Family Portal Banner */}
+          <div className="pt-2">
+            {currentUser.family ? (
+              <Button
+                onClick={() => setCurrentPage(`family/${currentUser.family?.toLowerCase()}` as any)}
+                className="w-full bg-gradient-to-r from-[#ffd700] to-[#ffd700]/80 text-[#001a16] font-bold py-3.5 px-6 rounded-xl hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg"
+              >
+                <Users className="w-5 h-5" />
+                Enter My {currentUser.family?.replace(/\s*Family\s*/gi, '').trim()} Portal
+              </Button>
+            ) : (
+              <div className="bg-[#001a16] border border-yellow-500/30 p-4 rounded-xl text-center text-sm text-gray-300">
+                You do not have an assigned family yet. Please edit your Profile Settings above to join a family.
               </div>
             )}
           </div>
-        </div>
+        </Card>
+      )}
 
-        {/* Upcoming Spiritual Assignments Card */}
-        <div className="mt-8 border-t border-[#ffd700]/20 pt-6">
-          <h3 className="text-xl text-[#ffd700] mb-4 flex items-center gap-2">
-            <BookOpen className="w-5 h-5" />
-            Upcoming Spiritual Assignments
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 3. activeTab === 'sports' Panel                               */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {activeTab === 'sports' && (
+        <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 md:p-8 space-y-6 rounded-2xl">
+          <h3 className="text-xl font-bold text-[#ffd700] flex items-center gap-2">
+            <UserCheck className="w-5 h-5" /> Sports & Match Duties
           </h3>
-          <div className="bg-[#001a16] border border-[#ffd700] rounded p-4">
+
+          {/* "Match Official Duty Assigned" Banner Cards */}
+          {refereeDuties.length > 0 ? (
+            <div className="space-y-4">
+              {refereeDuties.map(fixture => {
+                const homeTeam = (fixture.home_team as any)?.team_name ?? 'Home Team';
+                const awayTeam = (fixture.away_team as any)?.team_name ?? 'Away Team';
+                const matchDate = fixture.match_date ? new Date(fixture.match_date) : null;
+                const isLive = fixture.status === 'Live' || fixture.status === 'Ongoing';
+                return (
+                  <div
+                    key={fixture.id}
+                    className="bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-slate-900 border border-yellow-500/40 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                  >
+                    <div className="flex items-start gap-3.5">
+                      <div className="p-3 bg-yellow-500/20 text-yellow-400 rounded-xl shrink-0 border border-yellow-500/20">
+                        <UserCheck className="w-6 h-6" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-yellow-400 bg-yellow-500/20 px-2.5 py-0.5 rounded-full border border-yellow-500/30">
+                            Match Official Duty Assigned
+                          </span>
+                          {isLive && (
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-red-400 bg-red-500/20 px-2 py-0.5 rounded-full border border-red-500/30 animate-pulse">
+                              LIVE NOW
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="text-base sm:text-lg font-bold text-white">
+                          {homeTeam} <span className="text-yellow-400/60 font-normal text-sm">vs</span> {awayTeam}
+                        </h3>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300">
+                          {matchDate && (
+                            <>
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+                                {matchDate.toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                              </span>
+                              <span className="text-slate-600">•</span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+                                {matchDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </>
+                          )}
+                          {fixture.venue && (
+                            <>
+                              <span className="text-slate-600">•</span>
+                              <span className="flex items-center gap-1">
+                                <MapPin className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+                                {fixture.venue}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage('referee_center' as any)}
+                      className="w-full sm:w-auto px-5 py-2.5 bg-yellow-500 hover:bg-yellow-400 text-slate-950 text-xs font-bold rounded-xl shadow-lg transition-all duration-150 flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+                    >
+                      Open Referee Match Center
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="bg-[#001a16] border border-[#ffd700]/20 rounded-xl p-4 text-center">
+              <p className="text-gray-400 text-xs">No active match official referee duties assigned currently.</p>
+            </div>
+          )}
+
+          {/* Active Squad Card */}
+          <div className="bg-[#001a16] border border-[#ffd700]/30 rounded-xl p-5 space-y-4 shadow-lg">
+            <div className="flex justify-between items-center flex-wrap gap-2">
+              <h4 className="text-white font-bold text-sm uppercase tracking-wider flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-[#ffd700]" /> Active Squad
+              </h4>
+              <Button
+                onClick={() => setCurrentPage('dashboard/sports' as any)}
+                className="bg-[#ffd700] hover:bg-[#ffc700] text-[#001a16] text-xs font-bold px-4 py-2 h-auto rounded-lg flex items-center gap-1.5 cursor-pointer"
+              >
+                View Team Roster &rarr;
+              </Button>
+            </div>
+
+            {squadLoading ? (
+              <p className="text-gray-400 text-xs text-center py-4">Loading active squad roster...</p>
+            ) : squadData ? (
+              <div className="bg-[#002520] border border-[#ffd700]/20 rounded-xl p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div>
+                    <div className="flex items-center gap-2.5">
+                      <h5 className="text-white font-bold text-lg">
+                        {squadData.sports_teams?.team_name || 'Assigned Squad'}
+                      </h5>
+                      {squadData.jersey_number && (
+                        <span className="bg-[#ffd700] text-[#001a16] font-black text-xs px-2.5 py-0.5 rounded-full shadow">
+                          #{squadData.jersey_number}
+                        </span>
+                      )}
+                    </div>
+                    {squadData.sports_teams?.sports_tournaments?.title && (
+                      <p className="text-gray-400 text-xs mt-0.5">
+                        Tournament: <span className="text-gray-200">{squadData.sports_teams.sports_tournaments.title}</span>
+                      </p>
+                    )}
+                  </div>
+                  {squadData.position && (
+                    <span className="bg-[#ffd700]/15 text-[#ffd700] border border-[#ffd700]/30 font-bold text-xs px-3 py-1 rounded-lg">
+                      {squadData.position}
+                    </span>
+                  )}
+                </div>
+
+                {squadData.sports_teams?.cmo_family && (
+                  <div className="pt-2 border-t border-[#ffd700]/15 flex items-center justify-between text-xs">
+                    <span className="text-gray-400">Family Unit:</span>
+                    <span className="text-[#ffd700] font-semibold">
+                      {squadData.sports_teams.cmo_family} Family
+                    </span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-6 border border-dashed border-[#ffd700]/20 rounded-lg p-4">
+                <p className="text-gray-400 text-xs">You are currently not enrolled in an active tournament squad roster.</p>
+                <Button
+                  onClick={() => setCurrentPage('dashboard/sports' as any)}
+                  className="mt-3 bg-[#ffd700]/15 hover:bg-[#ffd700] hover:text-[#001a16] text-[#ffd700] text-xs font-bold px-3.5 py-1.5 h-auto rounded-lg cursor-pointer"
+                >
+                  Explore Sports Hub & Register
+                </Button>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 4. activeTab === 'financials' Panel                           */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {activeTab === 'financials' && (
+        <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 md:p-8 space-y-6 rounded-2xl">
+          <h3 className="text-xl font-bold text-[#ffd700] flex items-center gap-2">
+            <CreditCard className="w-5 h-5" /> Financials & Payment Ledgers
+          </h3>
+
+          {/* Dues & Payment Ledgers Summary Card */}
+          <div className="bg-[#001a16] border border-[#ffd700]/30 rounded-xl p-5">
+            <h4 className="text-white font-bold text-sm uppercase tracking-wider mb-3">Dues & Ledger Summary</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-[#002520] border border-[#ffd700]/10 p-3 rounded-lg">
+                <p className="text-gray-400 text-xs uppercase font-semibold">Total Paid</p>
+                <p className="text-green-400 font-bold text-lg">{formatCurrency(duesPaidTotal)}</p>
+              </div>
+              <div className="bg-[#002520] border border-[#ffd700]/10 p-3 rounded-lg">
+                <p className="text-gray-400 text-xs uppercase font-semibold">Dues Payments</p>
+                <p className="text-[#ffd700] font-bold text-lg">{duesCount} Transactions</p>
+              </div>
+              <div className="bg-[#002520] border border-[#ffd700]/10 p-3 rounded-lg">
+                <p className="text-gray-400 text-xs uppercase font-semibold">Levies & Fines</p>
+                <p className="text-blue-400 font-bold text-lg">{leviesCount} Recorded</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Transaction History list */}
+          <div>
+            <h4 className="text-lg text-[#ffd700] mb-3 flex items-center gap-2 font-bold">
+              <FileText className="w-5 h-5" /> Your Transaction History
+            </h4>
+            <div className="bg-[#001a16] border border-[#ffd700]/30 rounded-xl p-4">
+              {txLoading ? (
+                <p className="text-gray-400 text-center py-4 text-xs">Loading transactions...</p>
+              ) : liveTransactions.length === 0 ? (
+                <p className="text-gray-400 text-center py-4 text-xs">No transactions recorded yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {liveTransactions.map((txn, idx) => {
+                    const paymentDate = new Date(txn.created_at || txn.timestamp || new Date());
+                    const formattedTimestamp =
+                      paymentDate.toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      }) +
+                      ' at ' +
+                      paymentDate.toLocaleTimeString('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      });
+                    const displayPurpose =
+                      txn.purpose === 'Other Levy' && txn.notes
+                        ? `Other Levy (${txn.notes})`
+                        : txn.purpose;
+                    return (
+                      <div key={idx} className="flex justify-between items-center py-2.5 border-b border-[#ffd700]/15 last:border-0">
+                        <div>
+                          <p className="text-white font-semibold text-sm">{displayPurpose}</p>
+                          <p className="text-gray-400 text-xs font-mono">{formattedTimestamp}</p>
+                        </div>
+                        <p className="text-green-400 font-bold text-sm">{formatCurrency(txn.amount)}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 5. activeTab === 'spiritual' Panel                            */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {activeTab === 'spiritual' && (
+        <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 md:p-8 space-y-6 rounded-2xl">
+          <h3 className="text-xl font-bold text-[#ffd700] flex items-center gap-2">
+            <Church className="w-5 h-5" /> Spiritual & Welfare Center
+          </h3>
+
+          {/* Upcoming Spiritual Assignments Card */}
+          <div className="bg-[#001a16] border border-[#ffd700]/30 rounded-xl p-5 space-y-4">
+            <h4 className="text-white font-bold text-sm uppercase tracking-wider flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-[#ffd700]" /> Upcoming Liturgical Assignments
+            </h4>
             {assignmentsLoading ? (
-              <p className="text-gray-400 text-center py-4">Loading assignments...</p>
+              <p className="text-gray-400 text-center py-4 text-xs">Loading assignments...</p>
             ) : assignments.length === 0 ? (
-              <p className="text-gray-400 text-center py-4">No upcoming spiritual assignments scheduled.</p>
+              <p className="text-gray-400 text-center py-4 text-xs">No upcoming spiritual assignments scheduled.</p>
             ) : (
               <div className="space-y-3">
                 {assignments.map((assignment) => (
-                  <div key={assignment.id} className="p-3 bg-[#002520]/60 rounded border border-[#ffd700]/25 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  <div key={assignment.id} className="p-3 bg-[#002520]/80 rounded-lg border border-[#ffd700]/25 flex flex-col md:flex-row md:items-center justify-between gap-2">
                     <div>
                       <h4 className="text-white font-bold text-sm uppercase">{assignment.activity_name}</h4>
                       <p className="text-gray-400 text-xs mt-0.5">
@@ -612,10 +967,41 @@ export const MemberDashboard = () => {
               </div>
             )}
           </div>
-        </div>
-      </Card>
 
-      {/* Profile Settings Dialog */}
+          {/* Welfare Announcements */}
+          <div className="bg-[#001a16] border border-[#ffd700]/30 rounded-xl p-5 space-y-4">
+            <h4 className="text-white font-bold text-sm uppercase tracking-wider flex items-center gap-2">
+              <Bell className="w-4 h-4 text-[#ffd700]" /> Welfare & Community Announcements
+            </h4>
+            {announcements && announcements.length > 0 ? (
+              <div className="space-y-3">
+                {announcements.map((ann) => (
+                  <div key={ann.id} className="p-3 bg-[#002520]/80 rounded-lg border border-[#ffd700]/20">
+                    <div className="flex justify-between items-start mb-1">
+                      <h5 className="text-white font-bold text-xs sm:text-sm">{ann.title}</h5>
+                      <span className="text-[10px] text-gray-400 font-mono">
+                        {new Date(ann.date || ann.created_at || new Date()).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <p className="text-gray-300 text-xs leading-relaxed">{ann.content}</p>
+                    {ann.category && (
+                      <span className="inline-block mt-2 text-[10px] uppercase font-bold text-[#ffd700] bg-[#ffd700]/10 px-2 py-0.5 rounded border border-[#ffd700]/20">
+                        {ann.category}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-400 text-center py-4 text-xs">No welfare announcements at this time.</p>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* PROFILE SETTINGS MODAL DIALOG                                 */}
+      {/* ───────────────────────────────────────────────────────────── */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 md:p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">

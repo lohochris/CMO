@@ -1,0 +1,34 @@
+{
+  "member": [
+    {
+      "id": "9ee20e46-37c0-4985-ae73-102559d3ebe2",
+      "full_name": "STANLEY UKAH",
+      "official_member_id": "HCC-CMO-26-001",
+      "phone_number": null,
+      "email": null,
+      "status": "Active",
+      "address": null,
+      "home_town_address": null,
+      "residential_address": null,
+      "marriage_status": null,
+      "marital_status": null,
+      "number_of_children": 0,
+      "communicant": null,
+      "wifes_name": null,
+      "wifes_phone": null,
+      "church_position": null,
+      "post_held": null,
+      "phone": null,
+      "cmo_family": "Wisdom",
+      "balance": 0,
+      "role": null,
+      "avatar_url": null,
+      "date_of_birth": null,
+      "occupation": null,
+      "nok_name": null,
+      "nok_relationship": null,
+      "nok_phone": null
+    }
+  ],
+  "memberError": null
+}

@@ -1,0 +1,264 @@
+{
+  "id": {
+    "data": [],
+    "error": null
+  },
+  "fixture_id": {
+    "data": [],
+    "error": null
+  },
+  "match_id": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.match_id does not exist"
+    }
+  },
+  "minute": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.minute does not exist"
+    }
+  },
+  "match_minute": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.match_minute does not exist"
+    }
+  },
+  "minute_elapsed": {
+    "data": [],
+    "error": null
+  },
+  "event_type": {
+    "data": [],
+    "error": null
+  },
+  "type": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.type does not exist"
+    }
+  },
+  "notes": {
+    "data": [],
+    "error": null
+  },
+  "description": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.description does not exist"
+    }
+  },
+  "details": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.details does not exist"
+    }
+  },
+  "team_id": {
+    "data": [],
+    "error": null
+  },
+  "team_name": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.team_name does not exist"
+    }
+  },
+  "player_id": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.player_id does not exist"
+    }
+  },
+  "athlete_id": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.athlete_id does not exist"
+    }
+  },
+  "member_id": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.member_id does not exist"
+    }
+  },
+  "user_id": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.user_id does not exist"
+    }
+  },
+  "person_id": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.person_id does not exist"
+    }
+  },
+  "scorer_id": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.scorer_id does not exist"
+    }
+  },
+  "athlete_profile_id": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.athlete_profile_id does not exist"
+    }
+  },
+  "athlete_registry_id": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.athlete_registry_id does not exist"
+    }
+  },
+  "sports_athlete_id": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.sports_athlete_id does not exist"
+    }
+  },
+  "referee_id": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.referee_id does not exist"
+    }
+  },
+  "official_id": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.official_id does not exist"
+    }
+  },
+  "created_at": {
+    "data": [],
+    "error": null
+  },
+  "updated_at": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": "Perhaps you meant to reference the column \"sports_match_events.created_at\".",
+      "message": "column sports_match_events.updated_at does not exist"
+    }
+  },
+  "tenant_id": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": "Perhaps you meant to reference the column \"sports_match_events.team_id\".",
+      "message": "column sports_match_events.tenant_id does not exist"
+    }
+  },
+  "created_by": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": "Perhaps you meant to reference the column \"sports_match_events.created_at\".",
+      "message": "column sports_match_events.created_by does not exist"
+    }
+  },
+  "role": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.role does not exist"
+    }
+  },
+  "status": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.status does not exist"
+    }
+  },
+  "event_details": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.event_details does not exist"
+    }
+  },
+  "player_name": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.player_name does not exist"
+    }
+  },
+  "athlete_name": {
+    "data": null,
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column sports_match_events.athlete_name does not exist"
+    }
+  }
+}
