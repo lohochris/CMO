@@ -4,7 +4,8 @@ import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { BadgeDollarSign, TrendingUp, Receipt } from 'lucide-react';
+import { BadgeDollarSign, TrendingUp, Receipt, Trophy } from 'lucide-react';
+import { SportsAuditReadOnlyView } from './sports/SportsAuditReadOnlyView';
 import { useApp } from '../../contexts/AppContext';
 import { generateExpenseId } from '../../utils/idGenerators';
 import { calculateTotal, formatCurrency, formatDate, getCombinedTransactions } from '../../utils/helpers';
@@ -484,6 +485,10 @@ export const TreasurerDashboard = () => {
             <TabsTrigger value="ledger" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16]">
               Financial Timeline
             </TabsTrigger>
+            <TabsTrigger value="sports_treasury" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] flex items-center gap-1.5">
+              <Trophy className="w-4 h-4" />
+              Sports Treasury
+            </TabsTrigger>
           </TabsList>
           {isExecutiveUnlocked && (
             <button
@@ -749,6 +754,9 @@ export const TreasurerDashboard = () => {
               </div>
             </div>
           </Card>
+        </TabsContent>
+        <TabsContent value="sports_treasury" className="mt-6">
+          <SportsAuditReadOnlyView />
         </TabsContent>
           </>
         )}

@@ -4,7 +4,8 @@ import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { Users, CheckCircle, CheckCheck, AlertCircle, DollarSign, Megaphone, FileText, Shield, Heart, ShieldCheck, BookOpen, X } from 'lucide-react';
+import { Users, CheckCircle, CheckCheck, AlertCircle, DollarSign, Megaphone, FileText, Shield, Heart, ShieldCheck, BookOpen, X, Trophy } from 'lucide-react';
+import { SportsAuditReadOnlyView } from './sports/SportsAuditReadOnlyView';
 import { useApp } from '../../contexts/AppContext';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
@@ -994,6 +995,10 @@ export const ChairmanDashboard = () => {
             <TabsTrigger value="general_gallery" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
               General Gallery & Videos
             </TabsTrigger>
+            <TabsTrigger value="sports_treasury" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded flex items-center gap-1.5">
+              <Trophy className="w-4 h-4" />
+              Sports Treasury
+            </TabsTrigger>
           </TabsList>
           {isExecutiveUnlocked && (
             <button
@@ -1657,6 +1662,9 @@ export const ChairmanDashboard = () => {
             currentUserName={currentUser?.name || 'Executive Chairman'}
             isExecutive={isExecutiveUnlocked}
           />
+        </TabsContent>
+        <TabsContent value="sports_treasury" className="mt-6">
+          <SportsAuditReadOnlyView />
         </TabsContent>
           </>
         )}
