@@ -2,13 +2,36 @@ import { useState, useEffect } from 'react';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
-import { FileEdit, Mic, Download, Megaphone } from 'lucide-react';
+import { 
+  FileEdit, Mic, Download, Megaphone, Users, CheckCircle2, 
+  AlertTriangle, Sparkles, Search, FileText, Clock, Loader2, 
+  Copy, BookOpen, ChevronDown, ChevronUp, X, CheckSquare, 
+  FileCheck, Upload, ExternalLink, UserCheck, Plus, Filter, ShieldCheck, Eye,
+  ShieldAlert, Info, PackageCheck, Building2
+} from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { supabase } from '../../lib/supabaseClient';
 import { GeneralGalleryManager } from '../../app/components/gallery/GeneralGalleryManager';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
+import { 
+  calculateMeetingQuorum, 
+  generatePreMeetingAgenda, 
+  querySecretaryKnowledgeBase, 
+  fetchActiveResolutions,
+  createResolution,
+  updateResolutionStatus,
+  extractResolutionsFromMinutes,
+  evaluateConstitutionalCompliance,
+  generateHandoverPackage,
+  AgendaItem, 
+  QuorumStatus, 
+  KnowledgeQueryResult,
+  Resolution,
+  ConstitutionalCheckResult,
+  HandoverPackage
+} from '../../utils/aiService';
 
 export const SecretaryDashboard = () => {
   // Lock Engine States
@@ -36,6 +59,61 @@ export const SecretaryDashboard = () => {
   const [announcementContent, setAnnouncementContent] = useState('');
   const { currentUser, members, setMembers, setCurrentUser, announcements, setAnnouncements, setSuccess, setError } = useApp();
 
+  // Phase 1 Pre-Meeting & Quorum States
+  const [presentMembersCount, setPresentMembersCount] = useState<number>(42);
+  const [quorumStatus, setQuorumStatus] = useState<QuorumStatus | null>(null);
+  const [isCalculatingQuorum, setIsCalculatingQuorum] = useState<boolean>(false);
+
+  // Phase 1 Agenda Generator States
+  const [agendaItems, setAgendaItems] = useState<AgendaItem[] | null>(null);
+  const [isGeneratingAgenda, setIsGeneratingAgenda] = useState<boolean>(false);
+  const [isAgendaDrawerOpen, setIsAgendaDrawerOpen] = useState<boolean>(true);
+
+  // Phase 1 Knowledge Base RAG Search States
+  const [knowledgeSearchQuery, setKnowledgeSearchQuery] = useState<string>('');
+  const [isSearchingKnowledge, setIsSearchingKnowledge] = useState<boolean>(false);
+  const [knowledgeResult, setKnowledgeResult] = useState<KnowledgeQueryResult | null>(null);
+  const [isKnowledgeDrawerOpen, setIsKnowledgeDrawerOpen] = useState<boolean>(false);
+
+  // Phase 2 Resolution & Task Lifecycle States
+  const [resolutions, setResolutions] = useState<Resolution[]>([]);
+  const [isLoadingResolutions, setIsLoadingResolutions] = useState<boolean>(false);
+  const [resolutionFilter, setResolutionFilter] = useState<string>('ALL');
+
+  // Extracted Motions Modal States
+  const [extractedMotions, setExtractedMotions] = useState<Array<Omit<Resolution, 'id'>> | null>(null);
+  const [isExtractingMotions, setIsExtractingMotions] = useState<boolean>(false);
+  const [isExtractedModalOpen, setIsExtractedModalOpen] = useState<boolean>(false);
+  const [isSavingExtracted, setIsSavingExtracted] = useState<boolean>(false);
+
+  // Action Closure & Evidence Modal States
+  const [closureResolution, setClosureResolution] = useState<Resolution | null>(null);
+  const [evidenceUrlInput, setEvidenceUrlInput] = useState<string>('');
+  const [evidenceNotesInput, setEvidenceNotesInput] = useState<string>('');
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState<boolean>(false);
+
+  // Manual Create Resolution Modal States
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
+  const [newResTitle, setNewResTitle] = useState<string>('');
+  const [newResDesc, setNewResDesc] = useState<string>('');
+  const [newResMover, setNewResMover] = useState<string>('');
+  const [newResSeconder, setNewResSeconder] = useState<string>('');
+  const [newResVoteType, setNewResVoteType] = useState<Resolution['vote_type']>('Voice Vote');
+  const [newResOfficerId, setNewResOfficerId] = useState<string>('GEN-SEC-2026');
+  const [newResOfficerName, setNewResOfficerName] = useState<string>('General Secretary');
+  const [newResDeadline, setNewResDeadline] = useState<string>('');
+  const [isCreatingResolution, setIsCreatingResolution] = useState<boolean>(false);
+
+  // Phase 3 Constitutional Audit & Governance States
+  const [complianceResult, setComplianceResult] = useState<ConstitutionalCheckResult | null>(null);
+  const [isAuditingCompliance, setIsAuditingCompliance] = useState<boolean>(false);
+  const [isComplianceModalOpen, setIsComplianceModalOpen] = useState<boolean>(false);
+
+  // Phase 3 Executive Handover Package States
+  const [handoverDossier, setHandoverDossier] = useState<HandoverPackage | null>(null);
+  const [isGeneratingHandover, setIsGeneratingHandover] = useState<boolean>(false);
+  const [isHandoverModalOpen, setIsHandoverModalOpen] = useState<boolean>(false);
+
   // Saved Minutes State
   const [savedMinutes, setSavedMinutes] = useState<any[]>([]);
 
@@ -56,6 +134,292 @@ export const SecretaryDashboard = () => {
       localStorage.setItem('cmo_meeting_minutes', JSON.stringify(mock));
     }
   }, []);
+
+  // Fetch quorum status whenever presentMembersCount changes
+  useEffect(() => {
+    let isMounted = true;
+    const loadQuorum = async () => {
+      setIsCalculatingQuorum(true);
+      try {
+        const status = await calculateMeetingQuorum(presentMembersCount);
+        if (isMounted) setQuorumStatus(status);
+      } catch (err) {
+        console.error('Failed to calculate quorum:', err);
+      } finally {
+        if (isMounted) setIsCalculatingQuorum(false);
+      }
+    };
+    loadQuorum();
+    return () => { isMounted = false; };
+  }, [presentMembersCount]);
+
+  const handleGenerateAgenda = async () => {
+    setIsGeneratingAgenda(true);
+    try {
+      const items = await generatePreMeetingAgenda(['Resolution on Annual Dues Audit', 'Welfare Disbursement Review']);
+      setAgendaItems(items);
+      setIsAgendaDrawerOpen(true);
+      setSuccess('AI Pre-Meeting Agenda generated successfully!');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('Error generating agenda:', err);
+      setError('Failed to generate pre-meeting agenda.');
+    } finally {
+      setIsGeneratingAgenda(false);
+    }
+  };
+
+  const handleInsertAgendaToMinutes = () => {
+    if (!agendaItems || agendaItems.length === 0) return;
+
+    const formattedAgendaText = `
+========================================
+PRE-MEETING CANONICAL AGENDA
+========================================
+${agendaItems.map((item, idx) => `${idx + 1}. [${item.category.toUpperCase()}] ${item.title} (${item.estimatedMinutes} mins)${item.isUnfinishedBusiness ? ' *UNFINISHED BUSINESS*' : ''}${item.notes ? `\n   Notes: ${item.notes}` : ''}`).join('\n')}
+========================================
+`;
+
+    setMinutesText((prev) => (prev ? `${formattedAgendaText}\n${prev}` : formattedAgendaText));
+    setSuccess('Agenda inserted into minutes editor!');
+    setTimeout(() => setSuccess(''), 3000);
+  };
+
+  const handleSearchKnowledgeBase = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!knowledgeSearchQuery.trim()) return;
+
+    setIsSearchingKnowledge(true);
+    try {
+      const result = await querySecretaryKnowledgeBase(knowledgeSearchQuery);
+      setKnowledgeResult(result);
+      setIsKnowledgeDrawerOpen(true);
+    } catch (err) {
+      console.error('Error searching knowledge base:', err);
+      setError('Failed to query knowledge base.');
+    } finally {
+      setIsSearchingKnowledge(false);
+    }
+  };
+
+  const handleInsertSnippetToMinutes = (snippet: string, title: string) => {
+    const noteText = `\n[ARCHIVE REFERENCE - ${title}]:\n"${snippet}"\n`;
+    setMinutesText((prev) => `${prev}\n${noteText}`);
+    setSuccess('Archive snippet copied to minutes editor notes!');
+    setTimeout(() => setSuccess(''), 3000);
+  };
+
+  // Phase 2 Resolutions & Accountability Handlers
+  useEffect(() => {
+    let isMounted = true;
+    const loadResolutions = async () => {
+      setIsLoadingResolutions(true);
+      try {
+        const data = await fetchActiveResolutions();
+        if (isMounted) setResolutions(data);
+      } catch (err) {
+        console.error('Failed to fetch resolutions:', err);
+      } finally {
+        if (isMounted) setIsLoadingResolutions(false);
+      }
+    };
+    loadResolutions();
+    return () => { isMounted = false; };
+  }, []);
+
+  const handleExtractMotions = async () => {
+    if (!minutesText.trim()) {
+      setError('Please enter or transcribe minutes text before extracting resolutions.');
+      return;
+    }
+    setIsExtractingMotions(true);
+    try {
+      const items = await extractResolutionsFromMinutes(minutesText);
+      setExtractedMotions(items);
+      setIsExtractedModalOpen(true);
+    } catch (err) {
+      console.error('Error extracting motions:', err);
+      setError('Failed to extract resolutions from minutes text.');
+    } finally {
+      setIsExtractingMotions(false);
+    }
+  };
+
+  const handleConfirmSaveExtractedMotions = async () => {
+    if (!extractedMotions || extractedMotions.length === 0) return;
+    setIsSavingExtracted(true);
+    try {
+      const createdList: Resolution[] = [];
+      for (const motion of extractedMotions) {
+        const res = await createResolution(motion);
+        if (res) createdList.push(res);
+      }
+      setResolutions((prev) => [...createdList, ...prev]);
+      setIsExtractedModalOpen(false);
+      setExtractedMotions(null);
+      setSuccess(`Successfully committed ${createdList.length} resolution(s) to accountability ledger!`);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      console.error('Error saving extracted motions:', err);
+      setError('Failed to save extracted motions.');
+    } finally {
+      setIsSavingExtracted(false);
+    }
+  };
+
+  const handleOpenClosureModal = (res: Resolution) => {
+    setClosureResolution(res);
+    setEvidenceUrlInput(res.evidence_url || '');
+    setEvidenceNotesInput(res.evidence_notes || '');
+  };
+
+  const handleUpdateResolutionStatusAction = async (targetStatus: Resolution['status']) => {
+    if (!closureResolution) return;
+    setIsUpdatingStatus(true);
+    try {
+      const success = await updateResolutionStatus(
+        closureResolution.id,
+        targetStatus,
+        evidenceUrlInput || undefined,
+        evidenceNotesInput || undefined
+      );
+      if (success) {
+        setResolutions((prev) =>
+          prev.map((r) =>
+            r.id === closureResolution.id
+              ? {
+                  ...r,
+                  status: targetStatus,
+                  evidence_url: evidenceUrlInput || r.evidence_url,
+                  evidence_notes: evidenceNotesInput || r.evidence_notes
+                }
+              : r
+          )
+        );
+        setSuccess(`Resolution status updated to "${targetStatus}"!`);
+        setTimeout(() => setSuccess(''), 3000);
+        setClosureResolution(null);
+      }
+    } catch (err) {
+      console.error('Error updating resolution status:', err);
+      setError('Failed to update resolution status.');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleCreateManualResolution = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newResTitle || !newResDesc) {
+      setError('Please provide resolution title and description.');
+      return;
+    }
+    setIsCreatingResolution(true);
+    try {
+      const newRes = await createResolution({
+        title: newResTitle,
+        description: newResDesc,
+        mover_name: newResMover || 'General Assembly',
+        seconder_name: newResSeconder || 'Executive Committee',
+        vote_type: newResVoteType,
+        assigned_officer_id: newResOfficerId,
+        assigned_officer_name: newResOfficerName,
+        deadline: newResDeadline || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+        status: 'Assigned'
+      });
+
+      if (newRes) {
+        setResolutions((prev) => [newRes, ...prev]);
+        setIsCreateModalOpen(false);
+        setNewResTitle('');
+        setNewResDesc('');
+        setNewResMover('');
+        setNewResSeconder('');
+        setSuccess('New resolution created and assigned!');
+        setTimeout(() => setSuccess(''), 3000);
+      }
+    } catch (err) {
+      console.error('Error creating resolution:', err);
+      setError('Failed to create resolution.');
+    } finally {
+      setIsCreatingResolution(false);
+    }
+  };
+
+  // Phase 3 Governance Sentinel & Succession Handlers
+  const handleAuditCompliance = async () => {
+    const textToAudit = minutesText.trim() || 'General Assembly Financial Disbursement and Dues Review';
+    setIsAuditingCompliance(true);
+    try {
+      const result = await evaluateConstitutionalCompliance(textToAudit);
+      setComplianceResult(result);
+      setIsComplianceModalOpen(true);
+    } catch (err) {
+      console.error('Error auditing compliance:', err);
+      setError('Failed to evaluate constitutional compliance.');
+    } finally {
+      setIsAuditingCompliance(false);
+    }
+  };
+
+  const handleGenerateHandover = async () => {
+    setIsGeneratingHandover(true);
+    try {
+      const dossier = await generateHandoverPackage('2025 – 2026');
+      setHandoverDossier(dossier);
+      setIsHandoverModalOpen(true);
+    } catch (err) {
+      console.error('Error generating handover package:', err);
+      setError('Failed to generate executive handover package.');
+    } finally {
+      setIsGeneratingHandover(false);
+    }
+  };
+
+  const handleExportHandoverDossier = () => {
+    if (!handoverDossier) return;
+
+    const textContent = `
+======================================================
+HOLY CROSS CMO GENERAL SECRETARY EXECUTIVE HANDOVER DOSSIER
+Tenure Period: ${handoverDossier.tenurePeriod}
+Generated: ${new Date(handoverDossier.generatedAt).toLocaleString()}
+======================================================
+
+EXECUTIVE SUMMARY:
+${handoverDossier.summaryReport}
+
+METRICS & LEDGER STATS:
+- Total Registered Members: ${handoverDossier.totalRegisteredMembers}
+- Pending Resolutions & Actions: ${handoverDossier.pendingResolutionsCount}
+- Closed & Verified Resolutions: ${handoverDossier.closedResolutionsCount}
+- Archived Meeting Minutes: ${handoverDossier.archivedMinutesCount}
+
+ACTIVE COMMITMENTS & OUTSTANDING TASKS:
+${handoverDossier.activeCommitments.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+
+CONSTITUTIONAL & GOVERNANCE HIGHLIGHTS:
+${handoverDossier.constitutionalHighlights.map((h, i) => `${i + 1}. ${h}`).join('\n')}
+
+======================================================
+Certified & Formally Transferred by Outgoing Secretariat
+`;
+
+    const blob = new Blob([textContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `CMO_Executive_Handover_Dossier_${handoverDossier.tenurePeriod.replace(/\s+/g, '_')}.txt`;
+    a.click();
+
+    setSuccess('Executive Handover Dossier exported successfully!');
+    setTimeout(() => setSuccess(''), 3000);
+  };
+
+  const filteredResolutions = resolutions.filter((res) => {
+    if (resolutionFilter === 'ALL') return true;
+    return res.status === resolutionFilter;
+  });
 
   const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
     if (!currentUser) return;
@@ -237,16 +601,37 @@ Recorded by: ${currentUser?.name}`;
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <h2 className="text-2xl md:text-3xl font-bold text-[#ffd700] mb-0">General Secretary Department</h2>
         {isExecutiveUnlocked && (
-          <button
-            onClick={handleLockDashboard}
-            className="bg-[#002520] hover:bg-[#ffd700]/10 text-[#ffd700] border border-[#ffd700]/30 px-3 py-2 rounded text-sm font-semibold transition-colors flex items-center gap-2 shrink-0 cursor-pointer self-stretch sm:self-auto justify-center"
-            title="Lock Executive Workspace"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-            Lock Dashboard
-          </button>
+          <div className="flex items-center gap-3 self-stretch sm:self-auto flex-wrap">
+            <button
+              onClick={handleGenerateHandover}
+              disabled={isGeneratingHandover}
+              className="bg-[#ffd700] hover:bg-[#ffc700] text-[#001a16] px-3.5 py-2 rounded text-sm font-bold transition-colors flex items-center gap-2 shrink-0 cursor-pointer justify-center"
+              title="Generate Executive Handover Transition Package"
+            >
+              {isGeneratingHandover ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating Handover...
+                </>
+              ) : (
+                <>
+                  <PackageCheck className="w-4 h-4" />
+                  Executive Handover Package
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={handleLockDashboard}
+              className="bg-[#002520] hover:bg-[#ffd700]/10 text-[#ffd700] border border-[#ffd700]/30 px-3 py-2 rounded text-sm font-semibold transition-colors flex items-center gap-2 shrink-0 cursor-pointer justify-center"
+              title="Lock Executive Workspace"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              Lock Dashboard
+            </button>
+          </div>
         )}
       </div>
 
@@ -349,6 +734,9 @@ Recorded by: ${currentUser?.name}`;
             <TabsTrigger value="minutes" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
               Meeting Minutes & Records
             </TabsTrigger>
+            <TabsTrigger value="resolutions" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
+              Resolutions & Accountability
+            </TabsTrigger>
             <TabsTrigger value="announcements" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
               Announcements & Broadcasts
             </TabsTrigger>
@@ -358,6 +746,245 @@ Recorded by: ${currentUser?.name}`;
           </TabsList>
 
           <TabsContent value="minutes" className="space-y-6">
+            {/* Pre-Meeting Workspace & Executive AI Staging Banner */}
+            <Card className="bg-[#002520] border-2 border-[#ffd700]/40 p-6 rounded-xl shadow-xl space-y-6">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#ffd700]/20 pb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-[#ffd700] flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-[#ffd700]" />
+                    Pre-Meeting Workspace & Executive AI Staging
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Configure live meeting quorum, auto-generate time-boxed agendas, and search constitutional knowledge archives.
+                  </p>
+                </div>
+
+                <Button
+                  onClick={handleGenerateAgenda}
+                  disabled={isGeneratingAgenda}
+                  className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold text-xs py-2 px-4 rounded-lg flex items-center gap-2 cursor-pointer shrink-0"
+                >
+                  {isGeneratingAgenda ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generating Agenda...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      Generate AI Agenda
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {/* Quorum Counter & Status Widget Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Quorum Counter Control */}
+                <div className="bg-[#001a16] border border-[#ffd700]/20 p-4 rounded-lg flex flex-col justify-between space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Users className="w-4 h-4 text-[#ffd700]" />
+                      Present Members Counter
+                    </span>
+                    {isCalculatingQuorum && <Loader2 className="w-3.5 h-3.5 animate-spin text-[#ffd700]" />}
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setPresentMembersCount((prev) => Math.max(0, prev - 1))}
+                      className="w-9 h-9 rounded bg-[#002520] border border-[#ffd700]/30 text-[#ffd700] font-bold text-lg hover:bg-[#ffd700]/20 flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                      -
+                    </button>
+                    <input
+                      type="number"
+                      min={0}
+                      value={presentMembersCount}
+                      onChange={(e) => setPresentMembersCount(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-full bg-[#00100d] border border-[#ffd700]/30 text-white text-center font-bold text-lg py-1.5 rounded focus:outline-none focus:border-[#ffd700]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPresentMembersCount((prev) => prev + 1)}
+                      className="w-9 h-9 rounded bg-[#002520] border border-[#ffd700]/30 text-[#ffd700] font-bold text-lg hover:bg-[#ffd700]/20 flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {/* Live Quorum Status Badge */}
+                <div className="bg-[#001a16] border border-[#ffd700]/20 p-4 rounded-lg flex flex-col justify-between space-y-2 lg:col-span-2">
+                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    Constitutional Quorum Status
+                  </span>
+
+                  {quorumStatus ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        {quorumStatus.hasQuorum ? (
+                          <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 px-3 py-1.5 rounded-lg flex items-center gap-2 font-semibold text-xs">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span>{quorumStatus.presentMembers} / {quorumStatus.quorumRequired} Required — Quorum Reached</span>
+                          </div>
+                        ) : (
+                          <div className="bg-amber-500/20 border border-amber-500/40 text-amber-400 px-3 py-1.5 rounded-lg flex items-center gap-2 font-semibold text-xs">
+                            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                            <span>{quorumStatus.presentMembers} / {quorumStatus.quorumRequired} Required — Quorum Not Met</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="text-xs text-gray-300 font-mono flex items-center gap-3">
+                        <span>Total Active: <strong className="text-white">{quorumStatus.totalMembers}</strong></span>
+                        <span>Attendance: <strong className="text-[#ffd700]">{quorumStatus.percentagePresent}%</strong></span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-gray-400 text-xs py-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-[#ffd700]" />
+                      <span>Calculating constitutional quorum metrics...</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Expandable AI Pre-Meeting Agenda Drawer */}
+              {agendaItems && agendaItems.length > 0 && (
+                <div className="bg-[#001a16] border border-[#ffd700]/30 rounded-lg p-4 space-y-4">
+                  <div className="flex justify-between items-center border-b border-white/10 pb-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsAgendaDrawerOpen(!isAgendaDrawerOpen)}
+                      className="flex items-center gap-2 text-sm font-bold text-[#ffd700] hover:underline cursor-pointer"
+                    >
+                      <Clock className="w-4 h-4 text-[#ffd700]" />
+                      <span>AI Time-Boxed Meeting Agenda ({agendaItems.reduce((acc, i) => acc + i.estimatedMinutes, 0)} Total Mins)</span>
+                      {isAgendaDrawerOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                    </button>
+
+                    <Button
+                      onClick={handleInsertAgendaToMinutes}
+                      className="bg-[#ffd700]/10 border border-[#ffd700]/40 text-[#ffd700] hover:bg-[#ffd700] hover:text-[#001a16] text-xs py-1 px-3 h-auto font-bold flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>Insert Agenda into Minutes</span>
+                    </Button>
+                  </div>
+
+                  {isAgendaDrawerOpen && (
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                      {agendaItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="bg-[#002520] border border-white/10 p-3 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-white text-sm">{item.title}</span>
+                              <span className="bg-[#001411] text-[#ffd700] border border-[#ffd700]/20 px-2 py-0.5 rounded text-[10px] font-semibold">
+                                {item.category}
+                              </span>
+                              {item.isUnfinishedBusiness && (
+                                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1">
+                                  <AlertTriangle className="w-3 h-3 text-amber-400" />
+                                  Unfinished Business
+                                </span>
+                              )}
+                            </div>
+                            {item.notes && <p className="text-gray-400 text-[11px]">{item.notes}</p>}
+                          </div>
+
+                          <div className="flex items-center gap-1 text-gray-300 font-mono text-xs shrink-0">
+                            <Clock className="w-3.5 h-3.5 text-[#ffd700]" />
+                            <span>{item.estimatedMinutes} mins</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Secretary Knowledge Base Search Bar */}
+              <div className="border-t border-[#ffd700]/20 pt-4 space-y-4">
+                <form onSubmit={handleSearchKnowledgeBase} className="flex gap-2">
+                  <div className="relative flex-grow">
+                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={knowledgeSearchQuery}
+                      onChange={(e) => setKnowledgeSearchQuery(e.target.value)}
+                      placeholder="Search Archive Knowledge Base (Constitution, Minutes, Resolutions)..."
+                      className="w-full bg-[#001a16] border border-[#ffd700]/30 text-white pl-9 pr-4 py-2 rounded-lg text-sm focus:outline-none focus:border-[#ffd700]"
+                    />
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={isSearchingKnowledge || !knowledgeSearchQuery.trim()}
+                    className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold text-xs px-4 py-2 shrink-0 cursor-pointer"
+                  >
+                    {isSearchingKnowledge ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
+                        Searching...
+                      </>
+                    ) : (
+                      <>
+                        <BookOpen className="w-4 h-4 mr-1.5" />
+                        Search Archive
+                      </>
+                    )}
+                  </Button>
+                </form>
+
+                {/* Knowledge Search Results Side Drawer / Expandable Panel */}
+                {knowledgeResult && isKnowledgeDrawerOpen && (
+                  <div className="bg-[#001a16] border border-[#ffd700]/30 rounded-lg p-4 space-y-3">
+                    <div className="flex justify-between items-center border-b border-white/10 pb-2">
+                      <span className="text-xs font-semibold text-[#ffd700] flex items-center gap-1.5">
+                        <BookOpen className="w-4 h-4" />
+                        {knowledgeResult.summary}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsKnowledgeDrawerOpen(false)}
+                        className="text-gray-400 hover:text-white transition-colors cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1">
+                      {knowledgeResult.relevantMinutes.map((snippet) => (
+                        <div key={snippet.id} className="bg-[#002520] border border-white/10 p-3 rounded-lg space-y-2 text-xs">
+                          <div className="flex justify-between items-start gap-2">
+                            <div>
+                              <h5 className="font-bold text-white">{snippet.title}</h5>
+                              <span className="text-[10px] text-gray-400 font-mono">{snippet.date}</span>
+                            </div>
+                            <Button
+                              onClick={() => handleInsertSnippetToMinutes(snippet.snippet, snippet.title)}
+                              className="bg-[#ffd700]/10 border border-[#ffd700]/30 text-[#ffd700] hover:bg-[#ffd700] hover:text-[#001a16] text-[11px] py-1 px-2.5 h-auto font-semibold flex items-center gap-1 shrink-0 cursor-pointer"
+                            >
+                              <Copy className="w-3 h-3" />
+                              <span>Copy Note</span>
+                            </Button>
+                          </div>
+                          <p className="text-gray-300 text-xs italic bg-[#00100d] p-2 rounded border border-white/5">
+                            "{snippet.snippet}"
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
+
             {/* Meeting Minutes Editor card */}
             <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-xl shadow-lg">
               <h3 className="text-xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
@@ -366,7 +993,7 @@ Recorded by: ${currentUser?.name}`;
               </h3>
 
               <div className="space-y-4">
-                <div className="flex gap-4">
+                <div className="flex flex-wrap gap-4">
                   <Button
                     onClick={simulateAITranscription}
                     disabled={isRecording}
@@ -374,6 +1001,40 @@ Recorded by: ${currentUser?.name}`;
                   >
                     <Mic className="w-4 h-4 mr-2" />
                     {isRecording ? 'Recording...' : 'AI Voice-to-Text Listener'}
+                  </Button>
+                  <Button
+                    onClick={handleExtractMotions}
+                    disabled={isExtractingMotions || !minutesText.trim()}
+                    className="bg-[#ffd700]/10 border border-[#ffd700] text-[#ffd700] hover:bg-[#ffd700] hover:text-[#001a16] font-bold cursor-pointer flex items-center gap-2"
+                  >
+                    {isExtractingMotions ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Extracting Motions...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        Extract Motions to Resolutions
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={handleAuditCompliance}
+                    disabled={isAuditingCompliance}
+                    className="bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 font-bold cursor-pointer flex items-center gap-2"
+                  >
+                    {isAuditingCompliance ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Auditing Compliance...
+                      </>
+                    ) : (
+                      <>
+                        <ShieldAlert className="w-4 h-4" />
+                        Audit Compliance
+                      </>
+                    )}
                   </Button>
                   <Button
                     onClick={exportMinutes}
@@ -435,6 +1096,166 @@ Recorded by: ${currentUser?.name}`;
             </Card>
           </TabsContent>
 
+          {/* Phase 2 Resolutions & Accountability Tab Content */}
+          <TabsContent value="resolutions" className="space-y-6">
+            <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-xl shadow-lg space-y-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#ffd700]/20 pb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-[#ffd700] flex items-center gap-2">
+                    <CheckSquare className="w-5 h-5 text-[#ffd700]" />
+                    Assembly Resolutions & Executive Task Lifecycle
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Track floor motions, officer accountability deadlines, and evidence verification for action closure.
+                  </p>
+                </div>
+
+                <Button
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold text-xs py-2 px-4 rounded-lg flex items-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  New Floor Resolution
+                </Button>
+              </div>
+
+              {/* Filter Controls */}
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <Filter className="w-4 h-4 text-gray-400 mr-1" />
+                  {['ALL', 'Assigned', 'In Progress', 'Evidence Uploaded', 'Closed'].map((filterKey) => (
+                    <button
+                      key={filterKey}
+                      type="button"
+                      onClick={() => setResolutionFilter(filterKey)}
+                      className={`px-3 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
+                        resolutionFilter === filterKey
+                          ? 'bg-[#ffd700] text-[#001a16]'
+                          : 'bg-[#001a16] text-gray-300 border border-[#ffd700]/20 hover:border-[#ffd700]/50'
+                      }`}
+                    >
+                      {filterKey}
+                    </button>
+                  ))}
+                </div>
+
+                <span className="text-xs text-gray-400 font-mono">
+                  Showing {filteredResolutions.length} of {resolutions.length} resolution(s)
+                </span>
+              </div>
+
+              {/* Resolutions Grid */}
+              {isLoadingResolutions ? (
+                <div className="flex items-center justify-center py-12 text-[#ffd700] gap-2 text-sm">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Loading assembly resolutions ledger...</span>
+                </div>
+              ) : filteredResolutions.length === 0 ? (
+                <div className="text-center py-12 border border-dashed border-[#ffd700]/20 rounded-xl space-y-2">
+                  <CheckSquare className="w-8 h-8 text-gray-500 mx-auto" />
+                  <p className="text-gray-400 text-sm italic">No resolutions found for filter "{resolutionFilter}".</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredResolutions.map((res) => (
+                    <div
+                      key={res.id}
+                      className="bg-[#001a16] border border-[#ffd700]/20 rounded-xl p-5 space-y-4 flex flex-col justify-between hover:border-[#ffd700]/50 transition-colors shadow-md"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-start gap-2">
+                          <span className="bg-[#002520] text-[#ffd700] border border-[#ffd700]/30 px-2 py-0.5 rounded text-[10px] font-mono">
+                            {res.vote_type}
+                          </span>
+                          {res.status === 'Assigned' && (
+                            <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5 text-blue-400" />
+                              Assigned
+                            </span>
+                          )}
+                          {res.status === 'In Progress' && (
+                            <span className="bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5">
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                              In Progress
+                            </span>
+                          )}
+                          {res.status === 'Evidence Uploaded' && (
+                            <span className="bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5">
+                              <Upload className="w-3.5 h-3.5 text-purple-400" />
+                              Evidence Uploaded
+                            </span>
+                          )}
+                          {(res.status === 'Verified' || res.status === 'Closed') && (
+                            <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5">
+                              <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                              Verified & Closed
+                            </span>
+                          )}
+                        </div>
+
+                        <h4 className="font-bold text-white text-base leading-snug">{res.title}</h4>
+                        <p className="text-gray-300 text-xs leading-relaxed">{res.description}</p>
+                      </div>
+
+                      <div className="space-y-3 pt-3 border-t border-white/10 text-xs text-gray-400">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="text-[10px] text-gray-500 block">MOVER / SECONDER</span>
+                            <span className="text-gray-300 font-semibold text-[11px] truncate flex items-center gap-1">
+                              <UserCheck className="w-3 h-3 text-[#ffd700]" />
+                              {res.mover_name || 'Assembly'}
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="text-[10px] text-gray-500 block">ASSIGNED OFFICER</span>
+                            <span className="text-[#ffd700] font-semibold text-[11px] truncate block">
+                              {res.assigned_officer_name || res.assigned_officer_id || 'General Secretary'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {res.deadline && (
+                          <div className="flex items-center gap-1.5 text-gray-400 font-mono text-[11px]">
+                            <Clock className="w-3.5 h-3.5 text-[#ffd700]" />
+                            <span>Target Deadline: {res.deadline}</span>
+                          </div>
+                        )}
+
+                        {res.evidence_url && (
+                          <div className="bg-[#00100d] border border-purple-500/30 p-2 rounded text-[11px] space-y-1">
+                            <span className="text-purple-400 font-semibold flex items-center gap-1">
+                              <Upload className="w-3 h-3" />
+                              Uploaded Evidence Reference
+                            </span>
+                            <a
+                              href={res.evidence_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-blue-400 underline hover:text-blue-300 flex items-center gap-1 truncate"
+                            >
+                              <ExternalLink className="w-3 h-3 shrink-0" />
+                              <span className="truncate">{res.evidence_url}</span>
+                            </a>
+                            {res.evidence_notes && <p className="text-gray-400 italic">"{res.evidence_notes}"</p>}
+                          </div>
+                        )}
+
+                        <Button
+                          onClick={() => handleOpenClosureModal(res)}
+                          className="w-full bg-[#ffd700]/10 border border-[#ffd700]/40 text-[#ffd700] hover:bg-[#ffd700] hover:text-[#001a16] text-xs py-2 font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors mt-2"
+                        >
+                          <FileCheck className="w-4 h-4" />
+                          <span>Action Closure & Evidence</span>
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
           <TabsContent value="announcements" className="space-y-6">
             {/* Publish Announcement widget */}
             <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-xl shadow-lg">
@@ -491,6 +1312,445 @@ Recorded by: ${currentUser?.name}`;
             />
           </TabsContent>
         </Tabs>
+      )}
+
+      {/* Extracted Motions Preview Modal */}
+      {isExtractedModalOpen && extractedMotions && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#002520] border-2 border-[#ffd700] rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto space-y-5 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-[#ffd700]/20 pb-3">
+              <h3 className="text-lg font-bold text-[#ffd700] flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-[#ffd700]" />
+                Parsed Floor Motions Preview ({extractedMotions.length} Item(s))
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsExtractedModalOpen(false)}
+                className="text-gray-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {extractedMotions.map((item, idx) => (
+                <div key={idx} className="bg-[#001a16] border border-[#ffd700]/20 p-4 rounded-lg space-y-2 text-xs">
+                  <div className="flex justify-between items-start">
+                    <span className="font-bold text-white text-sm">{item.title}</span>
+                    <span className="bg-[#002520] text-[#ffd700] border border-[#ffd700]/30 px-2 py-0.5 rounded text-[10px]">
+                      {item.vote_type}
+                    </span>
+                  </div>
+                  <p className="text-gray-300">{item.description}</p>
+                  <div className="flex justify-between items-center text-gray-400 font-mono text-[11px] pt-2 border-t border-white/5">
+                    <span>Assigned: {item.assigned_officer_name || 'General Secretary'}</span>
+                    <span>Deadline: {item.deadline}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-3 border-t border-[#ffd700]/20">
+              <Button
+                type="button"
+                onClick={() => setIsExtractedModalOpen(false)}
+                variant="outline"
+                className="border-gray-600 text-gray-300 hover:bg-gray-800 text-xs cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleConfirmSaveExtractedMotions}
+                disabled={isSavingExtracted}
+                className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold text-xs px-4 flex items-center gap-1.5 cursor-pointer"
+              >
+                {isSavingExtracted ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Saving to Database...
+                  </>
+                ) : (
+                  <>
+                    <CheckSquare className="w-4 h-4" />
+                    Commit Resolutions to Ledger
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Action Closure & Evidence Upload Modal */}
+      {closureResolution && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#002520] border-2 border-[#ffd700] rounded-xl p-6 max-w-lg w-full space-y-5 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-[#ffd700]/20 pb-3">
+              <h3 className="text-lg font-bold text-[#ffd700] flex items-center gap-2">
+                <FileCheck className="w-5 h-5 text-[#ffd700]" />
+                Action Closure & Evidence Verification
+              </h3>
+              <button
+                type="button"
+                onClick={() => setClosureResolution(null)}
+                className="text-gray-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-[#001a16] border border-white/10 p-3 rounded-lg space-y-1 text-xs">
+              <h4 className="font-bold text-white text-sm">{closureResolution.title}</h4>
+              <p className="text-gray-300">{closureResolution.description}</p>
+              <div className="text-gray-400 font-mono text-[11px] pt-1">
+                Assigned to: <strong className="text-[#ffd700]">{closureResolution.assigned_officer_name || closureResolution.assigned_officer_id}</strong>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="text-gray-300 font-semibold flex items-center gap-1.5">
+                  <Upload className="w-3.5 h-3.5 text-[#ffd700]" />
+                  Evidence Document / Receipt URL
+                </label>
+                <Input
+                  value={evidenceUrlInput}
+                  onChange={(e) => setEvidenceUrlInput(e.target.value)}
+                  placeholder="https://supabase.co/storage/... or document reference link"
+                  className="bg-[#001a16] border-[#ffd700]/30 text-white focus:border-[#ffd700]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-300 font-semibold">Evidence / Completion Notes</label>
+                <textarea
+                  value={evidenceNotesInput}
+                  onChange={(e) => setEvidenceNotesInput(e.target.value)}
+                  placeholder="Summary of action taken, receipt numbers, or audit notes..."
+                  className="w-full bg-[#001a16] border border-[#ffd700]/30 text-white p-3 rounded-lg min-h-[90px] focus:outline-none focus:border-[#ffd700] text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-[#ffd700]/20">
+              <Button
+                type="button"
+                onClick={() => handleUpdateResolutionStatusAction('In Progress')}
+                disabled={isUpdatingStatus}
+                className="bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 text-xs font-semibold cursor-pointer"
+              >
+                Mark In Progress
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleUpdateResolutionStatusAction('Evidence Uploaded')}
+                disabled={isUpdatingStatus || !evidenceUrlInput}
+                className="bg-purple-500/20 text-purple-300 border border-purple-500/40 hover:bg-purple-500/30 text-xs font-semibold cursor-pointer"
+              >
+                Submit Evidence
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleUpdateResolutionStatusAction('Closed')}
+                disabled={isUpdatingStatus}
+                className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] text-xs font-bold flex items-center justify-center gap-1 cursor-pointer sm:ml-auto"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                Verify & Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Create Resolution Modal */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleCreateManualResolution} className="bg-[#002520] border-2 border-[#ffd700] rounded-xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-[#ffd700]/20 pb-3">
+              <h3 className="text-lg font-bold text-[#ffd700] flex items-center gap-2">
+                <Plus className="w-5 h-5 text-[#ffd700]" />
+                Record New Assembly Resolution
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsCreateModalOpen(false)}
+                className="text-gray-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="space-y-1">
+                <label className="text-gray-300 font-semibold">Resolution Title</label>
+                <Input
+                  value={newResTitle}
+                  onChange={(e) => setNewResTitle(e.target.value)}
+                  placeholder="e.g. Welfare Audit Commission"
+                  className="bg-[#001a16] border-[#ffd700]/30 text-white focus:border-[#ffd700]"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-300 font-semibold">Resolution Details / Mandate</label>
+                <textarea
+                  value={newResDesc}
+                  onChange={(e) => setNewResDesc(e.target.value)}
+                  placeholder="Detailed floor motion text and mandate..."
+                  className="w-full bg-[#001a16] border border-[#ffd700]/30 text-white p-3 rounded-lg min-h-[80px] focus:outline-none focus:border-[#ffd700] text-xs"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-gray-300 font-semibold">Mover Name</label>
+                  <Input
+                    value={newResMover}
+                    onChange={(e) => setNewResMover(e.target.value)}
+                    placeholder="e.g. Eze, Chukwuma"
+                    className="bg-[#001a16] border-[#ffd700]/30 text-white focus:border-[#ffd700]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-gray-300 font-semibold">Seconder Name</label>
+                  <Input
+                    value={newResSeconder}
+                    onChange={(e) => setNewResSeconder(e.target.value)}
+                    placeholder="e.g. Dondo, Christopher"
+                    className="bg-[#001a16] border-[#ffd700]/30 text-white focus:border-[#ffd700]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-gray-300 font-semibold">Vote Type</label>
+                  <select
+                    value={newResVoteType}
+                    onChange={(e) => setNewResVoteType(e.target.value as any)}
+                    className="w-full bg-[#001a16] border border-[#ffd700]/30 text-white p-2 rounded focus:outline-none focus:border-[#ffd700] text-xs"
+                  >
+                    <option value="Voice Vote">Voice Vote</option>
+                    <option value="Secret Ballot">Secret Ballot</option>
+                    <option value="Simple Majority">Simple Majority</option>
+                    <option value="2/3 Majority">2/3 Majority</option>
+                    <option value="Unanimous">Unanimous</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-gray-300 font-semibold">Assigned Officer</label>
+                  <Input
+                    value={newResOfficerName}
+                    onChange={(e) => setNewResOfficerName(e.target.value)}
+                    placeholder="e.g. Financial Secretary"
+                    className="bg-[#001a16] border-[#ffd700]/30 text-white focus:border-[#ffd700]"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-300 font-semibold">Target Completion Deadline</label>
+                <Input
+                  type="date"
+                  value={newResDeadline}
+                  onChange={(e) => setNewResDeadline(e.target.value)}
+                  className="bg-[#001a16] border-[#ffd700]/30 text-white focus:border-[#ffd700]"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-3 border-t border-[#ffd700]/20">
+              <Button
+                type="button"
+                onClick={() => setIsCreateModalOpen(false)}
+                variant="outline"
+                className="border-gray-600 text-gray-300 hover:bg-gray-800 text-xs cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isCreatingResolution || !newResTitle || !newResDesc}
+                className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold text-xs px-4 flex items-center gap-1.5 cursor-pointer"
+              >
+                {isCreatingResolution ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4" />
+                    Create & Assign Resolution
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Phase 3 Constitutional Sentinel Advisory Modal */}
+      {isComplianceModalOpen && complianceResult && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#002520] border-2 border-[#ffd700] rounded-xl p-6 max-w-lg w-full space-y-5 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-[#ffd700]/20 pb-3">
+              <h3 className="text-lg font-bold text-[#ffd700] flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-[#ffd700]" />
+                Constitutional Advisory Audit
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsComplianceModalOpen(false)}
+                className="text-gray-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div
+              className={`p-4 rounded-xl border flex items-start gap-3 text-xs ${
+                complianceResult.severity === 'Violation'
+                  ? 'bg-red-500/20 border-red-500/40 text-red-200'
+                  : complianceResult.severity === 'Warning'
+                  ? 'bg-amber-500/20 border-amber-500/40 text-amber-200'
+                  : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200'
+              }`}
+            >
+              {complianceResult.severity === 'Violation' || complianceResult.severity === 'Warning' ? (
+                <AlertTriangle className={`w-5 h-5 shrink-0 ${complianceResult.severity === 'Violation' ? 'text-red-400' : 'text-amber-400'}`} />
+              ) : (
+                <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+              )}
+
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <strong className="text-sm font-bold uppercase tracking-wider">
+                    {complianceResult.severity} Audit Result
+                  </strong>
+                </div>
+                {complianceResult.articleReference && (
+                  <p className="text-[11px] font-mono opacity-90">{complianceResult.articleReference}</p>
+                )}
+                <p className="text-xs leading-relaxed pt-1">{complianceResult.adviceText}</p>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-[#ffd700]/20">
+              <Button
+                type="button"
+                onClick={() => setIsComplianceModalOpen(false)}
+                className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold text-xs px-4 cursor-pointer"
+              >
+                Acknowledge Guidance
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Phase 3 Executive Succession & Handover Dossier Modal */}
+      {isHandoverModalOpen && handoverDossier && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#002520] border-2 border-[#ffd700] rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto space-y-6 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-[#ffd700]/20 pb-3">
+              <h3 className="text-lg font-bold text-[#ffd700] flex items-center gap-2">
+                <PackageCheck className="w-5 h-5 text-[#ffd700]" />
+                Executive Succession & Handover Dossier ({handoverDossier.tenurePeriod})
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsHandoverModalOpen(false)}
+                className="text-gray-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-[#001a16] border border-[#ffd700]/20 p-4 rounded-xl space-y-2 text-xs">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                <Building2 className="w-3.5 h-3.5 text-[#ffd700]" />
+                Executive Transition Summary
+              </span>
+              <p className="text-gray-200 leading-relaxed">{handoverDossier.summaryReport}</p>
+              <span className="text-[10px] font-mono text-gray-500 block pt-1">
+                Generated At: {new Date(handoverDossier.generatedAt).toLocaleString()}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-[#001a16] border border-white/10 p-3 rounded-lg text-center space-y-1">
+                <span className="text-[10px] text-gray-400 uppercase block">Registered Members</span>
+                <strong className="text-white text-lg font-bold">{handoverDossier.totalRegisteredMembers}</strong>
+              </div>
+              <div className="bg-[#001a16] border border-white/10 p-3 rounded-lg text-center space-y-1">
+                <span className="text-[10px] text-amber-400 uppercase block">Pending Tasks</span>
+                <strong className="text-amber-300 text-lg font-bold">{handoverDossier.pendingResolutionsCount}</strong>
+              </div>
+              <div className="bg-[#001a16] border border-white/10 p-3 rounded-lg text-center space-y-1">
+                <span className="text-[10px] text-emerald-400 uppercase block">Closed Actions</span>
+                <strong className="text-emerald-300 text-lg font-bold">{handoverDossier.closedResolutionsCount}</strong>
+              </div>
+              <div className="bg-[#001a16] border border-white/10 p-3 rounded-lg text-center space-y-1">
+                <span className="text-[10px] text-[#ffd700] uppercase block">Archived Minutes</span>
+                <strong className="text-[#ffd700] text-lg font-bold">{handoverDossier.archivedMinutesCount}</strong>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <h4 className="font-bold text-[#ffd700] uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                <FileText className="w-4 h-4" />
+                Active Commitments & Transition Tasks
+              </h4>
+              <div className="bg-[#001a16] border border-white/10 p-3 rounded-lg space-y-1.5">
+                {handoverDossier.activeCommitments.map((item, idx) => (
+                  <div key={idx} className="flex items-start gap-2 text-gray-300">
+                    <span className="text-[#ffd700] font-mono font-bold">{idx + 1}.</span>
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <h4 className="font-bold text-[#ffd700] uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                <BookOpen className="w-4 h-4" />
+                Constitutional Governance Highlights
+              </h4>
+              <div className="bg-[#001a16] border border-white/10 p-3 rounded-lg space-y-1.5">
+                {handoverDossier.constitutionalHighlights.map((item, idx) => (
+                  <div key={idx} className="flex items-start gap-2 text-gray-300">
+                    <span className="text-[#ffd700] font-mono font-bold">{idx + 1}.</span>
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-3 border-t border-[#ffd700]/20">
+              <Button
+                type="button"
+                onClick={() => setIsHandoverModalOpen(false)}
+                variant="outline"
+                className="border-gray-600 text-gray-300 hover:bg-gray-800 text-xs cursor-pointer"
+              >
+                Close
+              </Button>
+              <Button
+                type="button"
+                onClick={handleExportHandoverDossier}
+                className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold text-xs px-4 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                Export Handover Dossier
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

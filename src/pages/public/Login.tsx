@@ -5,6 +5,7 @@ import { Input } from '../../app/components/ui/input';
 import { LogIn, UserCheck, ShieldCheck } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { supabase } from '../../lib/supabaseClient';
+import { isUuid } from '../../utils/supabaseHelpers';
 import { Member } from '../../types';
 import { Heading } from '../../app/components/common/Heading';
 
@@ -146,12 +147,18 @@ export const Login = () => {
         // 1. Check in active context members array
         member = members.find(m => m.id === inputMemberId || m.official_member_id === inputMemberId) || null;
 
-        // 2. Check public.members matching official_member_id
+        // 2. Check public.members matching official_member_id or id
         if (!member) {
-          const { data: dbMembersData, error: dbErr } = await supabase
+          const isInputUuid = isUuid(inputMemberId);
+          const memberQuery = supabase
             .from('members')
-            .select('*')
-            .eq('official_member_id', inputMemberId);
+            .select('*');
+
+          const { data: dbMembersData, error: dbErr } = await (
+            isInputUuid 
+              ? memberQuery.or(`official_member_id.eq.${inputMemberId},id.eq.${inputMemberId}`)
+              : memberQuery.eq('official_member_id', inputMemberId)
+          );
 
           const dbMember = dbMembersData && dbMembersData.length > 0 ? dbMembersData[0] : null;
 
