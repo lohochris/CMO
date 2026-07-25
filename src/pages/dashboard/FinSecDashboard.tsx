@@ -4,12 +4,13 @@ import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { Users, CheckCircle, AlertCircle, TrendingUp, DollarSign, Camera, Megaphone, FileText, Upload, Edit, Trash2, ShieldCheck } from 'lucide-react';
+import { Users, CheckCircle, AlertCircle, TrendingUp, DollarSign, Camera, Megaphone, FileText, Upload, Edit, Trash2, ShieldCheck, Trophy } from 'lucide-react';
+import { SportsAuditReadOnlyView } from './sports/SportsAuditReadOnlyView';
 import { useApp } from '../../contexts/AppContext';
 import { generateMemberId, generateExpenseId } from '../../utils/idGenerators';
 import { formatCurrency, formatDate, getCombinedTransactions, calculateTotal, isAdministrativeId } from '../../utils/helpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
-import { uploadProfilePicture } from '../../utils/supabaseHelpers';
+import { uploadProfilePicture, isUuid, getMemberQueryField } from '../../utils/supabaseHelpers';
 import { supabase } from '../../lib/supabaseClient';
 import logoImage from '../../imports/CMO.png';
 import { Member, Family, MemberStatus } from '../../types';
@@ -265,13 +266,14 @@ export const FinSecDashboard = () => {
 
     try {
       // Update the registered member's official ID and status
+      const queryField = getMemberQueryField(memberUUID);
       const { error } = await supabase
         .from('members')
         .update({ 
           official_member_id: generatedNewId, // Write 'HCC-CMO-26-165' here!
           status: 'Active'                    // Set them as validated
         })
-        .eq('id', memberUUID);                // Match by their internal primary key UUID
+        .eq(queryField, memberUUID);
 
       if (error) {
         console.error("Database update error on validateMember:", error);
@@ -534,10 +536,11 @@ export const FinSecDashboard = () => {
 
     // Fetch existing balance, add the new amount, and update both tables
     let currentMemberBalance = 0;
+    const memQueryField = getMemberQueryField(selectedMemberId);
     const { data: dbMem, error: fetchMemErr } = await supabase
       .from('members')
       .select('balance')
-      .eq('official_member_id', selectedMemberId)
+      .eq(memQueryField, selectedMemberId)
       .maybeSingle();
 
     if (fetchMemErr) {
@@ -552,7 +555,7 @@ export const FinSecDashboard = () => {
 
     const newBalance = (parseFloat(currentMemberBalance as any) || 0) + parseFloat(amountInput);
 
-    const { error: memberUpdateErr } = await supabase.from('members').update({ balance: newBalance }).eq('official_member_id', selectedMemberId);
+    const { error: memberUpdateErr } = await supabase.from('members').update({ balance: newBalance }).eq(memQueryField, selectedMemberId);
     if (memberUpdateErr) {
       console.error("Members Balance Update Error:", memberUpdateErr);
     }
@@ -561,7 +564,7 @@ export const FinSecDashboard = () => {
     const { error: statusError } = await supabase
       .from('members')
       .update({ status: 'Active' })
-      .eq('official_member_id', selectedMemberId);
+      .eq(memQueryField, selectedMemberId);
     if (statusError) {
       console.error("Status Update Error:", statusError);
     }
@@ -1199,6 +1202,10 @@ export const FinSecDashboard = () => {
             </TabsTrigger>
             <TabsTrigger value="announcements" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer">
               Announcements
+            </TabsTrigger>
+            <TabsTrigger value="sports_treasury" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer flex items-center gap-1.5">
+              <Trophy className="w-4 h-4" />
+              Sports Treasury
             </TabsTrigger>
           </TabsList>
           {isExecutiveUnlocked && (
@@ -2270,6 +2277,9 @@ export const FinSecDashboard = () => {
               ))}
             </div>
           </Card>
+        </TabsContent>
+        <TabsContent value="sports_treasury" className="mt-6">
+          <SportsAuditReadOnlyView />
         </TabsContent>
           </>
         )}

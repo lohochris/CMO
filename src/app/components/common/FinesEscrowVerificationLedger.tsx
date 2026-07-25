@@ -3,6 +3,7 @@ import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { useApp } from '../../../contexts/AppContext';
 import { supabase } from '../../../lib/supabaseClient';
+import { getMemberQueryField } from '../../../utils/supabaseHelpers';
 import { toast } from 'sonner';
 import { Gavel, CheckCircle2, Clock, AlertCircle, ShieldCheck, DollarSign } from 'lucide-react';
 import { formatCurrency } from '../../../utils/helpers';
@@ -59,14 +60,15 @@ export const FinesEscrowVerificationLedger = () => {
 
       // 2. Fetch current member balance to clear the fine deficit if applicable
       const targetMember = members.find(m => m.official_member_id === memberId || m.id === memberId);
-      if (targetMember) {
+      if (targetMember && memberId) {
         const currentBalance = targetMember.balance || 0;
         const newBalance = currentBalance + fineAmount; // Restores fine amount back to balance upon clearance
 
+        const queryField = getMemberQueryField(memberId);
         await supabase
           .from('members')
           .update({ balance: newBalance })
-          .eq('official_member_id', memberId);
+          .eq(queryField, memberId);
 
         await supabase
           .from('master_roster')

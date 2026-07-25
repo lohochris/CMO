@@ -49,24 +49,30 @@ interface InventoryItem {
 
 interface AllocationLog {
   id: string;
-  item_id: string;
-  quantity: number;
+  item_id?: string;
+  equipment_id?: string;
+  quantity?: number;
   quantity_allocated?: number;
   quantity_returned?: number;
-  allocated_to: string;
+  allocated_to?: string;
+  assigned_to_name?: string;
+  assigned_to_type?: string;
   assignee_category?: AssigneeCategory;
-  allocation_date: string;
-  expected_return_date: string | null;
+  allocation_date?: string;
+  allocated_at?: string;
+  expected_return_date?: string | null;
+  actual_return_date?: string | null;
   condition_on_issue?: ItemCondition;
   condition_on_return?: ItemCondition;
   status?: string;
-  returned: boolean;
-  returned_date: string | null;
-  depreciation_notes: string | null;
+  returned?: boolean;
+  returned_date?: string | null;
+  depreciation_notes?: string | null;
   notes?: string | null;
-  logged_by: string | null;
-  created_at: string;
+  logged_by?: string | null;
+  created_at?: string;
   item?: { item_name: string; category: string };
+  sports_equipment?: { id?: string; item_name: string; category: string };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -151,11 +157,10 @@ interface AllocateEquipmentModalProps {
 }
 
 const AllocateEquipmentModal = ({ items, members, onClose, onSaved, managerName }: AllocateEquipmentModalProps) => {
-  const { currentUser, currentMember } = useApp();
+  const { currentUser } = useApp();
 
   const activeOfficialId =
     currentUser?.official_member_id ||
-    currentMember?.official_member_id ||
     'HCC-CMO-SPRT-DIR';
 
   const availableItems = items.filter(i => i.available_quantity > 0);
@@ -746,14 +751,13 @@ const NewItemForm = ({ onClose, onSaved, managerName }: NewItemFormProps) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const EquipmentInventoryLedger = () => {
-  const { currentUser, currentMember, members } = useApp();
+  const { currentUser, members } = useApp();
 
   const activeOfficialId =
     currentUser?.official_member_id ||
-    currentMember?.official_member_id ||
     'HCC-CMO-SPRT-DIR';
 
-  const role = (currentUser?.role || currentMember?.role)?.toLowerCase();
+  const role = currentUser?.role?.toLowerCase();
   const isAuthorised =
     role === 'sports_director' ||
     role === 'coach' ||

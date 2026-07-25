@@ -4,9 +4,10 @@ import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { Users, CheckCircle, CheckCheck, AlertCircle, DollarSign, Megaphone, FileText, Shield, Heart, ShieldCheck, BookOpen, X } from 'lucide-react';
+import { Users, CheckCircle, CheckCheck, AlertCircle, DollarSign, Megaphone, FileText, Shield, Heart, ShieldCheck, BookOpen, X, Trophy } from 'lucide-react';
+import { SportsAuditReadOnlyView } from './sports/SportsAuditReadOnlyView';
 import { useApp } from '../../contexts/AppContext';
-import { uploadProfilePicture } from '../../utils/supabaseHelpers';
+import { uploadProfilePicture, isUuid, getMemberQueryField } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { formatCurrency, formatDate, isAdministrativeId } from '../../utils/helpers';
 import { supabase } from '../../lib/supabaseClient';
@@ -202,7 +203,7 @@ export const ChairmanDashboard = () => {
       );
 
       for (const prev of previousOfficers) {
-        const queryField = prev.id.includes('-') && prev.id.length === 36 ? 'id' : 'official_member_id';
+        const queryField = getMemberQueryField(prev.id);
         const { error: revertErr } = await supabase
           .from('members')
           .update({ role: 'member' })
@@ -210,7 +211,7 @@ export const ChairmanDashboard = () => {
         if (revertErr) console.error("Failed to revert previous officer:", revertErr);
       }
 
-      const queryField = selectedMember.id.includes('-') && selectedMember.id.length === 36 ? 'id' : 'official_member_id';
+      const queryField = getMemberQueryField(selectedMember.id);
       const { error: memberUpdateErr } = await supabase
         .from('members')
         .update({
@@ -450,7 +451,7 @@ export const ChairmanDashboard = () => {
       setIsLoadingDetails(true);
       setIsDetailOpen(true);
       
-      const queryField = member.id.includes('-') && member.id.length === 36 ? 'id' : 'official_member_id';
+      const queryField = getMemberQueryField(member.id);
 
       const { data, error } = await supabase
         .from('members')
@@ -564,10 +565,12 @@ export const ChairmanDashboard = () => {
       };
 
       // 1. Update members table
+      const targetMemberId = editingMember.id || (editingMember as any).official_member_id;
+      const queryField = getMemberQueryField(targetMemberId);
       const { error: memberErr } = await supabase
         .from('members')
         .update(updatePayload)
-        .eq('official_member_id', editingMember.id);
+        .eq(queryField, targetMemberId);
 
       if (memberErr) throw memberErr;
 
@@ -684,10 +687,11 @@ export const ChairmanDashboard = () => {
     }
     setError('');
     try {
+      const queryField = getMemberQueryField(memberId);
       const { error: dbErr } = await supabase
         .from('members')
         .update({ status: 'Deceased' })
-        .eq('official_member_id', memberId);
+        .eq(queryField, memberId);
 
       if (dbErr) {
         console.error("Supabase update error on mark deceased:", dbErr);
@@ -715,7 +719,7 @@ export const ChairmanDashboard = () => {
     if (!confirmTransfer) return;
     setError('');
     try {
-      const queryField = memberId.includes('-') && memberId.length === 36 ? 'id' : 'official_member_id';
+      const queryField = getMemberQueryField(memberId);
 
       const { error: dbErr } = await supabase
         .from('members')
@@ -748,7 +752,7 @@ export const ChairmanDashboard = () => {
 
     setError('');
     try {
-      const queryField = memberId.includes('-') && memberId.length === 36 ? 'id' : 'official_member_id';
+      const queryField = getMemberQueryField(memberId);
 
       const { error } = await supabase
         .from('members')
@@ -993,6 +997,10 @@ export const ChairmanDashboard = () => {
             </TabsTrigger>
             <TabsTrigger value="general_gallery" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
               General Gallery & Videos
+            </TabsTrigger>
+            <TabsTrigger value="sports_treasury" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded flex items-center gap-1.5">
+              <Trophy className="w-4 h-4" />
+              Sports Treasury
             </TabsTrigger>
           </TabsList>
           {isExecutiveUnlocked && (
@@ -1657,6 +1665,9 @@ export const ChairmanDashboard = () => {
             currentUserName={currentUser?.name || 'Executive Chairman'}
             isExecutive={isExecutiveUnlocked}
           />
+        </TabsContent>
+        <TabsContent value="sports_treasury" className="mt-6">
+          <SportsAuditReadOnlyView />
         </TabsContent>
           </>
         )}

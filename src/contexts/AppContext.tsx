@@ -797,7 +797,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     for (const member of next) {
       const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
       
-      let existing = null;
+      const targetCode = member.official_member_id || member.id;
       if (isUuid(member.id)) {
         const { data } = await supabase
           .from('members')
@@ -805,11 +805,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           .eq('id', member.id)
           .maybeSingle();
         existing = data;
-      } else if (member.official_member_id) {
+      } else if (targetCode) {
         const { data } = await supabase
           .from('members')
           .select('id, official_member_id')
-          .eq('official_member_id', member.official_member_id)
+          .eq('official_member_id', targetCode)
           .maybeSingle();
         existing = data;
       }
