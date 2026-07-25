@@ -1,0 +1,807 @@
+{
+  "assignments": [
+    {
+      "id": 2,
+      "office_id": "HCC-CMO-EXEC-FS",
+      "official_member_id": "HCC-CMO-26-003",
+      "assigned_at": "2026-07-22T14:08:53.561+00:00"
+    },
+    {
+      "id": 14,
+      "office_id": "HCC-CMO-TAL-FH",
+      "official_member_id": "HCC-CMO-26-008",
+      "assigned_at": "2026-07-22T14:55:43.736+00:00"
+    },
+    {
+      "id": 4,
+      "office_id": "HCC-CMO-EXEC-LT",
+      "official_member_id": "HCC-CMO-26-009",
+      "assigned_at": "2026-07-22T12:37:08.536+00:00"
+    },
+    {
+      "id": 15,
+      "office_id": "HCC-CMO-TAL-FS",
+      "official_member_id": "HCC-CMO-26-038",
+      "assigned_at": "2026-07-22T14:56:04.847+00:00"
+    },
+    {
+      "id": 3,
+      "office_id": "HCC-CMO-SPRT-DIR",
+      "official_member_id": "HCC-CMO-26-040",
+      "assigned_at": "2026-07-22T12:36:38.547+00:00"
+    },
+    {
+      "id": 12,
+      "office_id": "HCC-CMO-HON-FH",
+      "official_member_id": "HCC-CMO-26-074",
+      "assigned_at": "2026-07-22T14:52:57.311+00:00"
+    },
+    {
+      "id": 13,
+      "office_id": "HCC-CMO-HON-FS",
+      "official_member_id": "HCC-CMO-26-075",
+      "assigned_at": "2026-07-22T14:54:52.973+00:00"
+    }
+  ],
+  "members": [
+    {
+      "id": "9ee20e46-37c0-4985-ae73-102559d3ebe2",
+      "full_name": "STANLEY UKAH",
+      "official_member_id": "HCC-CMO-26-001"
+    },
+    {
+      "id": "83cc0b23-2a62-49a1-b01f-c90f0bb8ab3d",
+      "full_name": "PIUS OKO",
+      "official_member_id": "HCC-CMO-26-002"
+    },
+    {
+      "id": "5b95a388-4469-4255-854f-4ae3beea6011",
+      "full_name": "LOHO CHRISTOPHER DONDO",
+      "official_member_id": "HCC-CMO-26-003"
+    },
+    {
+      "id": "4bb42719-978d-4779-83be-4c6d1ea119f7",
+      "full_name": "INNOCENT OGAR",
+      "official_member_id": "HCC-CMO-26-004"
+    },
+    {
+      "id": "cef6ec70-c0dc-4574-a6a5-5cb928003569",
+      "full_name": "BENJAMIN OLUMA",
+      "official_member_id": "HCC-CMO-26-005"
+    },
+    {
+      "id": "dbdfdb28-9a70-452f-b04d-ecef3cd1a76e",
+      "full_name": "RAPHAEL GODWIN",
+      "official_member_id": "HCC-CMO-26-006"
+    },
+    {
+      "id": "8d32e261-8974-479a-9ed0-2016d368af28",
+      "full_name": "ELLIS GABRIEL",
+      "official_member_id": "HCC-CMO-26-007"
+    },
+    {
+      "id": "e0a771b0-7917-42c6-a521-be0bbfa87ca6",
+      "full_name": "CHRISTOPHER NJIJA",
+      "official_member_id": "HCC-CMO-26-008"
+    },
+    {
+      "id": "9c2eaf4c-a314-4f36-ab74-15394f818f73",
+      "full_name": "GODWIN IDOKO",
+      "official_member_id": "HCC-CMO-26-009"
+    },
+    {
+      "id": "7a78a590-4e32-4a57-819a-8c048ca900ca",
+      "full_name": "TIMOTHY AGAZI",
+      "official_member_id": "HCC-CMO-26-010"
+    },
+    {
+      "id": "96fe12fa-310b-4915-bab7-e8301f30d8a4",
+      "full_name": "Dr LUGA JACOB",
+      "official_member_id": "HCC-CMO-26-011"
+    },
+    {
+      "id": "e706a059-5e54-4dc3-9052-e99f51618918",
+      "full_name": "ANTHONY EGBUNG",
+      "official_member_id": "HCC-CMO-26-012"
+    },
+    {
+      "id": "51dd2dbb-e113-4890-ab9c-b195dc55f87c",
+      "full_name": "MOSES TISHAR",
+      "official_member_id": "HCC-CMO-26-013"
+    },
+    {
+      "id": "a9f0144c-96d8-48a2-baa4-bf466e8907ea",
+      "full_name": "JAMES ADOLEJE",
+      "official_member_id": "HCC-CMO-26-014"
+    },
+    {
+      "id": "12373216-94d6-412f-b23d-b81d532ca8c6",
+      "full_name": "EMMANUEL ODEY",
+      "official_member_id": "HCC-CMO-26-016"
+    },
+    {
+      "id": "a8829920-f75e-4092-8b0a-37e2d1d3d5c7",
+      "full_name": "MICHAEL OKO",
+      "official_member_id": "HCC-CMO-26-017"
+    },
+    {
+      "id": "fb34af33-c129-449b-9fea-c5e4551a00fa",
+      "full_name": "JOSEPH AKOR",
+      "official_member_id": "HCC-CMO-26-018"
+    },
+    {
+      "id": "fed0da05-9a6c-4afe-aa74-569f4a1fc5fc",
+      "full_name": "LOUIS OCHIGBO",
+      "official_member_id": "HCC-CMO-26-019"
+    },
+    {
+      "id": "a217645b-410b-4939-9cb6-9a1354ab07c1",
+      "full_name": "EMMANUEL ONUH",
+      "official_member_id": "HCC-CMO-26-020"
+    },
+    {
+      "id": "8cdb1a7a-782b-427f-ba48-f75d3e1d605f",
+      "full_name": "DAVIDSON OGBONNA",
+      "official_member_id": "HCC-CMO-26-021"
+    },
+    {
+      "id": "b9308efc-fe60-4246-add9-7a9521b032bd",
+      "full_name": "JAMES OGBAJI",
+      "official_member_id": "HCC-CMO-26-022"
+    },
+    {
+      "id": "5b58bd48-bd5e-47a9-b1eb-b09570516530",
+      "full_name": "JEROME OCHEME O.",
+      "official_member_id": "HCC-CMO-26-023"
+    },
+    {
+      "id": "0aaa38b6-9c5a-4152-9002-d22ab36cf614",
+      "full_name": "PAUL CHONGU",
+      "official_member_id": "HCC-CMO-26-024"
+    },
+    {
+      "id": "a6acd5c8-4ada-47a2-b898-7606369669fc",
+      "full_name": "JULIUS EDEH",
+      "official_member_id": "HCC-CMO-26-026"
+    },
+    {
+      "id": "bd8e72b5-82fe-4e05-8526-0646b2df7179",
+      "full_name": "JILA MOSES",
+      "official_member_id": "HCC-CMO-26-025"
+    },
+    {
+      "id": "8219cdc8-de78-449b-af89-9c26fd3ee648",
+      "full_name": "PETER ALLEH",
+      "official_member_id": "HCC-CMO-26-027"
+    },
+    {
+      "id": "51f88388-6f6d-4315-adb7-e1bada9a72e1",
+      "full_name": "EMMANUEL CHAGA",
+      "official_member_id": "HCC-CMO-26-030"
+    },
+    {
+      "id": "ff30a161-0169-4a6f-b5fb-0280212d1326",
+      "full_name": "MICHAEL JOSEPH",
+      "official_member_id": "HCC-CMO-26-031"
+    },
+    {
+      "id": "c2f7cb2c-a17e-400f-b4fb-ce28d16a2940",
+      "full_name": "SOLOMON ASASE",
+      "official_member_id": "HCC-CMO-26-032"
+    },
+    {
+      "id": "4d85f3d1-bac5-417a-9315-afdcac3dce37",
+      "full_name": "RAYMOND AUGUSTINE",
+      "official_member_id": "HCC-CMO-26-033"
+    },
+    {
+      "id": "7a51826f-842e-44ed-be08-b19664fe1373",
+      "full_name": "JACOB AKURA",
+      "official_member_id": "HCC-CMO-26-034"
+    },
+    {
+      "id": "b3f3495c-addf-4819-b771-35c3348f1726",
+      "full_name": "SAMUEL ADADU",
+      "official_member_id": "HCC-CMO-26-035"
+    },
+    {
+      "id": "d6eff067-9889-4c45-872f-36b8d18732c0",
+      "full_name": "SULE MONDAY",
+      "official_member_id": "HCC-CMO-26-037"
+    },
+    {
+      "id": "4d969dbc-e5e1-4e31-8548-32369abbbabb",
+      "full_name": "PETER AWISA",
+      "official_member_id": "HCC-CMO-26-038"
+    },
+    {
+      "id": "e486020a-c269-4df4-a167-c51d54c94c35",
+      "full_name": "SUNDAY INEDU",
+      "official_member_id": "HCC-CMO-26-041"
+    },
+    {
+      "id": "140b90bc-4f56-4005-ac33-3d3aeb1be99f",
+      "full_name": "JACOB IDU",
+      "official_member_id": "HCC-CMO-26-042"
+    },
+    {
+      "id": "e9e96b17-5e6f-4d78-beaa-1309883c8474",
+      "full_name": "MATHIAS ITIUNG",
+      "official_member_id": "HCC-CMO-26-043"
+    },
+    {
+      "id": "e9436a80-2f79-436b-bb83-725efebe9db5",
+      "full_name": "EMMANUEL JOHN",
+      "official_member_id": "HCC-CMO-26-045"
+    },
+    {
+      "id": "aa0b7165-ec30-4893-8038-056c024eb619",
+      "full_name": "MATHIAS OGBECHE",
+      "official_member_id": "HCC-CMO-26-049"
+    },
+    {
+      "id": "d2d91834-2290-42d4-adee-fee03a2d4d5f",
+      "full_name": "PETER LEDGBA",
+      "official_member_id": "HCC-CMO-26-050"
+    },
+    {
+      "id": "49c1dc14-828a-4cce-9c33-0b20916755f4",
+      "full_name": "GP LINUS AKWAH",
+      "official_member_id": "HCC-CMO-26-051"
+    },
+    {
+      "id": "fc6f888f-0f8a-4366-8649-cc58bf0504e4",
+      "full_name": "GODWIN EDE",
+      "official_member_id": "HCC-CMO-26-052"
+    },
+    {
+      "id": "635cfee1-a364-458e-b3c1-b957027ff541",
+      "full_name": "JOSEPH ODEY",
+      "official_member_id": "HCC-CMO-26-053"
+    },
+    {
+      "id": "fd69f64c-fec7-4dc5-a9f3-aff864a760bf",
+      "full_name": "SUNDAY EKAGUN",
+      "official_member_id": "HCC-CMO-26-054"
+    },
+    {
+      "id": "a108a3f3-cb82-4df3-b61f-e4d5d39dbf31",
+      "full_name": "DAVID AGOBASIMI",
+      "official_member_id": "HCC-CMO-26-055"
+    },
+    {
+      "id": "36132e93-4d4e-4928-8ed4-6c9621906666",
+      "full_name": "CHRISTOPHER OSILAMA",
+      "official_member_id": "HCC-CMO-26-056"
+    },
+    {
+      "id": "2a4b67e9-1817-41c8-bb21-302418b15e8b",
+      "full_name": "THADDEUS THOMAS",
+      "official_member_id": "HCC-CMO-26-057"
+    },
+    {
+      "id": "316899ec-51ab-4d7f-b065-f527ef7231c0",
+      "full_name": "VALENTINE NKEMDRRIM",
+      "official_member_id": "HCC-CMO-26-058"
+    },
+    {
+      "id": "4f922e57-5c1f-4d8b-b01a-0d9b2f769969",
+      "full_name": "HASSAN BAKO",
+      "official_member_id": "HCC-CMO-26-059"
+    },
+    {
+      "id": "39d4bef7-4e32-4695-abe8-2a300e338f2a",
+      "full_name": "FRANCIS OGAR",
+      "official_member_id": "HCC-CMO-26-060"
+    },
+    {
+      "id": "76e7d719-8c2c-4e54-9bd1-6cc1eff27135",
+      "full_name": "MICHAEL USHIE",
+      "official_member_id": "HCC-CMO-26-061"
+    },
+    {
+      "id": "9cc09304-efa3-4585-8b60-29a740f4772b",
+      "full_name": "SABESTINE OKORI",
+      "official_member_id": "HCC-CMO-26-062"
+    },
+    {
+      "id": "076fd011-9b5e-40b9-acf6-29b59fac49ce",
+      "full_name": "GENESIS DAVID",
+      "official_member_id": "HCC-CMO-26-063"
+    },
+    {
+      "id": "e81e6919-5af5-4b3c-9ec4-7bf714fd0301",
+      "full_name": "SUNDAY UGEW OCHIGBO",
+      "official_member_id": "HCC-CMO-26-064"
+    },
+    {
+      "id": "c2d45ddb-3396-4de2-b575-8078b55df949",
+      "full_name": "JOHN USHIE",
+      "official_member_id": "HCC-CMO-26-039"
+    },
+    {
+      "id": "dc5fb306-0abc-465f-a9b8-59d9fb277765",
+      "full_name": "JOSEPH AJOMA",
+      "official_member_id": "HCC-CMO-26-040"
+    },
+    {
+      "id": "71f86d4f-a9bd-48f9-bd52-668b281bac98",
+      "full_name": "SAMSON BALOGUN",
+      "official_member_id": "HCC-CMO-26-044"
+    },
+    {
+      "id": "7eddd35e-031c-47d5-8639-355f24c379ad",
+      "full_name": "DAVID VINCENT",
+      "official_member_id": "HCC-CMO-26-046"
+    },
+    {
+      "id": "388b492e-42dc-4828-9ec9-89634a09093b",
+      "full_name": "ABRAHAM ATODO",
+      "official_member_id": "HCC-CMO-26-047"
+    },
+    {
+      "id": "fb8ad09d-85ff-4f39-9b58-4d1ab6744a7f",
+      "full_name": "PHILIP AKUT",
+      "official_member_id": "HCC-CMO-26-048"
+    },
+    {
+      "id": "b1bdb6e3-8854-4191-a7e4-2208762b82ef",
+      "full_name": "MONDAY BENJAMIN",
+      "official_member_id": "HCC-CMO-26-065"
+    },
+    {
+      "id": "1a877821-4d71-42bc-bf52-98bfd3644b56",
+      "full_name": "JAMES YOHANNA",
+      "official_member_id": "HCC-CMO-26-066"
+    },
+    {
+      "id": "78ed68e6-41d3-4fc8-bb8f-4ee4ac088abb",
+      "full_name": "BATHOLOMEW UGWU",
+      "official_member_id": "HCC-CMO-26-067"
+    },
+    {
+      "id": "c1590a0f-6929-4599-9a99-3be3afe0eca5",
+      "full_name": "STEPHANIE MACDONALD",
+      "official_member_id": "HCC-CMO-26-068"
+    },
+    {
+      "id": "55142dcf-9178-4895-b705-dd9efa97925a",
+      "full_name": "EMMANUEL ELLAH",
+      "official_member_id": "HCC-CMO-26-069"
+    },
+    {
+      "id": "187e2555-8cd8-424f-86bb-586de0deb7e4",
+      "full_name": "MATHIAS ODEY",
+      "official_member_id": "HCC-CMO-26-070"
+    },
+    {
+      "id": "5e088177-3229-4633-b104-b284dd59de2d",
+      "full_name": "OKO AUGUSTINE EJERE",
+      "official_member_id": "HCC-CMO-26-071"
+    },
+    {
+      "id": "cd6d492d-a235-465c-b3bd-538ffb834836",
+      "full_name": "GODWIN GEORGE BUSH",
+      "official_member_id": "HCC-CMO-26-072"
+    },
+    {
+      "id": "5a9454ff-41c4-46ce-979d-342e3a01c77a",
+      "full_name": "PHILIP OCHEME",
+      "official_member_id": "HCC-CMO-26-073"
+    },
+    {
+      "id": "35495a85-21a4-4c25-99d9-31205b791f40",
+      "full_name": "JAMES OKOH",
+      "official_member_id": "HCC-CMO-26-074"
+    },
+    {
+      "id": "c28445c6-c000-485d-a252-b143c6f5d712",
+      "full_name": "GABRIEL MATTHEW",
+      "official_member_id": "HCC-CMO-26-075"
+    },
+    {
+      "id": "4347388c-1961-459d-8327-42b6840d519a",
+      "full_name": "MOSES OKOLO",
+      "official_member_id": "HCC-CMO-26-076"
+    },
+    {
+      "id": "7635f639-a8e5-4985-a784-f39ba1a9609c",
+      "full_name": "FERDINAND OKOLO",
+      "official_member_id": "HCC-CMO-26-077"
+    },
+    {
+      "id": "e38d77c4-9b58-49d1-a589-0a7bb17dcc0d",
+      "full_name": "(PP) BENJAMIN MADAKI",
+      "official_member_id": "HCC-CMO-26-078"
+    },
+    {
+      "id": "9be10a0f-c57b-43f0-9e58-ba13992ee228",
+      "full_name": "JOSEPH USHIE",
+      "official_member_id": "HCC-CMO-26-079"
+    },
+    {
+      "id": "61ce6636-e249-4b4d-95eb-3eb4e3df1f96",
+      "full_name": "SYLVESTER YASHIM",
+      "official_member_id": "HCC-CMO-26-080"
+    },
+    {
+      "id": "d73b0f3f-7d11-4c2e-806b-0a483be6afba",
+      "full_name": "FRANCIS NWACHUKWU",
+      "official_member_id": "HCC-CMO-26-081"
+    },
+    {
+      "id": "cd6707de-7c4d-474c-b07d-72e76791578e",
+      "full_name": "(GP) FIDELIS MONDAY",
+      "official_member_id": "HCC-CMO-26-082"
+    },
+    {
+      "id": "0397cbe4-4f06-4365-8b8f-c1d56320df73",
+      "full_name": "(PP) ANTHONY ODO",
+      "official_member_id": "HCC-CMO-26-083"
+    },
+    {
+      "id": "a47ad46c-5d34-4531-b927-0afbd00b8103",
+      "full_name": "GODWIN OCHIGBO",
+      "official_member_id": "HCC-CMO-26-084"
+    },
+    {
+      "id": "e4598a16-8243-434e-8635-2563ff27c402",
+      "full_name": "MICHAEL ONYI",
+      "official_member_id": "HCC-CMO-26-085"
+    },
+    {
+      "id": "fe2db397-1a57-4430-a385-87210af4eaf9",
+      "full_name": "EDWARD ATOLOUGH",
+      "official_member_id": "HCC-CMO-26-086"
+    },
+    {
+      "id": "32449c9a-f15b-4c66-95f8-a24e247a7edd",
+      "full_name": "ALEXANDER OPENE",
+      "official_member_id": "HCC-CMO-26-087"
+    },
+    {
+      "id": "bcf81ac5-f5b7-48bd-9b25-04be979da868",
+      "full_name": "ANSLEM OKERE",
+      "official_member_id": "HCC-CMO-26-096"
+    },
+    {
+      "id": "7bcccc38-e6e5-4d81-a364-4e1cee9a8499",
+      "full_name": "FRANCIS ISAAC",
+      "official_member_id": "HCC-CMO-26-097"
+    },
+    {
+      "id": "695eee84-23b9-4904-a676-cc3ffd287062",
+      "full_name": "PAUL OZEMEDE",
+      "official_member_id": "HCC-CMO-26-098"
+    },
+    {
+      "id": "52603c50-b735-4614-9b0c-87e7d9372e62",
+      "full_name": "EMMANUEL CHENEDU",
+      "official_member_id": "HCC-CMO-26-099"
+    },
+    {
+      "id": "e908a5d9-6157-4d54-8027-bc3a7fc1ed8b",
+      "full_name": "GP DAVID KEHINDE",
+      "official_member_id": "HCC-CMO-26-100"
+    },
+    {
+      "id": "34d543f2-6e6d-4dc6-bef9-2a6c073cad04",
+      "full_name": "FESTUS NWACHUKWU",
+      "official_member_id": "HCC-CMO-26-101"
+    },
+    {
+      "id": "d037c843-05ae-4237-9140-0f9c1e22c652",
+      "full_name": "JOSHUA AGIRIGA",
+      "official_member_id": "HCC-CMO-26-015"
+    },
+    {
+      "id": "c9853404-3a6a-4ba1-a56b-f3261fa67125",
+      "full_name": "MICHAEL GYANG",
+      "official_member_id": "HCC-CMO-26-028"
+    },
+    {
+      "id": "4fc7930e-7bf5-4cad-9b63-996179e6c857",
+      "full_name": "MOSES ASIMI",
+      "official_member_id": "HCC-CMO-26-029"
+    },
+    {
+      "id": "f36ff6a0-b109-4fbc-916f-b8175c230271",
+      "full_name": "CHRISTOPHER ABUA",
+      "official_member_id": "HCC-CMO-26-036"
+    },
+    {
+      "id": "09b27865-3a8f-4b72-ba12-ae36b86690c2",
+      "full_name": "SAMSON AFALABI",
+      "official_member_id": "HCC-CMO-26-088"
+    },
+    {
+      "id": "f4a0f94c-5de9-414f-988a-3c9c510a9b81",
+      "full_name": "JOHN IRENE",
+      "official_member_id": "HCC-CMO-26-089"
+    },
+    {
+      "id": "ecaea2f3-4e48-4990-84ab-96567f46648f",
+      "full_name": "CHARLES ODEY",
+      "official_member_id": "HCC-CMO-26-090"
+    },
+    {
+      "id": "2de9af4f-21f0-4a8a-919e-9f1b9f706530",
+      "full_name": "FIDELIS OGBAJI",
+      "official_member_id": "HCC-CMO-26-091"
+    },
+    {
+      "id": "8373f045-c0e1-4e33-bcb5-e2c17e48dcad",
+      "full_name": "KENNETH SIMON",
+      "official_member_id": "HCC-CMO-26-092"
+    },
+    {
+      "id": "21a5d010-007e-4dc8-bc45-96af49864715",
+      "full_name": "PATRICK UDOK",
+      "official_member_id": "HCC-CMO-26-093"
+    },
+    {
+      "id": "9e226e70-ea12-4fe5-a0af-a69352f61d94",
+      "full_name": "PATRICK EMECHETE",
+      "official_member_id": "HCC-CMO-26-094"
+    },
+    {
+      "id": "7905aed1-c7c2-42ec-9232-2e7e3c211089",
+      "full_name": "TITUS OGBEBE",
+      "official_member_id": "HCC-CMO-26-095"
+    },
+    {
+      "id": "a07a9361-a761-4665-b52e-b6d60cd27491",
+      "full_name": "FRANCIS ENEGI (KSM)",
+      "official_member_id": "HCC-CMO-26-102"
+    },
+    {
+      "id": "e868d026-6db7-4704-9ea0-2e574fd3d346",
+      "full_name": "STEPHEN INWONABA",
+      "official_member_id": "HCC-CMO-26-103"
+    },
+    {
+      "id": "0cac057a-6137-46d6-8386-71e7ebd101ab",
+      "full_name": "DR JAMES AYERGA",
+      "official_member_id": "HCC-CMO-26-104"
+    },
+    {
+      "id": "219ca7fe-5855-4ca9-a88c-da28d9399e98",
+      "full_name": "VITALIS DAVID",
+      "official_member_id": "HCC-CMO-26-105"
+    },
+    {
+      "id": "131b7150-08ef-4360-89b6-765b34e52bb7",
+      "full_name": "MOSES OGA OGABOR",
+      "official_member_id": "HCC-CMO-26-106"
+    },
+    {
+      "id": "96f07a1d-6e96-4718-bca4-62f811ceb973",
+      "full_name": "OGAR SIMON",
+      "official_member_id": "HCC-CMO-26-107"
+    },
+    {
+      "id": "9c3daad9-a3c4-4d5a-a706-661899629580",
+      "full_name": "ABRAHAM JOSEPH",
+      "official_member_id": "HCC-CMO-26-108"
+    },
+    {
+      "id": "d58df92d-21da-4d7f-8def-8e850b6016d7",
+      "full_name": "OMOKAFE DUTCH",
+      "official_member_id": "HCC-CMO-26-109"
+    },
+    {
+      "id": "e52d725f-88da-4b44-9607-dc8055836e64",
+      "full_name": "OSCAR",
+      "official_member_id": "HCC-CMO-26-110"
+    },
+    {
+      "id": "c8f50309-cffa-4d57-aab3-9d8979f80d09",
+      "full_name": "JULIUS OGBAJI",
+      "official_member_id": "HCC-CMO-26-111"
+    },
+    {
+      "id": "786791b0-a157-433b-b572-5c9a8c919468",
+      "full_name": "JOSEPH OKEY",
+      "official_member_id": "HCC-CMO-26-112"
+    },
+    {
+      "id": "6fdfa404-3385-4d76-a200-56504a48263d",
+      "full_name": "MICHAEL ONAJI",
+      "official_member_id": "HCC-CMO-26-113"
+    },
+    {
+      "id": "df30df80-7993-41e3-b805-edaf77b46960",
+      "full_name": "EMMANUEL ADEKA",
+      "official_member_id": "HCC-CMO-26-114"
+    },
+    {
+      "id": "6931bd74-3862-4f9d-9647-a25f12734bc0",
+      "full_name": "EMMANUEL AKURME",
+      "official_member_id": "HCC-CMO-26-115"
+    },
+    {
+      "id": "64426202-74e7-4c84-a76d-3033e373bc59",
+      "full_name": "SAMSON ODAMA",
+      "official_member_id": "HCC-CMO-26-116"
+    },
+    {
+      "id": "aef63a44-3cae-435c-bbf4-53fb5eb01237",
+      "full_name": "ODEY LINUS",
+      "official_member_id": "HCC-CMO-26-117"
+    },
+    {
+      "id": "28d788c8-3e87-49d5-8ce4-c9d33f40fbb9",
+      "full_name": "PETER ODAH",
+      "official_member_id": "HCC-CMO-26-118"
+    },
+    {
+      "id": "a62d9c54-9692-47f4-a8c6-8fa77125b69b",
+      "full_name": "CORNELIUS IKWE",
+      "official_member_id": "HCC-CMO-26-119"
+    },
+    {
+      "id": "5b451f31-e6c1-48ce-a743-41aa1668e42f",
+      "full_name": "ELAM HASSAN",
+      "official_member_id": "HCC-CMO-26-120"
+    },
+    {
+      "id": "f7272c38-d5d5-4ebf-b1d6-784687fe12d8",
+      "full_name": "JAMES OKABA",
+      "official_member_id": "HCC-CMO-26-121"
+    },
+    {
+      "id": "a83e472a-4714-4772-afdb-18aaa515ca76",
+      "full_name": "JOSEPH OJO OKHAI",
+      "official_member_id": "HCC-CMO-26-122"
+    },
+    {
+      "id": "bf1c82d2-0497-4eb9-94e9-ef54bd4f09c1",
+      "full_name": "GREGORY AMAJORONWU",
+      "official_member_id": "HCC-CMO-26-123"
+    },
+    {
+      "id": "ba567c57-7258-448b-bc19-e092446e0790",
+      "full_name": "ANDREW OKO",
+      "official_member_id": "HCC-CMO-26-124"
+    },
+    {
+      "id": "4ad18ad2-7e13-4a5c-a53a-ec811a38da35",
+      "full_name": "PETER OGBEBE",
+      "official_member_id": "HCC-CMO-26-125"
+    },
+    {
+      "id": "f717ee6f-b3d7-4b41-bd95-f894143c6565",
+      "full_name": "JAMES RICHARD",
+      "official_member_id": "HCC-CMO-26-126"
+    },
+    {
+      "id": "dc6973ed-cd69-4da5-9f23-f929fc2c2389",
+      "full_name": "PAUL ABBA",
+      "official_member_id": "HCC-CMO-26-127"
+    },
+    {
+      "id": "fe48a7d6-20eb-4d80-a221-57424a51084a",
+      "full_name": "MOSES ELAIGWU",
+      "official_member_id": "HCC-CMO-26-128"
+    },
+    {
+      "id": "3a6c8a52-e3d2-4511-9ba4-bbb695e18863",
+      "full_name": "MATHIAS OMALE",
+      "official_member_id": "HCC-CMO-26-129"
+    },
+    {
+      "id": "2b022036-95fd-4f48-8cef-898b57505a0d",
+      "full_name": "VINCENT AKUMA",
+      "official_member_id": "HCC-CMO-26-130"
+    },
+    {
+      "id": "8d908103-d8e9-42eb-b1df-79a0c32cbf29",
+      "full_name": "JOHN K DAVID",
+      "official_member_id": "HCC-CMO-26-131"
+    },
+    {
+      "id": "1ba26f3d-3af7-498b-a28b-fa33cfe6843d",
+      "full_name": "ALAM SUNDAY",
+      "official_member_id": "HCC-CMO-26-132"
+    },
+    {
+      "id": "265b6e1a-f0b1-41dc-b945-51265401d27b",
+      "full_name": "JOSEPH OGAR",
+      "official_member_id": "HCC-CMO-26-133"
+    },
+    {
+      "id": "9260b96d-ac17-4b3b-b194-a07d6ce50d0f",
+      "full_name": "ANTHONY IDOKO",
+      "official_member_id": "HCC-CMO-26-134"
+    },
+    {
+      "id": "d0763ffb-8d1d-4b0e-a443-09cb6f6ce4bf",
+      "full_name": "ABRAHAM OBEMEATA",
+      "official_member_id": "HCC-CMO-26-135"
+    },
+    {
+      "id": "9b7f5f0b-b637-4898-b5bb-29c65910774b",
+      "full_name": "BENEDICT AIYEGBA",
+      "official_member_id": "HCC-CMO-26-136"
+    },
+    {
+      "id": "9acbe0c3-0565-4f56-9dfa-3846fd4dab37",
+      "full_name": "SIMON OKO",
+      "official_member_id": "HCC-CMO-26-137"
+    },
+    {
+      "id": "443ba69e-977d-448d-8af0-89eca6932be5",
+      "full_name": "KENNETH OKZIE JIBUKO",
+      "official_member_id": "HCC-CMO-26-138"
+    },
+    {
+      "id": "c1b3b0f6-dfc8-4e71-b0be-215a47324741",
+      "full_name": "STEPHEN OCHIOKHOME",
+      "official_member_id": "HCC-CMO-26-139"
+    },
+    {
+      "id": "d55a63e2-41c7-4226-8c30-5d22245f7bca",
+      "full_name": "EMMANUEL ADIE",
+      "official_member_id": "HCC-CMO-26-140"
+    },
+    {
+      "id": "76c1dab8-b943-4ad7-bbbb-acd0a4fc471e",
+      "full_name": "DENNIS OCHICHE",
+      "official_member_id": "HCC-CMO-26-141"
+    },
+    {
+      "id": "fae047f8-c98e-4a1d-8fe0-eadb5c4ec6da",
+      "full_name": "ANTHONY INNA",
+      "official_member_id": "HCC-CMO-26-142"
+    },
+    {
+      "id": "b50f7738-3f5e-44e2-95fa-707c0e190417",
+      "full_name": "CHRISTOPHER OGAR",
+      "official_member_id": "HCC-CMO-26-143"
+    },
+    {
+      "id": "ec962233-fd55-4403-aa99-28abbf3f4068",
+      "full_name": "PETER ABEE",
+      "official_member_id": "HCC-CMO-26-144"
+    },
+    {
+      "id": "cf2096db-5d97-40ba-a8fd-554baef6b2d0",
+      "full_name": "GODWIN ODE",
+      "official_member_id": "HCC-CMO-26-145"
+    },
+    {
+      "id": "bee099f2-7c0b-4ccc-a31a-4bc9d4c2d38e",
+      "full_name": "DR. C.I MADU",
+      "official_member_id": "HCC-CMO-26-146"
+    },
+    {
+      "id": "af5acabb-dba5-4444-8384-7f1793c9d3ce",
+      "full_name": "JOHN OGBEBE",
+      "official_member_id": "HCC-CMO-26-147"
+    },
+    {
+      "id": "f0155627-7a21-4bfd-ad19-43830961a2d9",
+      "full_name": "SAMUEL ADIKWU",
+      "official_member_id": "HCC-CMO-26-148"
+    },
+    {
+      "id": "3aafeb27-a40b-4212-a3d4-4758f1ad8dbc",
+      "full_name": "SILAS AKWU FARUNA",
+      "official_member_id": "HCC-CMO-26-149"
+    },
+    {
+      "id": "d8feac50-6144-493e-a507-990d4175cceb",
+      "full_name": "MICHAEL AGUANYAN",
+      "official_member_id": "HCC-CMO-26-150"
+    },
+    {
+      "id": "555dc873-e8f0-47fd-b3e2-47f1f0754b8b",
+      "full_name": "JOHN ODE IPUOLE",
+      "official_member_id": "HCC-CMO-26-151"
+    }
+  ],
+  "errors": {
+    "aErr": null,
+    "mErr": null
+  }
+}

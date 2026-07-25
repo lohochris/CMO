@@ -1,0 +1,126 @@
+{
+  "player_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'player_id' column of 'sports_match_events' in the schema cache"
+  },
+  "athlete_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'athlete_id' column of 'sports_match_events' in the schema cache"
+  },
+  "member_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'member_id' column of 'sports_match_events' in the schema cache"
+  },
+  "user_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'user_id' column of 'sports_match_events' in the schema cache"
+  },
+  "person_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'person_id' column of 'sports_match_events' in the schema cache"
+  },
+  "scorer_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'scorer_id' column of 'sports_match_events' in the schema cache"
+  },
+  "player_member_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'player_member_id' column of 'sports_match_events' in the schema cache"
+  },
+  "athlete_member_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'athlete_member_id' column of 'sports_match_events' in the schema cache"
+  },
+  "scorer_member_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'scorer_member_id' column of 'sports_match_events' in the schema cache"
+  },
+  "athlete_registry_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'athlete_registry_id' column of 'sports_match_events' in the schema cache"
+  },
+  "sports_athlete_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'sports_athlete_id' column of 'sports_match_events' in the schema cache"
+  },
+  "sports_athletes_registry_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'sports_athletes_registry_id' column of 'sports_match_events' in the schema cache"
+  },
+  "athlete_profile_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'athlete_profile_id' column of 'sports_match_events' in the schema cache"
+  },
+  "captain_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'captain_id' column of 'sports_match_events' in the schema cache"
+  },
+  "referee_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'referee_id' column of 'sports_match_events' in the schema cache"
+  },
+  "official_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'official_id' column of 'sports_match_events' in the schema cache"
+  },
+  "cmo_member_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'cmo_member_id' column of 'sports_match_events' in the schema cache"
+  },
+  "created_by": {
+    "code": "PGRST204",
+    "message": "Could not find the 'created_by' column of 'sports_match_events' in the schema cache"
+  },
+  "assist_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'assist_id' column of 'sports_match_events' in the schema cache"
+  },
+  "assisted_by_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'assisted_by_id' column of 'sports_match_events' in the schema cache"
+  },
+  "actor_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'actor_id' column of 'sports_match_events' in the schema cache"
+  },
+  "subject_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'subject_id' column of 'sports_match_events' in the schema cache"
+  },
+  "member_official_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'member_official_id' column of 'sports_match_events' in the schema cache"
+  },
+  "player_official_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'player_official_id' column of 'sports_match_events' in the schema cache"
+  },
+  "athlete_official_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'athlete_official_id' column of 'sports_match_events' in the schema cache"
+  },
+  "recipient_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'recipient_id' column of 'sports_match_events' in the schema cache"
+  },
+  "card_player_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'card_player_id' column of 'sports_match_events' in the schema cache"
+  },
+  "offending_player_id": {
+    "code": "PGRST204",
+    "message": "Could not find the 'offending_player_id' column of 'sports_match_events' in the schema cache"
+  },
+  "jersey_number": {
+    "code": "PGRST204",
+    "message": "Could not find the 'jersey_number' column of 'sports_match_events' in the schema cache"
+  },
+  "player_name": {
+    "code": "PGRST204",
+    "message": "Could not find the 'player_name' column of 'sports_match_events' in the schema cache"
+  },
+  "athlete_name": {
+    "code": "PGRST204",
+    "message": "Could not find the 'athlete_name' column of 'sports_match_events' in the schema cache"
+  }
+}

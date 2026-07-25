@@ -154,11 +154,11 @@ const LogForm = ({ athlete, existingLog, onClose, onSaved, officerName }: LogFor
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <Card className="w-full max-w-lg bg-[#001a16] border border-[#ffd700]/20 rounded-2xl shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 p-4 sm:p-6 md:p-8 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+      <div className="w-full max-w-lg bg-slate-900 border border-emerald-900/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-gray-200 text-left">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#ffd700]/10 bg-[#002520]">
+        <div className="p-4 sm:p-6 shrink-0 border-b border-emerald-900/50 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center">
               <HeartPulse className="w-4 h-4 text-red-400" />
@@ -176,21 +176,20 @@ const LogForm = ({ athlete, existingLog, onClose, onSaved, officerName }: LogFor
           </button>
         </div>
 
-        {/* Privacy Banner */}
-        <div className="mx-6 mt-4 flex items-center gap-2 bg-red-500/5 border border-red-500/20 rounded-xl px-4 py-2.5 text-xs text-red-400">
-          <Lock className="w-3.5 h-3.5 shrink-0" />
-          Confidential medical data — restricted to authorised clinical personnel only.
-        </div>
-
-        {/* Form */}
-        <div className="px-6 py-5 space-y-4">
+        {/* Body */}
+        <div className="p-4 sm:p-6 space-y-4 overflow-y-auto custom-scrollbar grow flex flex-col min-h-0">
+          {/* Privacy Banner */}
+          <div className="flex items-center gap-2 bg-red-500/5 border border-red-500/20 rounded-xl px-4 py-2.5 text-xs text-red-400 shrink-0">
+            <Lock className="w-3.5 h-3.5 shrink-0" />
+            Confidential medical data — restricted to authorised clinical personnel only.
+          </div>
 
           {/* Status */}
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">
               Fitness Status *
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {MEDICAL_STATUSES.map(s => {
                 const meta = STATUS_META[s];
                 return (
@@ -212,7 +211,7 @@ const LogForm = ({ athlete, existingLog, onClose, onSaved, officerName }: LogFor
           </div>
 
           {/* Clearance Flags */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div
               onClick={() => setClearance(c => !c)}
               className={`flex items-center justify-between px-4 py-3 rounded-xl border cursor-pointer transition-all duration-150 ${
@@ -283,14 +282,7 @@ const LogForm = ({ athlete, existingLog, onClose, onSaved, officerName }: LogFor
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 px-6 pb-5">
-          <Button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex-1 bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold shadow-lg shadow-[#ffd700]/20"
-          >
-            {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</> : <><Save className="w-4 h-4 mr-2" />Save Record</>}
-          </Button>
+        <div className="p-4 sm:p-6 shrink-0 border-t border-emerald-900/50 flex justify-end gap-3 bg-slate-900/50">
           <Button
             variant="outline"
             onClick={onClose}
@@ -298,8 +290,15 @@ const LogForm = ({ athlete, existingLog, onClose, onSaved, officerName }: LogFor
           >
             Cancel
           </Button>
+          <Button
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold shadow-lg shadow-[#ffd700]/20"
+          >
+            {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</> : <><Save className="w-4 h-4 mr-2" />Save Record</>}
+          </Button>
         </div>
-      </Card>
+      </div>
     </div>
   );
 };

@@ -1,0 +1,262 @@
+{
+  "roleCounts": {
+    "null": 101,
+    "member": 44,
+    "FAMILY_HEAD": 3,
+    "FAMILY_SEC": 3
+  },
+  "rError": null,
+  "activeRoles": [
+    {
+      "id": "83cc0b23-2a62-49a1-b01f-c90f0bb8ab3d",
+      "full_name": "PIUS OKO",
+      "role": "member"
+    },
+    {
+      "id": "5b95a388-4469-4255-854f-4ae3beea6011",
+      "full_name": "LOHO CHRISTOPHER DONDO",
+      "role": "member"
+    },
+    {
+      "id": "4bb42719-978d-4779-83be-4c6d1ea119f7",
+      "full_name": "INNOCENT OGAR",
+      "role": "member"
+    },
+    {
+      "id": "cef6ec70-c0dc-4574-a6a5-5cb928003569",
+      "full_name": "BENJAMIN OLUMA",
+      "role": "member"
+    },
+    {
+      "id": "dbdfdb28-9a70-452f-b04d-ecef3cd1a76e",
+      "full_name": "RAPHAEL GODWIN",
+      "role": "member"
+    },
+    {
+      "id": "8d32e261-8974-479a-9ed0-2016d368af28",
+      "full_name": "ELLIS GABRIEL",
+      "role": "member"
+    },
+    {
+      "id": "e0a771b0-7917-42c6-a521-be0bbfa87ca6",
+      "full_name": "CHRISTOPHER NJIJA",
+      "role": "FAMILY_HEAD"
+    },
+    {
+      "id": "9c2eaf4c-a314-4f36-ab74-15394f818f73",
+      "full_name": "GODWIN IDOKO",
+      "role": "member"
+    },
+    {
+      "id": "7a78a590-4e32-4a57-819a-8c048ca900ca",
+      "full_name": "TIMOTHY AGAZI",
+      "role": "member"
+    },
+    {
+      "id": "96fe12fa-310b-4915-bab7-e8301f30d8a4",
+      "full_name": "Dr LUGA JACOB",
+      "role": "member"
+    },
+    {
+      "id": "e706a059-5e54-4dc3-9052-e99f51618918",
+      "full_name": "ANTHONY EGBUNG",
+      "role": "member"
+    },
+    {
+      "id": "51dd2dbb-e113-4890-ab9c-b195dc55f87c",
+      "full_name": "MOSES TISHAR",
+      "role": "member"
+    },
+    {
+      "id": "a9f0144c-96d8-48a2-baa4-bf466e8907ea",
+      "full_name": "JAMES ADOLEJE",
+      "role": "member"
+    },
+    {
+      "id": "12373216-94d6-412f-b23d-b81d532ca8c6",
+      "full_name": "EMMANUEL ODEY",
+      "role": "member"
+    },
+    {
+      "id": "a8829920-f75e-4092-8b0a-37e2d1d3d5c7",
+      "full_name": "MICHAEL OKO",
+      "role": "member"
+    },
+    {
+      "id": "fb34af33-c129-449b-9fea-c5e4551a00fa",
+      "full_name": "JOSEPH AKOR",
+      "role": "member"
+    },
+    {
+      "id": "fed0da05-9a6c-4afe-aa74-569f4a1fc5fc",
+      "full_name": "LOUIS OCHIGBO",
+      "role": "member"
+    },
+    {
+      "id": "a217645b-410b-4939-9cb6-9a1354ab07c1",
+      "full_name": "EMMANUEL ONUH",
+      "role": "member"
+    },
+    {
+      "id": "8cdb1a7a-782b-427f-ba48-f75d3e1d605f",
+      "full_name": "DAVIDSON OGBONNA",
+      "role": "member"
+    },
+    {
+      "id": "b9308efc-fe60-4246-add9-7a9521b032bd",
+      "full_name": "JAMES OGBAJI",
+      "role": "member"
+    },
+    {
+      "id": "5b58bd48-bd5e-47a9-b1eb-b09570516530",
+      "full_name": "JEROME OCHEME O.",
+      "role": "FAMILY_HEAD"
+    },
+    {
+      "id": "0aaa38b6-9c5a-4152-9002-d22ab36cf614",
+      "full_name": "PAUL CHONGU",
+      "role": "member"
+    },
+    {
+      "id": "a6acd5c8-4ada-47a2-b898-7606369669fc",
+      "full_name": "JULIUS EDEH",
+      "role": "member"
+    },
+    {
+      "id": "bd8e72b5-82fe-4e05-8526-0646b2df7179",
+      "full_name": "JILA MOSES",
+      "role": "member"
+    },
+    {
+      "id": "8219cdc8-de78-449b-af89-9c26fd3ee648",
+      "full_name": "PETER ALLEH",
+      "role": "member"
+    },
+    {
+      "id": "51f88388-6f6d-4315-adb7-e1bada9a72e1",
+      "full_name": "EMMANUEL CHAGA",
+      "role": "member"
+    },
+    {
+      "id": "ff30a161-0169-4a6f-b5fb-0280212d1326",
+      "full_name": "MICHAEL JOSEPH",
+      "role": "member"
+    },
+    {
+      "id": "c2f7cb2c-a17e-400f-b4fb-ce28d16a2940",
+      "full_name": "SOLOMON ASASE",
+      "role": "member"
+    },
+    {
+      "id": "4d85f3d1-bac5-417a-9315-afdcac3dce37",
+      "full_name": "RAYMOND AUGUSTINE",
+      "role": "member"
+    },
+    {
+      "id": "7a51826f-842e-44ed-be08-b19664fe1373",
+      "full_name": "JACOB AKURA",
+      "role": "member"
+    },
+    {
+      "id": "b3f3495c-addf-4819-b771-35c3348f1726",
+      "full_name": "SAMUEL ADADU",
+      "role": "member"
+    },
+    {
+      "id": "d6eff067-9889-4c45-872f-36b8d18732c0",
+      "full_name": "SULE MONDAY",
+      "role": "member"
+    },
+    {
+      "id": "4d969dbc-e5e1-4e31-8548-32369abbbabb",
+      "full_name": "PETER AWISA",
+      "role": "FAMILY_SEC"
+    },
+    {
+      "id": "e486020a-c269-4df4-a167-c51d54c94c35",
+      "full_name": "SUNDAY INEDU",
+      "role": "member"
+    },
+    {
+      "id": "140b90bc-4f56-4005-ac33-3d3aeb1be99f",
+      "full_name": "JACOB IDU",
+      "role": "member"
+    },
+    {
+      "id": "e9e96b17-5e6f-4d78-beaa-1309883c8474",
+      "full_name": "MATHIAS ITIUNG",
+      "role": "FAMILY_SEC"
+    },
+    {
+      "id": "e9436a80-2f79-436b-bb83-725efebe9db5",
+      "full_name": "EMMANUEL JOHN",
+      "role": "member"
+    },
+    {
+      "id": "aa0b7165-ec30-4893-8038-056c024eb619",
+      "full_name": "MATHIAS OGBECHE",
+      "role": "member"
+    },
+    {
+      "id": "c2d45ddb-3396-4de2-b575-8078b55df949",
+      "full_name": "JOHN USHIE",
+      "role": "member"
+    },
+    {
+      "id": "dc5fb306-0abc-465f-a9b8-59d9fb277765",
+      "full_name": "JOSEPH AJOMA",
+      "role": "member"
+    },
+    {
+      "id": "71f86d4f-a9bd-48f9-bd52-668b281bac98",
+      "full_name": "SAMSON BALOGUN",
+      "role": "member"
+    },
+    {
+      "id": "7eddd35e-031c-47d5-8639-355f24c379ad",
+      "full_name": "DAVID VINCENT",
+      "role": "member"
+    },
+    {
+      "id": "388b492e-42dc-4828-9ec9-89634a09093b",
+      "full_name": "ABRAHAM ATODO",
+      "role": "member"
+    },
+    {
+      "id": "fb8ad09d-85ff-4f39-9b58-4d1ab6744a7f",
+      "full_name": "PHILIP AKUT",
+      "role": "member"
+    },
+    {
+      "id": "35495a85-21a4-4c25-99d9-31205b791f40",
+      "full_name": "JAMES OKOH",
+      "role": "FAMILY_HEAD"
+    },
+    {
+      "id": "c28445c6-c000-485d-a252-b143c6f5d712",
+      "full_name": "GABRIEL MATTHEW",
+      "role": "FAMILY_SEC"
+    },
+    {
+      "id": "d037c843-05ae-4237-9140-0f9c1e22c652",
+      "full_name": "JOSHUA AGIRIGA",
+      "role": "member"
+    },
+    {
+      "id": "c9853404-3a6a-4ba1-a56b-f3261fa67125",
+      "full_name": "MICHAEL GYANG",
+      "role": "member"
+    },
+    {
+      "id": "4fc7930e-7bf5-4cad-9b63-996179e6c857",
+      "full_name": "MOSES ASIMI",
+      "role": "member"
+    },
+    {
+      "id": "f36ff6a0-b109-4fbc-916f-b8175c230271",
+      "full_name": "CHRISTOPHER ABUA",
+      "role": "member"
+    }
+  ],
+  "aError": null
+}

@@ -1,0 +1,16 @@
+{
+  "fixture": [
+    "fixture_id"
+  ],
+  "minute": [],
+  "event_type": [
+    "event_type"
+  ],
+  "description": [
+    "notes"
+  ],
+  "team": [
+    "team_id"
+  ],
+  "player": []
+}

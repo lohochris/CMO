@@ -765,14 +765,19 @@ export const CoachRosterWorkspace = () => {
 
       {/* ── Custom Squad Creation Modal ── */}
       {showSquadModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <Card className="w-full max-w-md bg-[#001a16] border border-[#ffd700]/30 rounded-2xl shadow-2xl p-6 space-y-4 text-gray-200">
-            <div className="flex items-center justify-between border-b border-[#ffd700]/10 pb-3">
+        <div className="fixed inset-0 z-50 p-4 sm:p-6 md:p-8 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+          <form
+            onSubmit={handleCreateSquad}
+            className="w-full max-w-md bg-slate-900 border border-emerald-900/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-gray-200 text-left"
+          >
+            {/* Header */}
+            <div className="p-4 sm:p-6 shrink-0 border-b border-emerald-900/50 flex items-center justify-between">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <PlusCircle className="w-5 h-5 text-[#ffd700]" />
                 Create New Squad
               </h3>
               <button
+                type="button"
                 onClick={() => { setShowSquadModal(false); setSquadName(''); }}
                 className="text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg p-1.5 transition-colors"
               >
@@ -780,7 +785,8 @@ export const CoachRosterWorkspace = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateSquad} className="space-y-4">
+            {/* Body */}
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto custom-scrollbar grow">
               <div>
                 <label className="text-xs font-bold text-gray-400 block mb-1.5 uppercase">Squad / Team Name *</label>
                 <Input
@@ -810,7 +816,7 @@ export const CoachRosterWorkspace = () => {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-gray-400 block mb-1.5 uppercase">Age Category</label>
                   <select
@@ -838,42 +844,44 @@ export const CoachRosterWorkspace = () => {
                   </select>
                 </div>
               </div>
+            </div>
 
-              <div className="flex gap-2 pt-2 border-t border-[#ffd700]/10">
-                <Button
-                  type="submit"
-                  disabled={squadSubmitting}
-                  className="flex-1 bg-[#ffd700] hover:bg-[#ffc700] text-[#001a16] font-bold rounded-xl"
-                >
-                  {squadSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <PlusCircle className="w-4 h-4 mr-2" />}
-                  Create Squad
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => { setShowSquadModal(false); setSquadName(''); }}
-                  className="border-gray-600 text-gray-400 hover:bg-gray-800 bg-transparent rounded-xl"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </Card>
+            {/* Footer */}
+            <div className="p-4 sm:p-6 shrink-0 border-t border-emerald-900/50 flex justify-end gap-3 bg-slate-900/50">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => { setShowSquadModal(false); setSquadName(''); }}
+                className="border-gray-600 text-gray-400 hover:bg-gray-800 bg-transparent rounded-xl"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={squadSubmitting}
+                className="bg-[#ffd700] hover:bg-[#ffc700] text-[#001a16] font-bold rounded-xl"
+              >
+                {squadSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <PlusCircle className="w-4 h-4 mr-2" />}
+                Create Squad
+              </Button>
+            </div>
+          </form>
         </div>
       )}
 
       {/* ── Add Athlete Modal ── */}
       {showAthleteModal && selectedTeam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-          <Card className="w-full max-w-2xl bg-[#001a16] border border-[#ffd700]/30 rounded-2xl shadow-2xl p-6 flex flex-col max-h-[90vh] text-gray-200">
+        <div className="fixed inset-0 z-50 p-4 sm:p-6 md:p-8 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-2xl max-h-[90vh] bg-slate-900 border border-emerald-900/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-gray-200 text-left">
             
-            {/* Modal Title */}
-            <div className="flex items-center justify-between border-b border-[#ffd700]/10 pb-3 mb-4 shrink-0">
+            {/* Modal Title / Header */}
+            <div className="p-4 sm:p-6 shrink-0 border-b border-emerald-900/50 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-[#ffd700]" />
                 <h3 className="text-lg font-bold text-white">Add Athletes to {selectedTeam.team_name}</h3>
               </div>
               <button
+                type="button"
                 onClick={() => setShowAthleteModal(false)}
                 className="text-gray-400 hover:text-white hover:bg-[#ffd700]/10 rounded-lg p-1.5 transition-colors"
               >
@@ -881,134 +889,143 @@ export const CoachRosterWorkspace = () => {
               </button>
             </div>
 
-            {/* Smart Filters bar */}
-            <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-[#002520]/40 p-3 rounded-xl border border-[#ffd700]/10 shrink-0 mb-4">
-              <div className="relative w-full sm:max-w-xs">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                <Input
-                  id="athlete-search-input"
-                  value={athleteSearch}
-                  onChange={e => setAthleteSearch(e.target.value)}
-                  placeholder="Search name, ID, role..."
-                  className="pl-9 h-9.5 bg-[#001a16] border-[#ffd700]/25 text-white placeholder:text-gray-600 focus:border-[#ffd700]/60 rounded-lg"
-                />
+            {/* Smart Filters bar + Candidate Selection Sheet (Body) */}
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto custom-scrollbar grow flex flex-col min-h-0">
+              <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-[#002520]/40 p-3 rounded-xl border border-[#ffd700]/10 shrink-0">
+                <div className="relative w-full sm:max-w-xs">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  <Input
+                    id="athlete-search-input"
+                    value={athleteSearch}
+                    onChange={e => setAthleteSearch(e.target.value)}
+                    placeholder="Search name, ID, role..."
+                    className="pl-9 h-9.5 bg-[#001a16] border-[#ffd700]/25 text-white placeholder:text-gray-600 focus:border-[#ffd700]/60 rounded-lg"
+                  />
+                </div>
+
+                {isFamilyTeam && (
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={filterByFamily}
+                      onChange={e => setFilterByFamily(e.target.checked)}
+                      className="rounded bg-[#001a16] border-[#ffd700]/20 text-[#ffd700] focus:ring-0 w-4 h-4"
+                    />
+                    <Filter className="w-3.5 h-3.5 text-[#ffd700]" />
+                    <span>Filter by Family Unit ({teamFamilyName})</span>
+                  </label>
+                )}
               </div>
 
-              {isFamilyTeam && (
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-300">
-                  <input
-                    type="checkbox"
-                    checked={filterByFamily}
-                    onChange={e => setFilterByFamily(e.target.checked)}
-                    className="rounded bg-[#001a16] border-[#ffd700]/20 text-[#ffd700] focus:ring-0 w-4 h-4"
-                  />
-                  <Filter className="w-3.5 h-3.5 text-[#ffd700]" />
-                  <span>Filter by Family Unit ({teamFamilyName})</span>
-                </label>
-              )}
-            </div>
-
-            {/* Candidate selection sheet */}
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin max-h-[45vh]">
-              {membersLoading ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-2 text-gray-500">
-                  <Loader2 className="w-6 h-6 animate-spin text-[#ffd700]" />
-                  <span className="text-xs">Fetching members roster...</span>
-                </div>
-              ) : filteredCandidates.length === 0 ? (
-                <div className="py-12 text-center text-gray-500 text-sm">
-                  <Users className="w-8 h-8 mx-auto mb-2 opacity-25 text-[#ffd700]" />
-                  No matching candidates available for squad registration.
-                </div>
-              ) : (
-                filteredCandidates.map(member => {
-                  const state = selectedCandidates[member.official_member_id] || { selected: false, jerseyNumber: '', position: 'CM' };
-                  return (
-                    <div
-                      key={member.official_member_id}
-                      className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-3.5 rounded-xl border transition-all duration-150 ${
-                        state.selected
-                          ? 'bg-[#ffd700]/10 border-[#ffd700]/40 shadow-inner'
-                          : 'bg-[#002520]/50 border-[#ffd700]/5 hover:border-[#ffd700]/15 hover:bg-[#002520]'
-                      }`}
-                    >
-                      {/* Checkbox + Details */}
+              {/* Candidate selection sheet */}
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar min-h-0">
+                {membersLoading ? (
+                  <div className="flex flex-col items-center justify-center py-12 gap-2 text-gray-500">
+                    <Loader2 className="w-6 h-6 animate-spin text-[#ffd700]" />
+                    <span className="text-xs">Fetching members roster...</span>
+                  </div>
+                ) : filteredCandidates.length === 0 ? (
+                  <div className="py-12 text-center text-gray-500 text-sm">
+                    <Users className="w-8 h-8 mx-auto mb-2 opacity-25 text-[#ffd700]" />
+                    No matching candidates available for squad registration.
+                  </div>
+                ) : (
+                  filteredCandidates.map(member => {
+                    const state = selectedCandidates[member.official_member_id] || { selected: false, jerseyNumber: '', position: 'CM' };
+                    return (
                       <div
-                        onClick={() => handleToggleCandidate(member.official_member_id)}
-                        className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
+                        key={member.official_member_id}
+                        className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-3.5 rounded-xl border transition-all duration-150 ${
+                          state.selected
+                            ? 'bg-[#ffd700]/10 border-[#ffd700]/40 shadow-inner'
+                            : 'bg-[#002520]/50 border-[#ffd700]/5 hover:border-[#ffd700]/15 hover:bg-[#002520]'
+                        }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={state.selected}
-                          readOnly
-                          className="rounded bg-[#001a16] border-[#ffd700]/25 text-[#ffd700] focus:ring-0 w-4.5 h-4.5 shrink-0"
-                        />
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-white truncate">{member.full_name}</p>
-                          <p className="text-[10px] text-gray-500 font-medium">
-                            ID: <span className="font-mono text-gray-400">{member.official_member_id}</span> · Family: <span className="text-gray-400">{member.cmo_family || '—'}</span> · Role: <span className="text-gray-400">{member.role}</span>
-                          </p>
+                        {/* Checkbox + Details */}
+                        <div
+                          onClick={() => handleToggleCandidate(member.official_member_id)}
+                          className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={state.selected}
+                            readOnly
+                            className="rounded bg-[#001a16] border-[#ffd700]/25 text-[#ffd700] focus:ring-0 w-4.5 h-4.5 shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-white truncate">{member.full_name}</p>
+                            <p className="text-[10px] text-gray-500 font-medium">
+                              ID: <span className="font-mono text-gray-400">{member.official_member_id}</span> · Family: <span className="text-gray-400">{member.cmo_family || '—'}</span> · Role: <span className="text-gray-400">{member.role}</span>
+                            </p>
+                          </div>
                         </div>
+
+                        {/* Position & Jersey Options - only show input if checked */}
+                        {state.selected && (
+                          <div className="flex gap-2 items-center mt-3 sm:mt-0 w-full sm:w-auto shrink-0 animate-in slide-in-from-right-1 duration-150">
+                            <div>
+                              <select
+                                value={state.position}
+                                onChange={e => handleUpdatePosition(member.official_member_id, e.target.value)}
+                                className="h-8.5 px-2 rounded-lg bg-[#001a16] border border-[#ffd700]/30 text-white text-xs focus:outline-none"
+                              >
+                                <optgroup label="Goalkeeper" className="bg-[#001a16]">
+                                  <option value="GK">Goalkeeper (GK)</option>
+                                </optgroup>
+                                <optgroup label="Defenders" className="bg-[#001a16]">
+                                  <option value="CB">Centre-Back (CB)</option>
+                                  <option value="LB">Left-Back (LB)</option>
+                                  <option value="RB">Right-Back (RB)</option>
+                                  <option value="LWB">Left Wing-Back (LWB)</option>
+                                  <option value="RWB">Right Wing-Back (RWB)</option>
+                                </optgroup>
+                                <optgroup label="Midfielders" className="bg-[#001a16]">
+                                  <option value="CDM">Central Defensive Midfielder (CDM)</option>
+                                  <option value="CM">Central Midfielder (CM)</option>
+                                  <option value="CAM">Central Attacking Midfielder (CAM)</option>
+                                  <option value="LM">Left Midfielder (LM)</option>
+                                  <option value="RM">Right Midfielder (RM)</option>
+                                </optgroup>
+                                <optgroup label="Forwards / Attackers" className="bg-[#001a16]">
+                                  <option value="ST/CF">Striker / Centre-Forward (ST/CF)</option>
+                                  <option value="LW">Left Winger (LW)</option>
+                                  <option value="RW">Right Winger (RW)</option>
+                                  <option value="SS">Second Striker (SS)</option>
+                                </optgroup>
+                              </select>
+                            </div>
+                            <div className="w-20">
+                              <Input
+                                type="number"
+                                placeholder="No #"
+                                value={state.jerseyNumber}
+                                onChange={e => handleUpdateJersey(member.official_member_id, e.target.value)}
+                                className="h-8.5 text-center text-xs bg-[#001a16] border-[#ffd700]/30 text-white placeholder:text-gray-700 rounded-lg font-bold font-mono"
+                              />
+                            </div>
+                          </div>
+                        )}
+
                       </div>
-
-                      {/* Position & Jersey Options - only show input if checked */}
-                      {state.selected && (
-                        <div className="flex gap-2 items-center mt-3 sm:mt-0 w-full sm:w-auto shrink-0 animate-in slide-in-from-right-1 duration-150">
-                          <div>
-                            <select
-                              value={state.position}
-                              onChange={e => handleUpdatePosition(member.official_member_id, e.target.value)}
-                              className="h-8.5 px-2 rounded-lg bg-[#001a16] border border-[#ffd700]/30 text-white text-xs focus:outline-none"
-                            >
-                              <optgroup label="Goalkeeper" className="bg-[#001a16]">
-                                <option value="GK">Goalkeeper (GK)</option>
-                              </optgroup>
-                              <optgroup label="Defenders" className="bg-[#001a16]">
-                                <option value="CB">Centre-Back (CB)</option>
-                                <option value="LB">Left-Back (LB)</option>
-                                <option value="RB">Right-Back (RB)</option>
-                                <option value="LWB">Left Wing-Back (LWB)</option>
-                                <option value="RWB">Right Wing-Back (RWB)</option>
-                              </optgroup>
-                              <optgroup label="Midfielders" className="bg-[#001a16]">
-                                <option value="CDM">Central Defensive Midfielder (CDM)</option>
-                                <option value="CM">Central Midfielder (CM)</option>
-                                <option value="CAM">Central Attacking Midfielder (CAM)</option>
-                                <option value="LM">Left Midfielder (LM)</option>
-                                <option value="RM">Right Midfielder (RM)</option>
-                              </optgroup>
-                              <optgroup label="Forwards / Attackers" className="bg-[#001a16]">
-                                <option value="ST/CF">Striker / Centre-Forward (ST/CF)</option>
-                                <option value="LW">Left Winger (LW)</option>
-                                <option value="RW">Right Winger (RW)</option>
-                                <option value="SS">Second Striker (SS)</option>
-                              </optgroup>
-                            </select>
-                          </div>
-                          <div className="w-20">
-                            <Input
-                              type="number"
-                              placeholder="No #"
-                              value={state.jerseyNumber}
-                              onChange={e => handleUpdateJersey(member.official_member_id, e.target.value)}
-                              className="h-8.5 text-center text-xs bg-[#001a16] border-[#ffd700]/30 text-white placeholder:text-gray-700 rounded-lg font-bold font-mono"
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                    </div>
-                  );
-                })
-              )}
+                    );
+                  })
+                )}
+              </div>
             </div>
 
-            {/* Bottom Panel */}
-            <div className="border-t border-[#ffd700]/10 pt-4 mt-4 flex justify-between items-center shrink-0">
+            {/* Bottom Panel / Footer */}
+            <div className="p-4 sm:p-6 shrink-0 border-t border-emerald-900/50 flex justify-between items-center bg-slate-900/50">
               <span className="text-xs text-gray-400 font-bold">
                 {Object.values(selectedCandidates).filter(c => c.selected).length} Athletes Selected
               </span>
               <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowAthleteModal(false)}
+                  className="border-gray-600 text-gray-400 hover:bg-gray-800 bg-transparent rounded-xl h-9.5 text-xs px-4"
+                >
+                  Cancel
+                </Button>
                 <Button
                   onClick={handleSaveAthletes}
                   disabled={savingAthletes || Object.values(selectedCandidates).filter(c => c.selected).length === 0}
@@ -1017,17 +1034,10 @@ export const CoachRosterWorkspace = () => {
                   {savingAthletes ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <UserCheck className="w-4 h-4 mr-1.5" />}
                   Save Squad Roster
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowAthleteModal(false)}
-                  className="border-gray-600 text-gray-400 hover:bg-gray-800 bg-transparent rounded-xl h-9.5 text-xs px-4"
-                >
-                  Cancel
-                </Button>
               </div>
             </div>
 
-          </Card>
+          </div>
         </div>
       )}
 

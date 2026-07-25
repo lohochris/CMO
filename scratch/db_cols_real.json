@@ -1,0 +1,16 @@
+{
+  "cols": null,
+  "cErr": {
+    "code": "PGRST106",
+    "details": null,
+    "hint": "Only the following schemas are exposed: public, graphql_public",
+    "message": "Invalid schema: information_schema"
+  },
+  "tables": null,
+  "tErr": {
+    "code": "PGRST106",
+    "details": null,
+    "hint": "Only the following schemas are exposed: public, graphql_public",
+    "message": "Invalid schema: information_schema"
+  }
+}

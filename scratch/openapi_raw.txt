@@ -1,0 +1,3 @@
+Status: 401
+
+{"message":"Secret API key required","hint":"Only secret API keys can be used for this endpoint."}
