@@ -43,6 +43,8 @@ export type Page =
   | 'equipment_ledger'
   | 'sports_finance'
   | 'dashboard/sports'
+  | 'terms'
+  | 'privacy'
   | 'publicGallery';
 
 export interface Member {
