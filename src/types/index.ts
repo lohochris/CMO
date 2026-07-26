@@ -113,6 +113,7 @@ export interface WelfareTicket {
   reasonDetails?: string;
   declineReason?: string;
   chairmanRead?: boolean;
+  notes?: string;
 }
 
 export interface Expense {
@@ -201,4 +202,30 @@ export interface CmoMeetingSession {
   is_manually_locked?: boolean;
   opened_by?: string;
   created_at?: string;
+}
+
+export interface Lodgment {
+  id?: string | number;
+  teller_ref: string;
+  amount: number;
+  signatories: string;
+  status: string;
+  lodged_by: string;
+  created_at: string;
+}
+
+export interface BankWithdrawal {
+  id: string;
+  withdrawal_ref?: string;
+  purpose: string;
+  amount: number;
+  category: 'Welfare Payout' | 'Major Project' | 'Operational Expense' | 'General';
+  signatories: string;
+  status: 'PENDING' | 'AUTHORIZED' | 'SETTLED' | 'CANCELLED';
+  requested_by: string;
+  ticket_id?: string;
+  member_id?: string;
+  member_name?: string;
+  created_at: string;
+  authorized_at?: string;
 }

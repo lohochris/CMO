@@ -4,13 +4,13 @@ import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { Users, CheckCircle, AlertCircle, TrendingUp, DollarSign, Camera, Megaphone, FileText, Upload, Edit, Trash2, ShieldCheck, Trophy } from 'lucide-react';
+import { Users, CheckCircle, AlertCircle, TrendingUp, TrendingDown, DollarSign, Camera, Megaphone, FileText, Upload, Edit, Trash2, ShieldCheck, Trophy, Landmark, Calculator, Scale, Database } from 'lucide-react';
 import { SportsAuditReadOnlyView } from './sports/SportsAuditReadOnlyView';
 import { useApp } from '../../contexts/AppContext';
 import { generateMemberId, generateExpenseId } from '../../utils/idGenerators';
 import { formatCurrency, formatDate, getCombinedTransactions, calculateTotal, isAdministrativeId } from '../../utils/helpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
-import { uploadProfilePicture, isUuid, getMemberQueryField } from '../../utils/supabaseHelpers';
+import { uploadProfilePicture, isUuid, getMemberQueryField, calculateUnifiedFinancialSummary, fetchUnifiedFinancialSummary } from '../../utils/supabaseHelpers';
 import { supabase } from '../../lib/supabaseClient';
 import logoImage from '../../imports/CMO.png';
 import { Member, Family, MemberStatus } from '../../types';
@@ -212,13 +212,9 @@ export const FinSecDashboard = () => {
     return txDate >= start && txDate <= end;
   });
 
-  const filteredIncome = filteredTransactions
-    .filter(t => (t as any).transactionType === 'income')
-    .reduce((sum, t) => sum + Number(t.amount), 0);
-
-  const filteredExpenses = filteredTransactions
-    .filter(t => (t as any).transactionType === 'expense')
-    .reduce((sum, t) => sum + Number(t.amount), 0);
+  const filteredSummary = calculateUnifiedFinancialSummary(filteredTransactions);
+  const filteredIncome = filteredSummary.totalIncome;
+  const filteredExpenses = filteredSummary.totalExpenses;
 
   const manualSearchResults = manualSearchQuery.trim()
     ? rosterList
@@ -2089,15 +2085,15 @@ export const FinSecDashboard = () => {
             </div>
             <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 print-summary-grid">
               <div className="bg-[#001a16] border border-green-500 p-4 rounded print-summary-card">
-                <p className="text-green-500 text-sm mb-1">Total Income</p>
+                <p className="text-green-500 text-sm mb-1 flex items-center gap-1.5"><TrendingUp className="w-4 h-4" /> Total Income</p>
                 <p className="text-white text-xl font-bold val">{formatCurrency(filteredIncome)}</p>
               </div>
               <div className="bg-[#001a16] border border-red-500 p-4 rounded print-summary-card">
-                <p className="text-red-500 text-sm mb-1">Total Expenses</p>
+                <p className="text-red-500 text-sm mb-1 flex items-center gap-1.5"><TrendingDown className="w-4 h-4" /> Total Expenses</p>
                 <p className="text-white text-xl font-bold val">{formatCurrency(filteredExpenses)}</p>
               </div>
               <div className="bg-[#001a16] border border-[#ffd700] p-4 rounded print-summary-card">
-                <p className="text-[#ffd700] text-sm mb-1">Net Balance</p>
+                <p className="text-[#ffd700] text-sm mb-1 flex items-center gap-1.5"><Scale className="w-4 h-4" /> Net Balance</p>
                 <p className="text-white text-xl font-bold val">{formatCurrency(filteredIncome - filteredExpenses)}</p>
               </div>
             </div>
