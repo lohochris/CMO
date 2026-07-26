@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef, useCallback } from 'react';
-import { Member, Transaction, WelfareTicket, Expense, Announcement, Page, Family, FamilyTransaction, FamilyExpense, FamilyWelfareTicket, FamilyAnnouncement } from '../types';
+import { Member, Transaction, WelfareTicket, Expense, Announcement, Page, Family, FamilyTransaction, FamilyExpense, FamilyWelfareTicket, FamilyAnnouncement, Lodgment, BankWithdrawal } from '../types';
 import { seedAnnouncements } from '../data/seedData';
 import { supabase } from '../lib/supabaseClient';
 import { toast } from 'sonner';
 import { isAdministrativeId } from '../utils/helpers';
+import { calculateUnifiedFinancialSummary, fetchUnifiedFinancialSummary } from '../utils/supabaseHelpers';
 
 interface AppContextType {
   members: Member[];
@@ -16,6 +17,12 @@ interface AppContextType {
   setExpenses: (newExpenses: Expense[] | ((prev: Expense[]) => Expense[])) => void;
   announcements: Announcement[];
   setAnnouncements: (newAnnouncements: Announcement[] | ((prev: Announcement[]) => Announcement[])) => void;
+  lodgments: Lodgment[];
+  setLodgments: React.Dispatch<React.SetStateAction<Lodgment[]>>;
+  bankWithdrawals: BankWithdrawal[];
+  setBankWithdrawals: React.Dispatch<React.SetStateAction<BankWithdrawal[]>>;
+  authorizeBankWithdrawal: (withdrawalId: string, signatoryRole: string) => Promise<boolean>;
+  createBankWithdrawal: (newWithdrawal: Partial<BankWithdrawal>) => Promise<boolean>;
   familyTransactions: FamilyTransaction[];
   setFamilyTransactions: React.Dispatch<React.SetStateAction<FamilyTransaction[]>>;
   familyExpenses: FamilyExpense[];
@@ -252,7 +259,8 @@ const dbToWelfareTicket = (t: any, membersList?: Member[]): WelfareTicket => {
     settledAt: t.settled_at || undefined,
     reasonDetails: t.reason_details || undefined,
     declineReason: t.decline_reason || undefined,
-    chairmanRead: t.chairman_read !== undefined ? !!t.chairman_read : false
+    chairmanRead: t.chairman_read !== undefined ? !!t.chairman_read : false,
+    notes: t.notes || undefined
   };
 };
 
@@ -265,7 +273,8 @@ const welfareTicketToDb = (t: WelfareTicket): any => {
     reason_details: t.reasonDetails || '',
     decline_reason: t.declineReason || '',
     chairman_read: t.chairmanRead !== undefined ? t.chairmanRead : false,
-    status: t.status
+    status: t.status,
+    notes: t.notes || null
   };
   if (t.ticketId && t.ticketId.includes('-') && t.ticketId.length > 15) {
     payload.ticket_id = t.ticketId;
@@ -316,6 +325,34 @@ const announcementToDb = (a: Announcement): any => {
   return payload;
 };
 
+const INITIAL_BANK_WITHDRAWALS: BankWithdrawal[] = [
+  {
+    id: 'WTH-2026-001',
+    withdrawal_ref: 'WTH-SEC1-8841',
+    purpose: 'Bereavement Welfare Disbursement (Late Pa Okonkwo)',
+    amount: 50000,
+    category: 'Welfare Payout',
+    signatories: 'Treasurer',
+    status: 'PENDING',
+    requested_by: 'Treasurer Office',
+    ticket_id: 'WEL-2026-001',
+    member_id: 'HCC-CMO-WIS-004',
+    member_name: 'Bro. Emmanuel Okonkwo',
+    created_at: new Date().toISOString()
+  },
+  {
+    id: 'WTH-2026-002',
+    withdrawal_ref: 'WTH-SEC1-8842',
+    purpose: 'Parish Hall Renovation Support Project Phase I',
+    amount: 150000,
+    category: 'Major Project',
+    signatories: 'Chairman',
+    status: 'PENDING',
+    requested_by: 'Chairman Office',
+    created_at: new Date().toISOString()
+  }
+];
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [members, setMembersState] = useState<Member[]>([]);
   const [executives, setExecutives] = useState<Member[]>([]);
@@ -324,6 +361,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [welfareTickets, setWelfareTicketsState] = useState<WelfareTicket[]>([]);
   const [expenses, setExpensesState] = useState<Expense[]>([]);
   const [announcements, setAnnouncementsState] = useState<Announcement[]>([]);
+  const [lodgments, setLodgments] = useState<Lodgment[]>([]);
+  const [bankWithdrawals, setBankWithdrawals] = useState<BankWithdrawal[]>(INITIAL_BANK_WITHDRAWALS);
   
   const [familyTransactions, setFamilyTransactions] = useState<FamilyTransaction[]>([]);
   const [familyExpenses, setFamilyExpenses] = useState<FamilyExpense[]>([]);
@@ -623,6 +662,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setAnnouncementsState(seedAnnouncements);
     }
 
+    // 6. Fetch Bank Lodgments
+    try {
+      const { data: dbLodgments, error: lodgErr } = await supabase
+        .from('lodgments')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!lodgErr && dbLodgments) {
+        setLodgments(dbLodgments);
+      }
+    } catch (err: any) {
+      console.error("Isolated lodgments connection catch-block:", err);
+    }
+
+    // 7. Fetch Bank Withdrawals (Section I)
+    try {
+      const { data: dbWithdrawals, error: wthErr } = await supabase
+        .from('bank_withdrawals')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!wthErr && dbWithdrawals && dbWithdrawals.length > 0) {
+        setBankWithdrawals(dbWithdrawals);
+      }
+    } catch (err: any) {
+      console.error("Isolated bank_withdrawals connection catch-block:", err);
+    }
+
     // Fetch parish member census count directly from public.members
     try {
       const { count, error: rosterErr } = await supabase
@@ -639,55 +704,57 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, []);
 
+  const refreshUserContext = useCallback(async () => {
+    try {
+      if (typeof window !== 'undefined') {
+        const savedUserStr = localStorage.getItem('cmo_current_user');
+        const sessionKey = localStorage.getItem('cmo_member_session') || localStorage.getItem('cmo_admin_id');
+        const targetKey = sessionKey || (savedUserStr ? JSON.parse(savedUserStr).id || JSON.parse(savedUserStr).official_member_id : null);
+
+        if (targetKey) {
+          // Check cmo_executives partition directly
+          const { data: execData } = await supabase
+            .from('cmo_executives')
+            .select('*')
+            .or(`executive_id.eq.${targetKey},id.eq.${targetKey}`)
+            .maybeSingle();
+
+          if (execData) {
+            setCurrentUser(dbToExecutive(execData));
+          } else {
+            // Check public.members partition directly for general registry
+            const { data: memberData } = await supabase
+              .from('members')
+              .select('*')
+              .or(`official_member_id.eq.${targetKey},id.eq.${targetKey}`)
+              .maybeSingle();
+
+            if (memberData) {
+              setCurrentUser(dbToMember(memberData));
+            } else if (savedUserStr) {
+              setCurrentUser(JSON.parse(savedUserStr));
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Executive session recovery failed:", e);
+    }
+  }, []);
+
   // Initial fetch from Supabase on mount
   useEffect(() => {
     const initializeData = async () => {
       setLoading(true);
       setDbError(null);
 
-      // Check cmo_executives and local storage for initial user session
-      try {
-        if (typeof window !== 'undefined') {
-          const savedUserStr = localStorage.getItem('cmo_current_user');
-          const sessionKey = localStorage.getItem('cmo_member_session') || localStorage.getItem('cmo_admin_id');
-          const targetKey = sessionKey || (savedUserStr ? JSON.parse(savedUserStr).id : null);
-
-          if (targetKey) {
-            // Check cmo_executives partition directly
-            const { data: execData } = await supabase
-              .from('cmo_executives')
-              .select('*')
-              .or(`executive_id.eq.${targetKey},id.eq.${targetKey}`)
-              .maybeSingle();
-
-            if (execData) {
-              setCurrentUser(dbToExecutive(execData));
-            } else {
-              // Check public.members partition directly for general registry
-              const { data: memberData } = await supabase
-                .from('members')
-                .select('*')
-                .or(`official_member_id.eq.${targetKey},id.eq.${targetKey}`)
-                .maybeSingle();
-
-              if (memberData) {
-                setCurrentUser(dbToMember(memberData));
-              } else if (savedUserStr) {
-                setCurrentUser(JSON.parse(savedUserStr));
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Executive session recovery failed:", e);
-      }
-
+      await refreshUserContext();
       await refreshDatabase();
       setLoading(false);
     };
 
     initializeData();
-  }, [refreshDatabase]);
+  }, [refreshDatabase, refreshUserContext]);
 
 
   // Real-time Supabase Postgres changes subscription to welfare_tickets
@@ -784,6 +851,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
   }, []);
 
+  // Real-time Supabase Postgres changes subscription to lodgments
+  useEffect(() => {
+    const channel = supabase
+      .channel('lodgments-real-time')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'lodgments' },
+        (payload) => {
+          console.log('Real-time lodgments payload received:', payload);
+          if (payload.eventType === 'INSERT') {
+            setLodgments(prev => {
+              if (prev.some(l => l.id === payload.new.id)) return prev;
+              return [payload.new as Lodgment, ...prev];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            setLodgments(prev => prev.map(l => l.id === payload.new.id ? (payload.new as Lodgment) : l));
+          } else if (payload.eventType === 'DELETE') {
+            setLodgments(prev => prev.filter(l => l.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   // Intercepting State Setters to sync to Supabase asynchronously
   const setMembers = useCallback(async (newMembers: Member[] | ((prev: Member[]) => Member[])) => {
     const next = typeof newMembers === 'function' ? newMembers(membersRef.current) : newMembers;
@@ -798,6 +893,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
       
       const targetCode = member.official_member_id || member.id;
+      let existing: any = null;
       if (isUuid(member.id)) {
         const { data } = await supabase
           .from('members')
@@ -929,44 +1025,135 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   }, [announcements]);
 
-  // database-driven reactive financial totals
-  const totalIncome = useMemo(() => {
-    return transactions
-      .filter(t => {
-        const typeLower = (t.transactionType ?? '').toLowerCase();
-        if (typeLower !== 'income' && typeLower !== 'inflow' && typeLower !== 'section_a') return false;
-        
-        // If it's a Provost Fine, count toward realized treasury income when cleared or approved
-        if (t.purpose?.startsWith('Provost Fine:')) {
-          return t.status === 'Cleared' || t.status === 'Approved';
-        }
-        return true;
-      })
-      .reduce((sum, t) => sum + (t.amount || 0), 0);
+  // database-driven reactive unified financial totals
+  const unifiedSummary = useMemo(() => {
+    return calculateUnifiedFinancialSummary(transactions);
   }, [transactions]);
 
-  const totalExpenses = useMemo(() => {
-    return transactions
-      .filter(t => {
-        const typeLower = (t.transactionType ?? '').toLowerCase();
-        if (typeLower !== 'expense' && typeLower !== 'outflow' && typeLower !== 'section_b') return false;
-        
-        // Strictly exclude fine entries from operational expense outflows
-        if (t.purpose?.startsWith('Provost Fine:') || t.purpose?.includes('Fine Commitment')) {
-          return false;
-        }
+  const totalIncome = unifiedSummary.totalIncome;
+  const totalExpenses = unifiedSummary.totalExpenses;
+  const vaultBalance = unifiedSummary.vaultBalance;
+
+  const authorizeBankWithdrawal = useCallback(async (withdrawalId: string, signatoryRole: string): Promise<boolean> => {
+    try {
+      const target = bankWithdrawals.find(w => w.id === withdrawalId);
+      if (!target) return false;
+
+      const currentSigs = target.signatories ? target.signatories.split(',').map(s => s.trim()).filter(Boolean) : [];
+      if (currentSigs.includes(signatoryRole)) {
         return true;
-      })
-      .reduce((sum, t) => sum + (t.amount || 0), 0);
-  }, [transactions]);
+      }
 
-  const vaultBalance = useMemo(() => {
-    return totalIncome - totalExpenses;
-  }, [totalIncome, totalExpenses]);
+      const updatedSigs = [...currentSigs, signatoryRole];
+      const isAuthorized = updatedSigs.length >= 2;
+      const newStatus = isAuthorized ? 'SETTLED' : 'PENDING';
 
-  const refreshUserContext = useCallback(async () => {
-    await refreshDatabase();
-  }, [refreshDatabase]);
+      const updatedRecord: BankWithdrawal = {
+        ...target,
+        signatories: updatedSigs.join(', '),
+        status: newStatus,
+        authorized_at: isAuthorized ? new Date().toISOString() : target.authorized_at
+      };
+
+      const { error: bwErr } = await supabase.from('bank_withdrawals').upsert([updatedRecord]);
+      if (bwErr) console.warn('Supabase bank_withdrawals upsert warning:', bwErr);
+
+      setBankWithdrawals(prev => prev.map(w => w.id === withdrawalId ? updatedRecord : w));
+
+      if (isAuthorized) {
+        const settledTxPayload = {
+          official_member_id: target.member_id || 'PARISH_BANK_VAULT',
+          member_name: target.member_name || target.requested_by || 'Treasurer Office',
+          amount: target.amount,
+          purpose: `[Section I Bank Withdrawal] ${target.purpose}`,
+          notes: `Section I 2-of-3 Authorized Bank Withdrawal (Signatories: ${updatedSigs.join(', ')})`,
+          transaction_type: 'expense',
+          status: 'SETTLED',
+          created_at: new Date().toISOString()
+        };
+
+        const { data: txData, error: txErr } = await supabase
+          .from('transactions')
+          .insert([settledTxPayload])
+          .select();
+
+        if (txErr) console.warn('Supabase settled transaction insert warning:', txErr);
+        const createdTx = (txData && txData.length > 0) ? dbToTransaction(txData[0]) : dbToTransaction(settledTxPayload);
+        setTransactionsState(prev => [createdTx, ...prev]);
+
+        const expensePayload = {
+          id: `EXP-SEC1-${Date.now()}`,
+          amount: target.amount,
+          purpose: `[Section I Bank Withdrawal] ${target.purpose}`,
+          date: new Date().toISOString().split('T')[0],
+          recordedBy: `Signatories: ${updatedSigs.join(', ')}`
+        };
+
+        const { error: expErr } = await supabase.from('expenses').insert([expensePayload]);
+        if (expErr) console.warn('Supabase expense insert warning:', expErr);
+        setExpensesState(prev => [...prev, expensePayload]);
+
+        if (target.ticket_id) {
+          const { error: welErr } = await supabase
+            .from('welfare_tickets')
+            .update({
+              status: 'Completed',
+              settled_at: new Date().toISOString(),
+              notes: `Bank withdrawal authorized by ${updatedSigs.join(', ')}`
+            })
+            .eq('ticket_id', target.ticket_id);
+
+          if (!welErr) {
+            setWelfareTicketsState(prev => prev.map(t =>
+              t.ticketId === target.ticket_id
+                ? { ...t, status: 'Completed', settledAt: new Date().toISOString() }
+                : t
+            ));
+          }
+        }
+
+        setSuccess(`Section I Bank Withdrawal authorized! ₦${target.amount.toLocaleString()} disbursed and synchronized across FinSec Ledger, Treasurer Vault, and Chairman Oversight.`);
+        await refreshDatabase();
+      } else {
+        setSuccess(`Signature recorded (${signatoryRole}). Requires 1 more signature out of 3 to authorize bank release.`);
+      }
+
+      return true;
+    } catch (err: any) {
+      console.error("Authorize bank withdrawal error:", err);
+      setError("Failed to process signature authorization: " + err.message);
+      return false;
+    }
+  }, [bankWithdrawals, refreshDatabase]);
+
+  const createBankWithdrawal = useCallback(async (newWithdrawalData: Partial<BankWithdrawal>): Promise<boolean> => {
+    try {
+      const withdrawalRecord: BankWithdrawal = {
+        id: `WTH-${Date.now()}`,
+        withdrawal_ref: `WTH-SEC1-${Math.floor(1000 + Math.random() * 9000)}`,
+        purpose: newWithdrawalData.purpose || 'Major Bank Disbursement',
+        amount: newWithdrawalData.amount || 0,
+        category: newWithdrawalData.category || 'General',
+        signatories: newWithdrawalData.signatories || currentUser?.office_title || 'Treasurer',
+        status: 'PENDING',
+        requested_by: currentUser?.name || 'Treasurer Office',
+        ticket_id: newWithdrawalData.ticket_id,
+        member_id: newWithdrawalData.member_id,
+        member_name: newWithdrawalData.member_name,
+        created_at: new Date().toISOString()
+      };
+
+      const { error: insertErr } = await supabase.from('bank_withdrawals').insert([withdrawalRecord]);
+      if (insertErr) console.warn('Supabase bank_withdrawals insert warning:', insertErr);
+      setBankWithdrawals(prev => [withdrawalRecord, ...prev]);
+      setSuccess(`Bank withdrawal request created for ₦${withdrawalRecord.amount.toLocaleString()}. Pending Section I 2-of-3 Signatory Authorization.`);
+      return true;
+    } catch (err: any) {
+      console.error("Create bank withdrawal error:", err);
+      setError("Failed to create bank withdrawal request: " + err.message);
+      return false;
+    }
+  }, [currentUser]);
 
   const contextValue = useMemo(() => ({
     members,
@@ -979,6 +1166,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setExpenses,
     announcements: activeAnnouncements,
     setAnnouncements,
+    lodgments,
+    setLodgments,
+    bankWithdrawals,
+    setBankWithdrawals,
+    authorizeBankWithdrawal,
+    createBankWithdrawal,
     familyTransactions,
     setFamilyTransactions,
     familyExpenses,
@@ -1018,6 +1211,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setExpenses,
     activeAnnouncements,
     setAnnouncements,
+    lodgments,
+    setLodgments,
+    bankWithdrawals,
+    setBankWithdrawals,
+    authorizeBankWithdrawal,
+    createBankWithdrawal,
     familyTransactions,
     familyExpenses,
     familyWelfareTickets,

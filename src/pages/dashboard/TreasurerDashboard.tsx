@@ -4,12 +4,12 @@ import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { BadgeDollarSign, TrendingUp, Receipt, Trophy, Landmark, ShieldCheck, CheckCircle2, Clock, AlertTriangle, Coins } from 'lucide-react';
+import { BadgeDollarSign, TrendingUp, TrendingDown, Receipt, Trophy, Landmark, ShieldCheck, CheckCircle2, Clock, AlertTriangle, Coins, Key, ArrowUpRight, ArrowDownLeft, Scale, FileText, Calculator, Database } from 'lucide-react';
 import { SportsAuditReadOnlyView } from './sports/SportsAuditReadOnlyView';
 import { useApp } from '../../contexts/AppContext';
 import { generateExpenseId } from '../../utils/idGenerators';
 import { calculateTotal, formatCurrency, formatDate, getCombinedTransactions } from '../../utils/helpers';
-import { uploadProfilePicture } from '../../utils/supabaseHelpers';
+import { uploadProfilePicture, calculateUnifiedFinancialSummary, fetchUnifiedFinancialSummary } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { supabase } from '../../lib/supabaseClient';
 import { CMO_CONSTITUTION_2023 } from '../../config/cmoConstitution';
@@ -55,21 +55,57 @@ export const TreasurerDashboard = () => {
     setError,
     totalIncome,
     totalExpenses,
-    refreshDatabase
+    vaultBalance,
+    refreshDatabase,
+    lodgments,
+    setLodgments,
+    bankWithdrawals,
+    authorizeBankWithdrawal,
+    createBankWithdrawal
   } = useApp();
 
-  // Bank Lodgment Reconciliation States (Section D(6) & Section I)
+  // Bank Lodgment Reconciliation States (Section D(6))
   const [tellerRef, setTellerRef] = useState('');
   const [lodgmentAmount, setLodgmentAmount] = useState('');
-  const [selectedSignatories, setSelectedSignatories] = useState<string[]>(['Chairman', 'Treasurer']);
   const [isSubmittingLodgment, setIsSubmittingLodgment] = useState(false);
   const [lodgmentHistory, setLodgmentHistory] = useState<any[]>([]);
 
-  const toggleSignatory = (role: string) => {
-    if (selectedSignatories.includes(role)) {
-      setSelectedSignatories(selectedSignatories.filter(r => r !== role));
-    } else {
-      setSelectedSignatories([...selectedSignatories, role]);
+  // Section I Bank Withdrawal Request States
+  const [withdrawalPurpose, setWithdrawalPurpose] = useState('');
+  const [withdrawalAmount, setWithdrawalAmount] = useState('');
+  const [withdrawalCategory, setWithdrawalCategory] = useState<'Welfare Payout' | 'Major Project' | 'Operational Expense' | 'General'>('Welfare Payout');
+  const [isSubmittingWithdrawal, setIsSubmittingWithdrawal] = useState(false);
+  const [authorizingWthId, setAuthorizingWthId] = useState<string | null>(null);
+
+  const handleCreateWithdrawal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    const amt = parseFloat(withdrawalAmount);
+    if (!withdrawalPurpose.trim() || isNaN(amt) || amt <= 0) {
+      setError('Please provide a valid withdrawal purpose and positive amount.');
+      return;
+    }
+    setIsSubmittingWithdrawal(true);
+    try {
+      await createBankWithdrawal({
+        purpose: withdrawalPurpose.trim(),
+        amount: amt,
+        category: withdrawalCategory,
+        signatories: 'Treasurer'
+      });
+      setWithdrawalPurpose('');
+      setWithdrawalAmount('');
+    } finally {
+      setIsSubmittingWithdrawal(false);
+    }
+  };
+
+  const handleAuthorizeWithdrawal = async (wthId: string, role: string) => {
+    setAuthorizingWthId(wthId);
+    try {
+      await authorizeBankWithdrawal(wthId, role);
+    } finally {
+      setAuthorizingWthId(null);
     }
   };
 
@@ -79,11 +115,6 @@ export const TreasurerDashboard = () => {
 
     if (!tellerRef.trim()) {
       setError('Please provide a valid Bank Teller Reference Number.');
-      return;
-    }
-
-    if (selectedSignatories.length < 2) {
-      setError('Constitutional Policy Violation: Section I mandates authorization by at least 2 out of 3 designated signatories (Chairman, Treasurer, Parish Priest).');
       return;
     }
 
@@ -98,22 +129,26 @@ export const TreasurerDashboard = () => {
       const newLodgment = {
         teller_ref: tellerRef.trim(),
         amount: amountVal,
-        signatories: selectedSignatories.join(', '),
+        signatories: 'Treasurer Direct Deposit (Sec D(6))',
         status: 'Reconciled',
         lodged_by: currentUser?.name || 'Treasurer',
         created_at: new Date().toISOString()
       };
 
-      const { error: dbErr } = await supabase
+      const { data: dbData, error: dbErr } = await supabase
         .from('lodgments')
-        .insert([newLodgment]);
+        .insert([newLodgment])
+        .select();
 
       if (dbErr) {
         console.warn('Supabase lodgments insert warning:', dbErr);
       }
 
-      setLodgmentHistory([newLodgment, ...lodgmentHistory]);
-      setSuccess(`Bank Lodgment of ₦${amountVal.toLocaleString()} (Teller: ${tellerRef.trim()}) reconciled with ${selectedSignatories.join(' & ')} authorization under Section I Bye-Laws!`);
+      const createdRecord = (dbData && dbData.length > 0) ? dbData[0] : newLodgment;
+
+      setLodgments(prev => [createdRecord, ...prev.filter(l => l.id !== createdRecord.id)]);
+      setLodgmentHistory(prev => [createdRecord, ...prev]);
+      setSuccess(`Bank Lodgment of ₦${amountVal.toLocaleString()} (Teller: ${tellerRef.trim()}) recorded as Reconciled Bank Deposit!`);
       setTellerRef('');
       setLodgmentAmount('');
       setTimeout(() => setSuccess(''), 4000);
@@ -206,6 +241,29 @@ export const TreasurerDashboard = () => {
       setIsSubmittingPinChange(false);
     }
   };
+
+  const isExpenseTransaction = (item: any): boolean => {
+    const typeStr = String(item.transactionType || item.transaction_type || item.type || '').toLowerCase().trim();
+    if (typeStr === 'expense' || typeStr === 'outflow' || typeStr === 'section_b') return true;
+    if (typeStr === 'income' || typeStr === 'inflow' || typeStr === 'section_a') return false;
+
+    const amt = Number(item.amount);
+    if (!isNaN(amt) && amt < 0) return true;
+
+    const purposeStr = String(item.purpose || '').toLowerCase();
+    if (
+      purposeStr.includes('withdrawal') ||
+      purposeStr.includes('expense') ||
+      purposeStr.includes('payout') ||
+      purposeStr.includes('disbursement') ||
+      purposeStr.includes('outflow')
+    ) {
+      return true;
+    }
+
+    return false;
+  };
+
   const combinedTransactions = getCombinedTransactions(transactions, expenses);
 
   const handleIncomeRecord = async () => {
@@ -493,7 +551,7 @@ export const TreasurerDashboard = () => {
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Vault Balance</p>
                   <p className="text-white font-bold text-sm">
                     {isExecutiveUnlocked ? (
-                      formatCurrency(totalIncome - totalExpenses)
+                      formatCurrency(vaultBalance)
                     ) : (
                       <span className="tracking-widest text-[#ffd700]/40">••••••</span>
                     )}
@@ -557,6 +615,10 @@ export const TreasurerDashboard = () => {
             <TabsTrigger value="bank_lodgment" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] flex items-center gap-1.5">
               <Landmark className="w-4 h-4" />
               Bank Lodgment
+            </TabsTrigger>
+            <TabsTrigger value="bank_withdrawal" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4" />
+              Section I Withdrawals
             </TabsTrigger>
             <TabsTrigger value="sports_treasury" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] flex items-center gap-1.5">
               <Trophy className="w-4 h-4" />
@@ -796,34 +858,60 @@ export const TreasurerDashboard = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {combinedTransactions.slice(0, 20).map((item, idx) => (
-                    <TableRow key={idx} className="border-[#ffd700]/30 hover:bg-[#001a16]">
-                      <TableCell className="text-gray-400 text-sm">{formatDate(item.timestamp)}</TableCell>
-                      <TableCell>
-                        <span className={`text-xs px-2 py-1 rounded ${item.type === 'income' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
-                          {item.type === 'income' ? 'Income' : 'Expense'}
-                        </span>
+                  {combinedTransactions.slice(0, 50).map((item: any, idx: number) => {
+                    const isExpense = isExpenseTransaction(item);
+                    const formattedAmt = formatCurrency(Math.abs(Number(item.amount) || 0));
+                    const timestamp = item.timestamp || item.created_at || item.date;
+
+                    let description = item.purpose || 'Transaction';
+                    if (!isExpense && item.memberId && item.memberId !== 'GENERAL' && item.memberId !== 'GENERAL-INCOME') {
+                      description = item.memberName ? `Payment from ${item.memberName} (${item.memberId})` : `Payment from ${item.memberId}`;
+                    }
+
+                    return (
+                      <TableRow key={idx} className="border-[#ffd700]/30 hover:bg-[#001a16]">
+                        <TableCell className="text-gray-400 text-sm">{formatDate(timestamp)}</TableCell>
+                        <TableCell>
+                          {isExpense ? (
+                            <span className="text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded text-xs font-semibold inline-flex items-center gap-1">
+                              <ArrowDownLeft className="w-3 h-3 text-rose-400" />
+                              Expense
+                            </span>
+                          ) : (
+                            <span className="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded text-xs font-semibold inline-flex items-center gap-1">
+                              <ArrowUpRight className="w-3 h-3 text-emerald-400" />
+                              Income
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-white font-medium">{description}</TableCell>
+                        <TableCell className="text-emerald-400 font-semibold">{!isExpense ? formattedAmt : '—'}</TableCell>
+                        <TableCell className="text-rose-400 font-semibold">{isExpense ? formattedAmt : '—'}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {combinedTransactions.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-gray-400 py-8">
+                        No ledger transactions recorded yet
                       </TableCell>
-                      <TableCell className="text-white">{item.type === 'income' ? (item.memberId === 'GENERAL' ? item.purpose : `Payment from ${item.memberId}`) : item.purpose}</TableCell>
-                      <TableCell className="text-green-500 font-semibold">{item.type === 'income' ? formatCurrency(item.amount) : '-'}</TableCell>
-                      <TableCell className="text-red-500 font-semibold">{item.type === 'expense' ? formatCurrency(item.amount) : '-'}</TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </div>
             <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-[#001a16] border border-green-500 p-4 rounded">
-                <p className="text-green-500 text-sm mb-1">Total Income</p>
+                <p className="text-green-500 text-sm mb-1 flex items-center gap-1.5"><TrendingUp className="w-4 h-4" /> Total Income</p>
                 <p className="text-white text-xl font-bold">{formatCurrency(totalIncome)}</p>
               </div>
               <div className="bg-[#001a16] border border-red-500 p-4 rounded">
-                <p className="text-red-500 text-sm mb-1">Total Expenses</p>
+                <p className="text-red-500 text-sm mb-1 flex items-center gap-1.5"><TrendingDown className="w-4 h-4" /> Total Expenses</p>
                 <p className="text-white text-xl font-bold">{formatCurrency(totalExpenses)}</p>
               </div>
               <div className="bg-[#001a16] border border-[#ffd700] p-4 rounded">
-                <p className="text-[#ffd700] text-sm mb-1">Net Position</p>
-                <p className="text-white text-xl font-bold">{formatCurrency(totalIncome - totalExpenses)}</p>
+                <p className="text-[#ffd700] text-sm mb-1 flex items-center gap-1.5"><Scale className="w-4 h-4" /> Net Position</p>
+                <p className="text-white text-xl font-bold">{formatCurrency(vaultBalance)}</p>
               </div>
             </div>
           </Card>
@@ -844,23 +932,23 @@ export const TreasurerDashboard = () => {
 
               <div className="bg-[#001a16] border border-[#ffd700]/30 p-4 rounded-lg mb-6">
                 <p className="text-gray-400 text-sm">Un-lodged Cash Collected</p>
-                <p className="text-3xl font-bold text-white mt-1">{formatCurrency(totalIncome - totalExpenses)}</p>
+                <p className="text-3xl font-bold text-white mt-1">{formatCurrency(vaultBalance)}</p>
                 <p className="text-xs text-gray-500 mt-1">Net accumulated cash balance awaiting bank deposit.</p>
               </div>
 
               {/* Section D(6) Rule Enforcement Badge */}
-              <div className="bg-amber-950/40 border border-amber-500/40 p-4 rounded-lg flex items-start gap-3">
-                <Clock className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+              <div className="bg-emerald-950/40 border border-emerald-500/40 p-4 rounded-lg flex items-start gap-3">
+                <ShieldCheck className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-sm font-semibold text-amber-300">Section D(6) Lodgment Requirement</h4>
-                  <p className="text-xs text-amber-200/80 mt-1">
-                    Cash collected by the Financial Secretary must be handed over and lodged into the official CMO bank account no later than the <strong>next working day</strong>.
+                  <h4 className="text-sm font-semibold text-emerald-300">Section D(6) Direct Deposit Policy</h4>
+                  <p className="text-xs text-emerald-200/80 mt-1">
+                    Deposits are handled directly by the Treasurer upon receiving cash from FinSec. They do <strong>NOT</strong> require signatory approval and save directly as Reconciled Proof-of-Deposit records.
                   </p>
                 </div>
               </div>
             </Card>
 
-            {/* Bank Teller & Signatory Verification Modal / Form */}
+            {/* Bank Teller Reconcile Form */}
             <Card className="bg-[#002520] border-2 border-[#ffd700] p-6">
               <div className="flex items-center gap-2 mb-4">
                 <Landmark className="w-6 h-6 text-[#ffd700]" />
@@ -889,49 +977,191 @@ export const TreasurerDashboard = () => {
                   />
                 </div>
 
-                {/* Section I Signatory Verification Checkboxes */}
-                <div>
-                  <label className="text-gray-300 text-sm block mb-2 font-semibold flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-[#ffd700]" />
-                    Section I Signatory Authorization (Select at least 2 of 3)
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {['Chairman', 'Treasurer', 'Parish Priest'].map((role) => {
-                      const isSelected = selectedSignatories.includes(role);
-                      return (
-                        <button
-                          key={role}
-                          type="button"
-                          onClick={() => toggleSignatory(role)}
-                          className={`p-2.5 rounded border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
-                            isSelected
-                              ? 'bg-[#ffd700]/20 border-[#ffd700] text-[#ffd700]'
-                              : 'bg-[#001a16] border-gray-700 text-gray-400 hover:border-gray-500'
-                          }`}
-                        >
-                          <CheckCircle2 className={`w-3.5 h-3.5 ${isSelected ? 'text-[#ffd700]' : 'text-gray-600'}`} />
-                          {role}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {selectedSignatories.length < 2 && (
-                    <p className="text-red-400 text-xs mt-1.5 flex items-center gap-1">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      Section I mandates authorization by at least 2 signatories.
-                    </p>
-                  )}
+                <div className="bg-[#001a16] p-3 rounded border border-gray-700 text-xs text-gray-400">
+                  <p className="font-semibold text-[#ffd700]">Proof-of-Deposit Confirmation:</p>
+                  Submitting this teller reference records the bank deposit immediately without requiring executive signatures.
                 </div>
 
                 <Button
                   type="submit"
-                  disabled={isSubmittingLodgment || selectedSignatories.length < 2}
+                  disabled={isSubmittingLodgment}
                   className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold mt-2 disabled:opacity-50"
                 >
                   <Landmark className="w-4 h-4 mr-2" />
-                  {isSubmittingLodgment ? 'Reconciling...' : 'Confirm & Reconcile Bank Lodgment'}
+                  {isSubmittingLodgment ? 'Reconciling...' : 'Confirm & Save Bank Deposit (Sec D(6))'}
                 </Button>
               </form>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="bank_withdrawal" className="mt-6 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Form: Create Bank Withdrawal Request */}
+            <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 lg:col-span-1">
+              <div className="flex items-center gap-2 mb-4">
+                <ArrowUpRight className="w-6 h-6 text-[#ffd700]" />
+                <h3 className="text-lg font-bold text-[#ffd700]">New Section I Withdrawal Request</h3>
+              </div>
+
+              <form onSubmit={handleCreateWithdrawal} className="space-y-4">
+                <div>
+                  <label className="text-gray-300 text-xs block mb-1 font-semibold">Category</label>
+                  <select
+                    value={withdrawalCategory}
+                    onChange={(e: any) => setWithdrawalCategory(e.target.value)}
+                    className="w-full bg-[#001a16] border border-[#ffd700] text-white p-2 rounded text-xs focus:outline-none"
+                  >
+                    <option value="Welfare Payout">Welfare Payout</option>
+                    <option value="Major Project">Major Project</option>
+                    <option value="Operational Expense">Operational Expense</option>
+                    <option value="General">General</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-gray-300 text-xs block mb-1 font-semibold">Purpose & Description</label>
+                  <Input
+                    value={withdrawalPurpose}
+                    onChange={(e) => setWithdrawalPurpose(e.target.value)}
+                    placeholder="e.g., Welfare Payout, Project Support"
+                    className="bg-[#001a16] border-[#ffd700] text-white text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-gray-300 text-xs block mb-1 font-semibold">Amount (₦)</label>
+                  <Input
+                    type="number"
+                    value={withdrawalAmount}
+                    onChange={(e) => setWithdrawalAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="bg-[#001a16] border-[#ffd700] text-white text-xs"
+                  />
+                </div>
+
+                <div className="bg-[#001a16] p-2.5 rounded border border-[#ffd700]/20 text-[11px] text-gray-300 space-y-1">
+                  <p className="text-[#ffd700] font-semibold flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5" /> Section I Policy Rule:
+                  </p>
+                  Requires at least 2 of 3 signatures (Chairman, Treasurer, Parish Priest) before bank release.
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={isSubmittingWithdrawal}
+                  className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold text-xs"
+                >
+                  <ArrowUpRight className="w-4 h-4 mr-1" />
+                  {isSubmittingWithdrawal ? 'Submitting...' : 'Initiate Withdrawal Request'}
+                </Button>
+              </form>
+            </Card>
+
+            {/* Section I Bank Withdrawal Authorization Table */}
+            <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 lg:col-span-2">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Scale className="w-6 h-6 text-[#ffd700]" />
+                  <h3 className="text-xl font-bold text-[#ffd700]">Section I Bank Withdrawal Authorization Deck</h3>
+                </div>
+                <span className="text-xs px-2.5 py-1 rounded bg-[#ffd700]/20 text-[#ffd700] border border-[#ffd700]/30 font-mono">
+                  Mandatory 2-of-3 Signatories
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-[#ffd700]/30 hover:bg-[#001a16]">
+                      <TableHead className="text-[#ffd700]">Ref / Date</TableHead>
+                      <TableHead className="text-[#ffd700]">Purpose</TableHead>
+                      <TableHead className="text-[#ffd700]">Amount</TableHead>
+                      <TableHead className="text-[#ffd700]">Signatory Authorization Progress</TableHead>
+                      <TableHead className="text-[#ffd700]">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {bankWithdrawals.map((wth) => {
+                      const sigs = wth.signatories ? wth.signatories.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+                      const hasChairman = sigs.includes('Chairman');
+                      const hasTreasurer = sigs.includes('Treasurer');
+                      const hasParishPriest = sigs.includes('Parish Priest');
+                      const isSettled = wth.status === 'SETTLED' || sigs.length >= 2;
+
+                      return (
+                        <TableRow key={wth.id} className="border-[#ffd700]/20 hover:bg-[#001a16]">
+                          <TableCell className="text-white font-mono text-xs">
+                            <div>{wth.withdrawal_ref || wth.id}</div>
+                            <div className="text-[10px] text-gray-400">{formatDate(wth.created_at)}</div>
+                          </TableCell>
+                          <TableCell className="text-white text-xs">
+                            <p className="font-semibold">{wth.purpose}</p>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 inline-block mt-0.5">
+                              {wth.category}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-[#ffd700] font-bold text-sm">
+                            {formatCurrency(wth.amount)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold border inline-flex items-center gap-1 ${hasChairman ? 'bg-emerald-950 text-emerald-400 border-emerald-500/40' : 'bg-gray-800 text-gray-400 border-gray-700'}`}>
+                                {hasChairman ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Clock className="w-3 h-3 text-gray-400" />}
+                                Chairman [{hasChairman ? 'Signed' : 'Pending'}]
+                              </span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold border inline-flex items-center gap-1 ${hasTreasurer ? 'bg-emerald-950 text-emerald-400 border-emerald-500/40' : 'bg-gray-800 text-gray-400 border-gray-700'}`}>
+                                {hasTreasurer ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Clock className="w-3 h-3 text-gray-400" />}
+                                Treasurer [{hasTreasurer ? 'Signed' : 'Pending'}]
+                              </span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold border inline-flex items-center gap-1 ${hasParishPriest ? 'bg-emerald-950 text-emerald-400 border-emerald-500/40' : 'bg-gray-800 text-gray-400 border-gray-700'}`}>
+                                {hasParishPriest ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Clock className="w-3 h-3 text-gray-400" />}
+                                Priest [{hasParishPriest ? 'Signed' : 'Pending'}]
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {isSettled ? (
+                              <span className="inline-flex items-center text-xs text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-500/40 px-2 py-1 rounded">
+                                <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> SETTLED
+                              </span>
+                            ) : (
+                              <div className="flex flex-col gap-1">
+                                {!hasTreasurer && (
+                                  <Button
+                                    onClick={() => handleAuthorizeWithdrawal(wth.id, 'Treasurer')}
+                                    disabled={authorizingWthId === wth.id}
+                                    className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] text-[11px] font-bold py-1 h-auto"
+                                  >
+                                    <Key className="w-3 h-3 mr-1" />
+                                    Sign (Treasurer)
+                                  </Button>
+                                )}
+                                {!hasParishPriest && (
+                                  <Button
+                                    onClick={() => handleAuthorizeWithdrawal(wth.id, 'Parish Priest')}
+                                    disabled={authorizingWthId === wth.id}
+                                    className="bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] font-semibold py-1 h-auto"
+                                  >
+                                    + Add Priest Signature
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {bankWithdrawals.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-gray-400 py-6 text-xs">
+                          No bank withdrawals recorded
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </Card>
           </div>
         </TabsContent>

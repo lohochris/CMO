@@ -4,7 +4,7 @@ import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { Users, CheckCircle, CheckCheck, AlertCircle, DollarSign, Megaphone, FileText, Shield, Heart, ShieldCheck, BookOpen, X, Trophy, Activity, CheckSquare, Landmark, TrendingUp, PieChart, CheckCircle2, Key } from 'lucide-react';
+import { Users, CheckCircle, CheckCheck, AlertCircle, DollarSign, Megaphone, FileText, Shield, Heart, ShieldCheck, BookOpen, X, Trophy, Activity, CheckSquare, Landmark, TrendingUp, PieChart, CheckCircle2, Key, Clock, Scale, ArrowUpRight } from 'lucide-react';
 import { SportsAuditReadOnlyView } from './sports/SportsAuditReadOnlyView';
 import { useApp } from '../../contexts/AppContext';
 import { uploadProfilePicture, isUuid, getMemberQueryField } from '../../utils/supabaseHelpers';
@@ -58,14 +58,28 @@ export const ChairmanDashboard = () => {
     setError,
     rosterCount,
     vaultBalance,
-    refreshDatabase
+    refreshDatabase,
+    lodgments,
+    setLodgments,
+    bankWithdrawals,
+    authorizeBankWithdrawal
   } = useApp();
 
   // Executive Oversight & Bank Lodgment States
   const [lodgmentsList, setLodgmentsList] = useState<any[]>([]);
   const [finesList, setFinesList] = useState<any[]>([]);
   const [loadingLodgments, setLoadingLodgments] = useState(false);
+  const [authorizingWthId, setAuthorizingWthId] = useState<string | null>(null);
   const [authorizingLodgmentId, setAuthorizingLodgmentId] = useState<string | number | null>(null);
+
+  const handleChairmanAuthorizeWithdrawal = async (wthId: string, role: string) => {
+    setAuthorizingWthId(wthId);
+    try {
+      await authorizeBankWithdrawal(wthId, role);
+    } finally {
+      setAuthorizingWthId(null);
+    }
+  };
 
   const fetchLodgmentsAndFines = async () => {
     setLoadingLodgments(true);
@@ -102,6 +116,12 @@ export const ChairmanDashboard = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (lodgments && lodgments.length > 0) {
+      setLodgmentsList(lodgments);
+    }
+  }, [lodgments]);
+
   const handleAuthorizeLodgment = async (lodgmentId: string | number, currentSignatoriesStr: string = '') => {
     setAuthorizingLodgmentId(lodgmentId);
     setError('');
@@ -128,6 +148,7 @@ export const ChairmanDashboard = () => {
       }
 
       setLodgmentsList(prev => prev.map(l => l.id === lodgmentId ? { ...l, signatories: nextSignatoriesStr, status: nextStatus } : l));
+      setLodgments(prev => prev.map(l => l.id === lodgmentId ? { ...l, signatories: nextSignatoriesStr, status: nextStatus } : l));
       setSuccess(`Bank Lodgment authorized! Chairman signatory registered (${existingSigs.length}/3 signatures). Status: ${nextStatus}.`);
       setTimeout(() => setSuccess(''), 4000);
       await refreshDatabase();
@@ -876,13 +897,17 @@ export const ChairmanDashboard = () => {
   ]);
 
   // Combined predicate — a row is a human church member only if BOTH layers clear it
-  const isHumanChurchMember = (m: { role?: string; official_member_id?: string; id?: string }): boolean => {
+  const isHumanChurchMember = (m: Member): boolean => {
+    const roleLower = (m.role || '').toLowerCase().trim();
+    if (EXEC_ADMIN_ROLES.has(roleLower)) return false;
     const memberId = m.official_member_id || m.id || '';
     if (memberId.startsWith('HCC-')) return true;
     return !isAdministrativeId(memberId);
   };
 
-  const isHumanRegistryMember = (m: { role?: string; official_member_id?: string; id?: string }): boolean => {
+  const isHumanRegistryMember = (m: Member): boolean => {
+    const roleLower = (m.role || '').toLowerCase().trim();
+    if (REGISTRY_ADMIN_ROLES.has(roleLower)) return false;
     const memberId = m.official_member_id || m.id || '';
     if (memberId.startsWith('HCC-')) return true;
     return !isAdministrativeId(memberId);
@@ -1259,15 +1284,15 @@ export const ChairmanDashboard = () => {
                 </div>
               </Card>
 
-              {/* Card 2: Section I Signatory Authorization & Bank Lodgment Deck */}
+              {/* Card 2: Section D(6) Bank Lodgment Audit Deck */}
               <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-xl shadow-xl">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <Landmark className="w-6 h-6 text-[#ffd700]" />
-                    <h3 className="text-xl font-bold text-[#ffd700]">Section I Bank Lodgment Authorization Deck</h3>
+                    <h3 className="text-xl font-bold text-[#ffd700]">Section D(6) Bank Lodgment Audit Deck</h3>
                   </div>
                   <span className="text-xs px-2.5 py-1 rounded bg-[#ffd700]/20 text-[#ffd700] border border-[#ffd700]/30 font-mono">
-                    Mandatory 2-of-3 Signatories
+                    Proof-of-Deposit Records
                   </span>
                 </div>
 
@@ -1278,58 +1303,134 @@ export const ChairmanDashboard = () => {
                         <TableHead className="text-[#ffd700]">Teller Ref</TableHead>
                         <TableHead className="text-[#ffd700]">Amount</TableHead>
                         <TableHead className="text-[#ffd700]">Lodged By</TableHead>
+                        <TableHead className="text-[#ffd700]">Date</TableHead>
+                        <TableHead className="text-[#ffd700]">Audit Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {lodgmentsList.map((lodg) => (
+                        <TableRow key={lodg.id} className="border-[#ffd700]/20 hover:bg-[#001a16]">
+                          <TableCell className="text-white font-mono font-semibold">{lodg.teller_ref || 'TLR-REC'}</TableCell>
+                          <TableCell className="text-[#ffd700] font-bold">{formatCurrency(lodg.amount)}</TableCell>
+                          <TableCell className="text-gray-300">{lodg.lodged_by || 'Treasurer'}</TableCell>
+                          <TableCell className="text-gray-400 text-xs">{formatDate(lodg.created_at)}</TableCell>
+                          <TableCell>
+                            <span className="inline-flex items-center text-xs text-emerald-400 font-semibold bg-emerald-950/60 border border-emerald-500/40 px-2.5 py-1 rounded">
+                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Reconciled Bank Deposit
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {lodgmentsList.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-gray-400 py-6">
+                            No bank lodgments recorded in audit log
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </Card>
+
+              {/* Card 2B: Section I Bank Withdrawal Authorization Deck */}
+              <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-xl shadow-xl">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Scale className="w-6 h-6 text-[#ffd700]" />
+                    <h3 className="text-xl font-bold text-[#ffd700]">Section I Bank Withdrawal Authorization Deck</h3>
+                  </div>
+                  <span className="text-xs px-2.5 py-1 rounded bg-[#ffd700]/20 text-[#ffd700] border border-[#ffd700]/30 font-mono">
+                    Mandatory 2-of-3 Signatories
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-[#ffd700]/30 hover:bg-[#001a16]">
+                        <TableHead className="text-[#ffd700]">Ref / Date</TableHead>
+                        <TableHead className="text-[#ffd700]">Purpose & Category</TableHead>
+                        <TableHead className="text-[#ffd700]">Amount</TableHead>
                         <TableHead className="text-[#ffd700]">Signatory Authorization Progress</TableHead>
                         <TableHead className="text-[#ffd700]">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {lodgmentsList.map((lodg) => {
-                        const sigs = lodg.signatories ? lodg.signatories.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+                      {bankWithdrawals.map((wth) => {
+                        const sigs = wth.signatories ? wth.signatories.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
                         const hasChairman = sigs.includes('Chairman');
                         const hasTreasurer = sigs.includes('Treasurer');
                         const hasParishPriest = sigs.includes('Parish Priest');
+                        const isSettled = wth.status === 'SETTLED' || sigs.length >= 2;
 
                         return (
-                          <TableRow key={lodg.id} className="border-[#ffd700]/20 hover:bg-[#001a16]">
-                            <TableCell className="text-white font-mono font-semibold">{lodg.teller_ref || 'TLR-REC'}</TableCell>
-                            <TableCell className="text-[#ffd700] font-bold">{formatCurrency(lodg.amount)}</TableCell>
-                            <TableCell className="text-gray-300">{lodg.lodged_by || 'Treasurer'}</TableCell>
+                          <TableRow key={wth.id} className="border-[#ffd700]/20 hover:bg-[#001a16]">
+                            <TableCell className="text-white font-mono text-xs">
+                              <div>{wth.withdrawal_ref || wth.id}</div>
+                              <div className="text-[10px] text-gray-400">{formatDate(wth.created_at)}</div>
+                            </TableCell>
+                            <TableCell className="text-white text-xs">
+                              <p className="font-semibold">{wth.purpose}</p>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 inline-block mt-0.5">
+                                {wth.category}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-[#ffd700] font-bold text-sm">
+                              {formatCurrency(wth.amount)}
+                            </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className={`text-[11px] px-2 py-0.5 rounded font-semibold border ${hasChairman ? 'bg-emerald-950 text-emerald-400 border-emerald-500/40' : 'bg-gray-800 text-gray-400 border-gray-700'}`}>
-                                  Chairman [{hasChairman ? 'Approved' : 'Pending'}]
+                                <span className={`text-[11px] px-2 py-0.5 rounded font-semibold border inline-flex items-center gap-1 ${hasChairman ? 'bg-emerald-950 text-emerald-400 border-emerald-500/40' : 'bg-gray-800 text-gray-400 border-gray-700'}`}>
+                                  {hasChairman ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Clock className="w-3 h-3 text-gray-400" />}
+                                  Chairman [{hasChairman ? 'Signed' : 'Pending'}]
                                 </span>
-                                <span className={`text-[11px] px-2 py-0.5 rounded font-semibold border ${hasTreasurer ? 'bg-emerald-950 text-emerald-400 border-emerald-500/40' : 'bg-gray-800 text-gray-400 border-gray-700'}`}>
-                                  Treasurer [{hasTreasurer ? 'Approved' : 'Pending'}]
+                                <span className={`text-[11px] px-2 py-0.5 rounded font-semibold border inline-flex items-center gap-1 ${hasTreasurer ? 'bg-emerald-950 text-emerald-400 border-emerald-500/40' : 'bg-gray-800 text-gray-400 border-gray-700'}`}>
+                                  {hasTreasurer ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Clock className="w-3 h-3 text-gray-400" />}
+                                  Treasurer [{hasTreasurer ? 'Signed' : 'Pending'}]
                                 </span>
-                                <span className={`text-[11px] px-2 py-0.5 rounded font-semibold border ${hasParishPriest ? 'bg-emerald-950 text-emerald-400 border-emerald-500/40' : 'bg-gray-800 text-gray-400 border-gray-700'}`}>
-                                  Parish Priest [{hasParishPriest ? 'Approved' : 'Pending'}]
+                                <span className={`text-[11px] px-2 py-0.5 rounded font-semibold border inline-flex items-center gap-1 ${hasParishPriest ? 'bg-emerald-950 text-emerald-400 border-emerald-500/40' : 'bg-gray-800 text-gray-400 border-gray-700'}`}>
+                                  {hasParishPriest ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Clock className="w-3 h-3 text-gray-400" />}
+                                  Priest [{hasParishPriest ? 'Signed' : 'Pending'}]
                                 </span>
                               </div>
                             </TableCell>
                             <TableCell>
-                              {!hasChairman ? (
-                                <Button
-                                  onClick={() => handleAuthorizeLodgment(lodg.id, lodg.signatories)}
-                                  disabled={authorizingLodgmentId === lodg.id}
-                                  className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] text-xs font-bold"
-                                >
-                                  <Key className="w-3.5 h-3.5 mr-1" />
-                                  {authorizingLodgmentId === lodg.id ? 'Authorizing...' : 'Authorize (Chairman 1/3)'}
-                                </Button>
-                              ) : (
-                                <span className="inline-flex items-center text-xs text-emerald-400 font-semibold">
-                                  <CheckCircle2 className="w-4 h-4 mr-1" /> Signed
+                              {isSettled ? (
+                                <span className="inline-flex items-center text-xs text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-500/40 px-2 py-1 rounded">
+                                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> SETTLED & RELEASED
                                 </span>
+                              ) : (
+                                <div className="flex flex-col gap-1">
+                                  {!hasChairman && (
+                                    <Button
+                                      onClick={() => handleChairmanAuthorizeWithdrawal(wth.id, 'Chairman')}
+                                      disabled={authorizingWthId === wth.id}
+                                      className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] text-xs font-bold py-1 h-auto"
+                                    >
+                                      <Key className="w-3.5 h-3.5 mr-1" />
+                                      {authorizingWthId === wth.id ? 'Signing...' : 'Authorize (Chairman 1/3)'}
+                                    </Button>
+                                  )}
+                                  {!hasParishPriest && (
+                                    <Button
+                                      onClick={() => handleChairmanAuthorizeWithdrawal(wth.id, 'Parish Priest')}
+                                      disabled={authorizingWthId === wth.id}
+                                      className="bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] font-semibold py-1 h-auto"
+                                    >
+                                      + Add Priest Signature
+                                    </Button>
+                                  )}
+                                </div>
                               )}
                             </TableCell>
                           </TableRow>
                         );
                       })}
-                      {lodgmentsList.length === 0 && (
+                      {bankWithdrawals.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center text-gray-400 py-6">
-                            No bank lodgments recorded in queue
+                          <TableCell colSpan={5} className="text-center text-gray-400 py-6 text-xs">
+                            No bank withdrawals recorded in queue
                           </TableCell>
                         </TableRow>
                       )}

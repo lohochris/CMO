@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
 import { Card } from '../../../app/components/ui/card';
+import { Button } from '../../../app/components/ui/button';
 import { toast } from 'sonner';
 
 // ─────────────────────────────────────────────────────────────────────────────
