@@ -2,6 +2,7 @@ import { Member, Transaction, WelfareTicket, Expense, Announcement } from '../ty
 import { supabase } from '../lib/supabaseClient';
 import { GoogleGenAI } from '@google/genai';
 import { isAdministrativeId } from './helpers';
+import { CMO_CONSTITUTION_2023 } from '../config/cmoConstitution';
 
 const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
 
@@ -53,6 +54,101 @@ export const seedKnowledgeDocuments: KnowledgeDocument[] = [
     category: 'policy',
     source: 'Finance Operations Guidelines',
     content: 'All collection streams, including harvest contributions, family levies, and general donations, must be processed by the Financial Secretary before being deposited with the Treasurer. The Treasurer maintains the bank reserve and processes disbursed welfare/expense tickets.'
+  }
+];
+
+// Official 2023 CMO Bye-Laws Knowledge Base Dataset (Sections A - N)
+export const CMO_CONSTITUTION_SECTIONS: KnowledgeDocument[] = [
+  {
+    id: 'sec-a',
+    title: 'Section A - Preamble, Aims & Objectives',
+    category: 'constitution',
+    source: '2023 CMO Bye-Laws (Holy Cross Badawa, Kano Diocese)',
+    content: '[Section A - Preamble & Aims] Established in 2002 (Amended 2023) at Holy Cross Catholic Church, Badawa, Kano Diocese. Core Aims: 1. Promote spiritual growth and active Catholic faith among men. 2. Foster unity, brotherhood, and mutual support across family units. 3. Support parish development projects and diocesan initiatives. 4. Manage welfare scheme for members and families. 5. Uphold Catholic moral values in families and community.'
+  },
+  {
+    id: 'sec-b',
+    title: 'Section B - Membership & Registration Fees',
+    category: 'constitution',
+    source: '2023 CMO Bye-Laws (Holy Cross Badawa, Kano Diocese)',
+    content: '[Section B - Membership & Registration Fees] Membership is open to all practicing Catholic men in the parish. Fees: CMO Registration Fee ₦1,000.00; Laity Council and AMC Levy ₦850.00. Members must belong to one of four family units (Wisdom, Honour, Integrity, Talent) and maintain active cleared dues status.'
+  },
+  {
+    id: 'sec-c',
+    title: 'Section C - Meeting Schedules & Protocols',
+    category: 'constitution',
+    source: '2023 CMO Bye-Laws (Holy Cross Badawa, Kano Diocese)',
+    content: '[Section C - Meeting Schedules & Protocols] General Assembly meetings hold on the Second Sunday of every month. Executive Council meets monthly prior to general meeting. Emergency meetings convened by Chairman or General Secretary request.'
+  },
+  {
+    id: 'sec-d',
+    title: 'Section D - Executive Officers & Duties',
+    category: 'constitution',
+    source: '2023 CMO Bye-Laws (Holy Cross Badawa, Kano Diocese)',
+    content: '[Section D - Executive Officers & Duties] 12 Designated Executive Officers: 1. Chairman (Chief Executive), 2. Vice Chairman, 3. General Secretary (Secretariat & Minutes Custodian), 4. Assistant Secretary, 5. Financial Secretary (Dues & Collections), 6. Treasurer (Bank Custodian), 7. Provost (Discipline & Fines), 8. Public Relations Officer (PRO - Communications), 9. Welfare Officer (Welfare Disbursements & Condolences), 10. Auditors, 11. Patron, 12. Grand Pillars.'
+  },
+  {
+    id: 'sec-e',
+    title: 'Section E - Election, Tenure & Voting Rules',
+    category: 'constitution',
+    source: '2023 CMO Bye-Laws (Holy Cross Badawa, Kano Diocese)',
+    content: '[Section E - Election & Tenure] Elections decided by simple majority. Executive tenure is capped at strictly 4 years per term. Re-election to the exact same office for consecutive terms is prohibited. Chairman holds casting vote in ties.'
+  },
+  {
+    id: 'sec-f',
+    title: 'Section F - Executive Dissolution & Handing Over',
+    category: 'constitution',
+    source: '2023 CMO Bye-Laws (Holy Cross Badawa, Kano Diocese)',
+    content: '[Section F - Executive Dissolution & Handing Over] Executive dissolution requires formal motion supported by at least 3 active members. Appointed returning officers supervise elections. Outgoing executive must present complete handover dossier with attached bank statements.'
+  },
+  {
+    id: 'sec-g',
+    title: 'Section G - Adhoc Committees',
+    category: 'constitution',
+    source: '2023 CMO Bye-Laws (Holy Cross Badawa, Kano Diocese)',
+    content: '[Section G - Adhoc Committees] Executive committee empowers ad-hoc committees (Harvest, Audit, Welfare Audit, Special Events) to execute specific assignments and report to General Assembly.'
+  },
+  {
+    id: 'sec-h-i',
+    title: 'Section H & I - Finance, Revenue & Bank Account Signatories',
+    category: 'constitution',
+    source: '2023 CMO Bye-Laws (Holy Cross Badawa, Kano Diocese)',
+    content: '[Section H & I - Finance & Bank Account Signatories] Organization maintains a single official bank account. 3 Mandatory Bank Account Signatories: 1. Chairman, 2. Treasurer, 3. Parish Priest. At least 2 signatures (including Chairman or Treasurer plus Parish Priest) are mandatory for cash withdrawals or fund transfers.'
+  },
+  {
+    id: 'sec-j',
+    title: 'Section J - Financial Reports & Audit Ledgers',
+    category: 'constitution',
+    source: '2023 CMO Bye-Laws (Holy Cross Badawa, Kano Diocese)',
+    content: '[Section J - Financial Reports & Audit Ledgers] Financial Secretary and Treasurer present twice-yearly member indebtedness reports and financial balance sheets to Assembly with attached bank statements.'
+  },
+  {
+    id: 'sec-k',
+    title: "Section K - Members' Benefits & Welfare Scheme",
+    category: 'welfare',
+    source: '2023 CMO Bye-Laws (Holy Cross Badawa, Kano Diocese)',
+    content: "[Section K - Members' Benefits & Welfare] Qualifying period: Must be registered for at least 12 months (1 year) with cleared dues. Welfare Rates: Sickness/Hospitalization ₦10,000.00; Major Surgery ₦20,000.00; Relocation Gift Max ₦10,000.00; Naming Ceremony Support ₦10,000.00 (requires 2-month prior notice); Member Wedding Support ₦20,000.00 (requires 2-month prior notice); Wedding Outside CMO Gift ₦5,000.00; Youth Invitation ₦5,000.00; Member Death Next of Kin Benefit ₦50,000.00 (Levy: ₦1,000/member); Wife Death Condolence ₦20,000.00 (Levy: ₦500/member); Child Death Condolence ₦5,000.00 [Section K(v)(b)] (Levy: ₦200/member); Parent Death Condolence ₦10,000.00."
+  },
+  {
+    id: 'sec-l',
+    title: 'Section L - Offences, Penalties & Dispute Resolution',
+    category: 'constitution',
+    source: '2023 CMO Bye-Laws (Holy Cross Badawa, Kano Diocese)',
+    content: '[Section L - Offences, Penalties & Dispute Resolution] Lateness Fine: ₦50.00 (applies immediately after opening prayer). Absence Fines: Executive Member ₦300.00; General Member ₦200.00. Embezzlement & Betrayal of Trust: Immediate suspension and recovery. Legal Dispute Restriction [Section L(4)]: Strictly prohibited to take a member to police or court without prior CMO executive settlement reporting.'
+  },
+  {
+    id: 'sec-m',
+    title: 'Section M - Regular Activities & Celebrations',
+    category: 'constitution',
+    source: '2023 CMO Bye-Laws (Holy Cross Badawa, Kano Diocese)',
+    content: '[Section M - Regular Activities] Annual Fathers’ Day celebration, St. Joseph Feast Day (May 1st), spiritual retreats/seminars, and annual award ceremonies.'
+  },
+  {
+    id: 'sec-n',
+    title: 'Section N - Constitutional Amendments',
+    category: 'constitution',
+    source: '2023 CMO Bye-Laws (Holy Cross Badawa, Kano Diocese)',
+    content: '[Section N - Constitutional Amendments] Amendments require written motion submitted to Executive Council. Quorum threshold: At least 50% (1/2) of total registered members present at General Assembly meeting.'
   }
 ];
 
@@ -496,54 +592,71 @@ export async function querySecretaryKnowledgeBase(searchQuery: string): Promise<
   const queryLower = queryTerm.toLowerCase();
   let relevantMinutes: Array<{ id: string; title: string; date: string; snippet: string }> = [];
 
-  if (queryTerm) {
-    try {
-      const { data, error } = await supabase
-        .from('meeting_minutes')
-        .select('id, title, meeting_date, content')
-        .or(`content.ilike.%${queryTerm}%,title.ilike.%${queryTerm}%`)
-        .limit(5);
+  if (!queryTerm) {
+    return {
+      summary: 'Knowledge Base search requires a search query.',
+      relevantMinutes: []
+    };
+  }
 
-      if (!error && data && data.length > 0) {
-        relevantMinutes = data.map((item: any) => ({
+  // 1. Prioritized search across official 2023 Bye-Laws Knowledge Base (CMO_CONSTITUTION_SECTIONS & seedKnowledgeDocuments)
+  const allDocChunks = [...CMO_CONSTITUTION_SECTIONS, ...seedKnowledgeDocuments];
+  const matchedDocs = allDocChunks.filter(doc => {
+    const titleMatch = doc.title.toLowerCase().includes(queryLower);
+    const contentMatch = doc.content.toLowerCase().includes(queryLower);
+    const categoryMatch = doc.category.toLowerCase().includes(queryLower);
+    return titleMatch || contentMatch || categoryMatch;
+  });
+
+  if (matchedDocs.length > 0) {
+    matchedDocs.forEach(doc => {
+      relevantMinutes.push({
+        id: doc.id,
+        title: doc.title,
+        date: 'Official 2023 Bye-Laws Archive',
+        snippet: doc.content
+      });
+    });
+  }
+
+  // 2. Search Supabase meeting_minutes table for historical minutes records
+  try {
+    const { data, error } = await supabase
+      .from('meeting_minutes')
+      .select('id, title, meeting_date, content')
+      .or(`content.ilike.%${queryTerm}%,title.ilike.%${queryTerm}%`)
+      .limit(5);
+
+    if (!error && data && data.length > 0) {
+      data.forEach((item: any) => {
+        relevantMinutes.push({
           id: item.id || `min-${Math.random().toString(36).substr(2, 9)}`,
           title: item.title || 'General Meeting Minutes',
           date: item.meeting_date || new Date().toISOString().split('T')[0],
           snippet: item.content
-            ? (item.content.length > 180 ? item.content.substring(0, 180) + '...' : item.content)
+            ? (item.content.length > 220 ? item.content.substring(0, 220) + '...' : item.content)
             : 'No content snippet available.'
-        }));
-      }
-    } catch (err) {
-      console.warn('Meeting minutes table query error, using fallback archive:', err);
+        });
+      });
     }
+  } catch (err) {
+    console.warn('Meeting minutes table query error, using local RAG fallback:', err);
   }
 
+  // Fallback if no records matched
   if (relevantMinutes.length === 0) {
-    const seedMatches = seedKnowledgeDocuments.filter(doc =>
-      doc.title.toLowerCase().includes(queryLower) || doc.content.toLowerCase().includes(queryLower)
-    );
-
-    if (seedMatches.length > 0) {
-      relevantMinutes = seedMatches.map(doc => ({
-        id: doc.id,
-        title: doc.title,
-        date: 'Constitutional Archive',
-        snippet: doc.content.length > 180 ? doc.content.substring(0, 180) + '...' : doc.content
-      }));
-    } else {
-      relevantMinutes = [
-        {
-          id: 'min-default-1',
-          title: 'Holy Cross CMO General Assembly Minutes',
-          date: new Date().toISOString().split('T')[0],
-          snippet: `Knowledge Base Query for "${queryTerm}": Archive indexed and available for General Secretary review.`
-        }
-      ];
-    }
+    relevantMinutes.push({
+      id: 'sec-general',
+      title: 'Section A-N: 2023 CMO Holy Cross Badawa Bye-Laws',
+      date: 'Official 2023 Bye-Laws Archive',
+      snippet: `Query for "${queryTerm}": Indexed against Holy Cross Badawa 2023 Bye-Laws. Refer to Secretary Portal Knowledge Base for specific section clauses.`
+    });
   }
 
-  const summary = `Found ${relevantMinutes.length} relevant record(s) matching "${queryTerm}".`;
+  const constMatchCount = matchedDocs.length;
+  const summary = constMatchCount > 0
+    ? `Found ${relevantMinutes.length} record(s) matching "${queryTerm}" (${constMatchCount} matching 2023 Constitutional Clause(s)).`
+    : `Found ${relevantMinutes.length} record(s) matching "${queryTerm}".`;
 
   return {
     summary,
@@ -791,74 +904,161 @@ export async function evaluateConstitutionalCompliance(proposalText: string): Pr
   if (!textLower) {
     return {
       isCompliant: true,
-      articleReference: 'Article I: General Principles',
-      adviceText: 'No proposal text provided for constitutional audit.',
+      articleReference: `2023 CMO Bye-Laws & Guidelines (${CMO_CONSTITUTION_2023.parish})`,
+      adviceText: `Audit engine grounded in official 2023 Bye-Laws for ${CMO_CONSTITUTION_2023.parish} (${CMO_CONSTITUTION_2023.diocese}). No proposal text provided for audit.`,
       severity: 'Info'
     };
   }
 
-  // Check 1: Financial authorization limit (> ₦100,000 without Chairman & Assembly approval)
-  if (textLower.includes('disburse') || textLower.includes('expenditure') || textLower.includes('grant') || textLower.includes('₦')) {
-    const amountMatch = textLower.match(/₦?\s*([\d,]+)/);
-    if (amountMatch) {
-      const val = parseInt(amountMatch[1].replace(/,/g, ''), 10);
-      if (val > 100000) {
-        return {
-          isCompliant: false,
-          articleReference: 'Article IV: Financial Authorizations & Expenditures (Section 3)',
-          adviceText: `Financial authorization for ₦${val.toLocaleString()} exceeds single-executive discretionary cap (₦100,000). Requires prior 2/3 majority vote of the General Assembly and Chairman co-signature.`,
-          severity: 'Violation'
-        };
-      }
-    }
-  }
-
-  // Check 2: Dues modification without 2/3 constitutional amendment vote
-  if (textLower.includes('dues') || textLower.includes('levy') || textLower.includes('monthly fee')) {
-    if (textLower.includes('increase') || textLower.includes('decrease') || textLower.includes('change') || textLower.includes('modify')) {
+  // 1. Dispute / Legal Audit (Section L(4) Violation)
+  if (textLower.includes('police') || textLower.includes('court') || textLower.includes('lawsuit') || textLower.includes('litigation') || textLower.includes('sue')) {
+    if (!textLower.includes('cmo settlement') && !textLower.includes('reconciliation') && !textLower.includes('executive report')) {
       return {
         isCompliant: false,
-        articleReference: 'Article I: Membership & Dues (Section 4)',
-        adviceText: 'Monthly membership dues are constitutionally fixed at ₦1,000. Altering dues requires a formal constitutional amendment with 30 days prior notice and a 2/3 secret ballot majority.',
+        articleReference: 'Section L(4): Legal Dispute & Arbitration Guidelines',
+        adviceText: `VIOLATION: ${CMO_CONSTITUTION_2023.penalties.legalDisputeViolation}. All disputes between members must first be reported to the CMO Executive Council for internal settlement prior to any external law enforcement or court filing.`,
         severity: 'Violation'
       };
     }
   }
 
-  // Check 3: Quorum and voting majority rules
-  if (textLower.includes('quorum') || textLower.includes('voting') || textLower.includes('election')) {
-    if (textLower.includes('simple majority') || textLower.includes('voice vote')) {
-      return {
-        isCompliant: true,
-        articleReference: 'Article II: Assembly Governance & Voting Rules (Section 2)',
-        adviceText: 'Proposal aligns with standard simple majority voice vote rules for general assembly motions. Ensure minimum quorum (20% active members) is present.',
-        severity: 'Info'
-      };
+  // 2. Financial & Welfare Audit (Section K Figures)
+  if (textLower.includes('welfare') || textLower.includes('disburse') || textLower.includes('benefit') || textLower.includes('death') || textLower.includes('bereavement') || textLower.includes('naming') || textLower.includes('wedding') || textLower.includes('surgery') || textLower.includes('hospital')) {
+    
+    // Check Member Death Benefit
+    if (textLower.includes('member death') || textLower.includes('death of member') || textLower.includes('next of kin')) {
+      const amountMatch = textLower.match(/₦?\s*([\d,]+)/);
+      if (amountMatch) {
+        const val = parseInt(amountMatch[1].replace(/,/g, ''), 10);
+        if (val !== CMO_CONSTITUTION_2023.benefits.memberDeathNextOfKin) {
+          return {
+            isCompliant: false,
+            articleReference: 'Section K(i): Member Death Benefit & Next of Kin Support',
+            adviceText: `Member death benefit to Next of Kin is constitutionally fixed at ₦${CMO_CONSTITUTION_2023.benefits.memberDeathNextOfKin.toLocaleString()} (supported by a compulsory ₦${CMO_CONSTITUTION_2023.benefits.memberDeathLevyPerMember.toLocaleString()} levy per member). Proposed ₦${val.toLocaleString()} deviates from Section K.`,
+            severity: 'Violation'
+          };
+        }
+      }
     }
-    return {
-      isCompliant: true,
-      articleReference: 'Article II: Governance & Officers (Section 1)',
-      adviceText: 'Ensure executive elections and constitutional amendments follow secret ballot protocols as specified in Section 2.',
-      severity: 'Warning'
-    };
+
+    // Check Wife Death Condolence
+    if (textLower.includes('wife death') || textLower.includes('death of wife') || textLower.includes('spouse death')) {
+      const amountMatch = textLower.match(/₦?\s*([\d,]+)/);
+      if (amountMatch) {
+        const val = parseInt(amountMatch[1].replace(/,/g, ''), 10);
+        if (val !== CMO_CONSTITUTION_2023.benefits.wifeDeathCondolence) {
+          return {
+            isCompliant: false,
+            articleReference: 'Section K(ii): Wife Death Condolence Support',
+            adviceText: `Wife death condolence benefit is strictly ₦${CMO_CONSTITUTION_2023.benefits.wifeDeathCondolence.toLocaleString()} (funded by a ₦${CMO_CONSTITUTION_2023.benefits.wifeDeathLevyPerMember.toLocaleString()} levy per member). Proposed ₦${val.toLocaleString()} deviates from Section K.`,
+            severity: 'Violation'
+          };
+        }
+      }
+    }
+
+    // Check Child Death Condolence (Section K(v)(b))
+    if (textLower.includes('child death') || textLower.includes('death of child')) {
+      const amountMatch = textLower.match(/₦?\s*([\d,]+)/);
+      if (amountMatch) {
+        const val = parseInt(amountMatch[1].replace(/,/g, ''), 10);
+        if (val !== CMO_CONSTITUTION_2023.benefits.childDeathCondolence) {
+          return {
+            isCompliant: false,
+            articleReference: 'Section K(v)(b): Child Death Condolence',
+            adviceText: `Child death condolence support is strictly ₦${CMO_CONSTITUTION_2023.benefits.childDeathCondolence.toLocaleString()} under Section K(v)(b) (supported by a ₦${CMO_CONSTITUTION_2023.benefits.childDeathLevyPerMember.toLocaleString()} levy per member). Proposed ₦${val.toLocaleString()} is invalid.`,
+            severity: 'Violation'
+          };
+        }
+      }
+    }
+
+    // Check Naming Ceremony & Wedding Notice Period & Support Amounts
+    if (textLower.includes('naming') || textLower.includes('childbirth') || textLower.includes('wedding')) {
+      if (textLower.includes('notice') || textLower.includes('invitation') || textLower.includes('inform')) {
+        if (textLower.includes('1 month') || textLower.includes('one month') || textLower.includes('immediate') || textLower.includes('2 weeks') || textLower.includes('two weeks')) {
+          return {
+            isCompliant: false,
+            articleReference: 'Section K: Social Invitations & Notice Period Requirements',
+            adviceText: `Social invitations (naming ceremonies, weddings) require a mandatory ${CMO_CONSTITUTION_2023.benefits.requiredNoticePeriodMonths}-month prior notice to the organization to qualify for executive support (₦${CMO_CONSTITUTION_2023.benefits.namingCeremonySupport.toLocaleString()} for Naming / ₦${CMO_CONSTITUTION_2023.benefits.weddingSupport.toLocaleString()} for Weddings).`,
+            severity: 'Warning'
+          };
+        }
+      }
+    }
+
+    // Check Qualifying Period
+    if (textLower.includes('qualify') || textLower.includes('eligibility') || textLower.includes('new member')) {
+      if (textLower.includes('immediate') || textLower.includes('1 month') || textLower.includes('3 months') || textLower.includes('6 months')) {
+        return {
+          isCompliant: false,
+          articleReference: 'Section C: Membership Qualification & Benefit Eligibility',
+          adviceText: `New members must complete a qualifying period of at least ${CMO_CONSTITUTION_2023.membership.qualifyingPeriodMonths} months (1 full year) and clear ₦${CMO_CONSTITUTION_2023.membership.cmoRegistrationFee.toLocaleString()} CMO fee + ₦${CMO_CONSTITUTION_2023.membership.laityCouncilAndAmcFee.toLocaleString()} Laity/AMC fee to qualify for welfare benefits.`,
+          severity: 'Warning'
+        };
+      }
+    }
   }
 
-  // Check 4: Welfare eligibility waiver
-  if (textLower.includes('welfare') || textLower.includes('bereavement') || textLower.includes('sickness')) {
-    if (textLower.includes('waive') || textLower.includes('bypass') || textLower.includes('override')) {
+  // 3. Lateness & Attendance Audit (Section L(1,2))
+  if (textLower.includes('late') || textLower.includes('lateness') || textLower.includes('absent') || textLower.includes('absence') || textLower.includes('fine')) {
+    if (textLower.includes('late') || textLower.includes('lateness')) {
+      const fineMatch = textLower.match(/₦?\s*([\d,]+)/);
+      if (fineMatch && parseInt(fineMatch[1].replace(/,/g, ''), 10) !== CMO_CONSTITUTION_2023.penalties.latenessFine) {
+        return {
+          isCompliant: false,
+          articleReference: 'Section L(1): Lateness Penalties',
+          adviceText: `Lateness fine is constitutionally set at ₦${CMO_CONSTITUTION_2023.penalties.latenessFine.toLocaleString()}, applicable immediately after opening prayer.`,
+          severity: 'Warning'
+        };
+      }
+    }
+    if (textLower.includes('absent') || textLower.includes('absence')) {
+      if (textLower.includes('executive') && !textLower.includes('300')) {
+        return {
+          isCompliant: false,
+          articleReference: 'Section L(2): Executive Attendance Penalties',
+          adviceText: `Unexcused executive absence fine is strictly ₦${CMO_CONSTITUTION_2023.penalties.absenceExecutiveFine.toLocaleString()} under Section L(2).`,
+          severity: 'Warning'
+        };
+      }
+      if (!textLower.includes('executive') && !textLower.includes('200')) {
+        return {
+          isCompliant: false,
+          articleReference: 'Section L(2): General Member Attendance Penalties',
+          adviceText: `Unexcused general member absence fine is strictly ₦${CMO_CONSTITUTION_2023.penalties.absenceMemberFine.toLocaleString()} under Section L(2).`,
+          severity: 'Warning'
+        };
+      }
+    }
+  }
+
+  // 4. Tenure & Election Audit (Section E)
+  if (textLower.includes('election') || textLower.includes('tenure') || textLower.includes('re-election') || textLower.includes('re-elect') || textLower.includes('term')) {
+    if (textLower.includes('second term') || textLower.includes('consecutive') || textLower.includes('re-elect same office') || textLower.includes('5 years') || textLower.includes('6 years')) {
       return {
         isCompliant: false,
-        articleReference: 'Article III: Welfare Scheme Guidelines & Eligibility (Section 5)',
-        adviceText: 'Welfare disbursements require 6 months active membership and zero dues arrears. Waiving eligibility requires joint approval by Welfare Officer, Financial Secretary, and Chairman.',
-        severity: 'Warning'
+        articleReference: 'Section E: Executive Officers Tenure & Re-Election Restrictions',
+        adviceText: `Executive tenure is strictly capped at ${CMO_CONSTITUTION_2023.executive.tenureYears} years per term. Re-election to the exact same office for consecutive terms is prohibited under Section E.`,
+        severity: 'Violation'
       };
     }
+  }
+
+  // 5. Quorum & Constitutional Amendment Audit (Section M)
+  if (textLower.includes('amendment') || textLower.includes('constitution review') || textLower.includes('bye-laws review')) {
+    return {
+      isCompliant: true,
+      articleReference: 'Section M: Constitutional Amendments & Quorum Rules',
+      adviceText: `Constitutional amendments require at least ${CMO_CONSTITUTION_2023.meetings.amendmentQuorumRatio * 100}% (1/2) of total registered members present at the general meeting (${CMO_CONSTITUTION_2023.meetings.generalMeetingSchedule}).`,
+      severity: 'Info'
+    };
   }
 
   return {
     isCompliant: true,
-    articleReference: 'Holy Cross CMO Constitution - General Compliance',
-    adviceText: 'Proposal conforms to standard CMO constitutional guidelines and executive administrative procedures.',
+    articleReference: `2023 CMO Bye-Laws (${CMO_CONSTITUTION_2023.parish})`,
+    adviceText: `Proposal conforms to the official 2023 CMO Constitution guidelines for ${CMO_CONSTITUTION_2023.parish} (${CMO_CONSTITUTION_2023.diocese}).`,
     severity: 'Info'
   };
 }
@@ -949,6 +1149,202 @@ export async function generateHandoverPackage(tenurePeriod: string = '2025 – 2
     summaryReport,
     activeCommitments,
     constitutionalHighlights
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Financial Staging & Attendance Fines Ground-Truth Helpers (2023 Bye-Laws)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface WelfareProposalPayload {
+  proposalId: string;
+  welfareType: string;
+  memberId: string;
+  memberName: string;
+  approvedAmount: number;
+  sectionClause: string;
+  eventDate?: string;
+  noticeWarning?: string | null;
+  requiresNotice: boolean;
+  status: 'Staged for Audit' | 'Approved' | 'Flagged';
+  stagedAt: string;
+  notes: string;
+}
+
+/**
+ * Stages a welfare disbursement proposal lookup using CMO_CONSTITUTION_2023.benefits.
+ * Validates 2-month prior notice requirement (Section K(iii)) for social celebrations.
+ */
+export function stageWelfareProposal(
+  type: string,
+  memberId: string,
+  memberName: string,
+  eventDate?: string
+): WelfareProposalPayload {
+  const typeLower = type.toLowerCase().trim();
+  let approvedAmount = 0;
+  let sectionClause = "Section K: Members' Benefits & Welfare";
+  let requiresNotice = false;
+  let noticeWarning: string | null = null;
+  let notes = '';
+
+  if (typeLower.includes('member death') || typeLower.includes('death of member')) {
+    approvedAmount = CMO_CONSTITUTION_2023.benefits.memberDeathNextOfKin;
+    sectionClause = 'Section K(iv)(e): Member Death Benefit';
+    notes = `Next of Kin benefit of ₦${approvedAmount.toLocaleString()} funded by ₦${CMO_CONSTITUTION_2023.benefits.memberDeathLevyPerMember.toLocaleString()} member levy.`;
+  } else if (typeLower.includes('wife death') || typeLower.includes('death of wife') || typeLower.includes('spouse death')) {
+    approvedAmount = CMO_CONSTITUTION_2023.benefits.wifeDeathCondolence;
+    sectionClause = 'Section K(v)(a): Wife Death Condolence';
+    notes = `Wife death condolence of ₦${approvedAmount.toLocaleString()} funded by ₦${CMO_CONSTITUTION_2023.benefits.wifeDeathLevyPerMember.toLocaleString()} member levy.`;
+  } else if (typeLower.includes('child death') || typeLower.includes('death of child')) {
+    approvedAmount = CMO_CONSTITUTION_2023.benefits.childDeathCondolence;
+    sectionClause = 'Section K(v)(b): Child Death Condolence';
+    notes = `Child death condolence of ₦${approvedAmount.toLocaleString()} funded by ₦${CMO_CONSTITUTION_2023.benefits.childDeathLevyPerMember.toLocaleString()} member levy.`;
+  } else if (typeLower.includes('parent death') || typeLower.includes('death of parent')) {
+    approvedAmount = CMO_CONSTITUTION_2023.benefits.parentDeathCondolence;
+    sectionClause = 'Section K(v)(c): Parent Death Condolence';
+    notes = `Parent death condolence benefit of ₦${approvedAmount.toLocaleString()}.`;
+  } else if (typeLower.includes('sickness') || typeLower.includes('hospitalization') || typeLower.includes('illness')) {
+    approvedAmount = CMO_CONSTITUTION_2023.benefits.sicknessHospitalization;
+    sectionClause = 'Section K(i): Sickness & Hospitalization Benefit';
+    notes = `Hospitalization welfare support capped at ₦${approvedAmount.toLocaleString()}.`;
+  } else if (typeLower.includes('surgery') || typeLower.includes('major surgery')) {
+    approvedAmount = CMO_CONSTITUTION_2023.benefits.majorSurgery;
+    sectionClause = 'Section K(i): Major Surgery Welfare Benefit';
+    notes = `Major surgery welfare assistance of ₦${approvedAmount.toLocaleString()}.`;
+  } else if (typeLower.includes('wedding') || typeLower.includes('marriage')) {
+    approvedAmount = CMO_CONSTITUTION_2023.benefits.weddingSupport;
+    sectionClause = 'Section K(iii)(b): Member Wedding Support';
+    requiresNotice = true;
+    notes = `Member wedding support gift of ₦${approvedAmount.toLocaleString()}.`;
+  } else if (typeLower.includes('naming') || typeLower.includes('childbirth') || typeLower.includes('child birth')) {
+    approvedAmount = CMO_CONSTITUTION_2023.benefits.namingCeremonySupport;
+    sectionClause = 'Section K(iii)(a): Naming Ceremony Support';
+    requiresNotice = true;
+    notes = `Naming ceremony executive gift of ₦${approvedAmount.toLocaleString()}.`;
+  } else {
+    approvedAmount = 10000.00;
+    sectionClause = 'Section K: General Welfare Support';
+    notes = `Standard general welfare support of ₦${approvedAmount.toLocaleString()}.`;
+  }
+
+  // Validate 2-month prior notice requirement for joyful events
+  if (requiresNotice && eventDate) {
+    const eventTime = new Date(eventDate).getTime();
+    const nowTime = Date.now();
+    const noticeMs = eventTime - nowTime;
+    const noticeDays = Math.ceil(noticeMs / (1000 * 60 * 60 * 24));
+    
+    if (noticeDays < 60) {
+      noticeWarning = `NOTICE WARNING: Event date (${eventDate}) provides only ${Math.max(0, noticeDays)} days notice. Section K(iii) mandates a ${CMO_CONSTITUTION_2023.benefits.requiredNoticePeriodMonths}-month (60 days) prior notice to the secretariat.`;
+    }
+  }
+
+  return {
+    proposalId: `WEL-2023-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+    welfareType: type,
+    memberId,
+    memberName,
+    approvedAmount,
+    sectionClause,
+    eventDate,
+    noticeWarning,
+    requiresNotice,
+    status: noticeWarning ? 'Flagged' : 'Staged for Audit',
+    stagedAt: new Date().toISOString(),
+    notes
+  };
+}
+
+export interface AttendanceFineAssessment {
+  memberId: string;
+  isExecutive: boolean;
+  fineType: 'Lateness' | 'Member Absence' | 'Executive Absence';
+  fineAmount: number;
+  sectionClause: string;
+  reason: string;
+}
+
+export interface AttendanceFinesResult {
+  totalFinesAmount: number;
+  totalLateMembers: number;
+  totalAbsentMembers: number;
+  totalAbsentExecutives: number;
+  itemizedFines: AttendanceFineAssessment[];
+  summary: string;
+}
+
+/**
+ * Calculates itemized Section L attendance penalties:
+ * ₦50 for lateness, ₦200 for general member absence, ₦300 for executive absence.
+ */
+export function calculateAttendanceFines(
+  absentMemberIds: string[] = [],
+  lateMemberIds: string[] = [],
+  executiveIds: string[] = []
+): AttendanceFinesResult {
+  const execSet = new Set(executiveIds);
+  const itemizedFines: AttendanceFineAssessment[] = [];
+  let totalFinesAmount = 0;
+  let totalLateMembers = 0;
+  let totalAbsentMembers = 0;
+  let totalAbsentExecutives = 0;
+
+  // Process Late Members (Section L(1): ₦50)
+  lateMemberIds.forEach((mId) => {
+    const isExec = execSet.has(mId);
+    const fineAmount = CMO_CONSTITUTION_2023.penalties.latenessFine; // ₦50
+    totalFinesAmount += fineAmount;
+    totalLateMembers++;
+    itemizedFines.push({
+      memberId: mId,
+      isExecutive: isExec,
+      fineType: 'Lateness',
+      fineAmount,
+      sectionClause: 'Section L(1): Lateness Fine',
+      reason: `Lateness fine of ₦${fineAmount} assessed after opening prayer.`
+    });
+  });
+
+  // Process Absent Members (Section L(2): ₦300 for Exec, ₦200 for General Member)
+  absentMemberIds.forEach((mId) => {
+    const isExec = execSet.has(mId);
+    if (isExec) {
+      const fineAmount = CMO_CONSTITUTION_2023.penalties.absenceExecutiveFine; // ₦300
+      totalFinesAmount += fineAmount;
+      totalAbsentExecutives++;
+      itemizedFines.push({
+        memberId: mId,
+        isExecutive: true,
+        fineType: 'Executive Absence',
+        fineAmount,
+        sectionClause: 'Section L(2): Executive Absence Fine',
+        reason: `Unexcused executive absence fine of ₦${fineAmount}.`
+      });
+    } else {
+      const fineAmount = CMO_CONSTITUTION_2023.penalties.absenceMemberFine; // ₦200
+      totalFinesAmount += fineAmount;
+      totalAbsentMembers++;
+      itemizedFines.push({
+        memberId: mId,
+        isExecutive: false,
+        fineType: 'Member Absence',
+        fineAmount,
+        sectionClause: 'Section L(2): Member Absence Fine',
+        reason: `Unexcused general member absence fine of ₦${fineAmount}.`
+      });
+    }
+  });
+
+  const summary = `Assessed ${itemizedFines.length} fine(s) totaling ₦${totalFinesAmount.toLocaleString()} (${totalLateMembers} Late @ ₦50, ${totalAbsentMembers} Member Absence @ ₦200, ${totalAbsentExecutives} Executive Absence @ ₦300) under Section L 2023 Bye-Laws.`;
+
+  return {
+    totalFinesAmount,
+    totalLateMembers,
+    totalAbsentMembers,
+    totalAbsentExecutives,
+    itemizedFines,
+    summary
   };
 }
 
