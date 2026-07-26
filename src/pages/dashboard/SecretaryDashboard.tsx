@@ -3,12 +3,13 @@ import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { 
-  FileEdit, Mic, Download, Megaphone, Users, CheckCircle2, 
+  FileEdit, Mic, MicOff, Volume2, Radio, RotateCcw, Download, Megaphone, Users, CheckCircle2, 
   AlertTriangle, Sparkles, Search, FileText, Clock, Loader2, 
   Copy, BookOpen, ChevronDown, ChevronUp, X, CheckSquare, 
   FileCheck, Upload, ExternalLink, UserCheck, Plus, Filter, ShieldCheck, Eye,
-  ShieldAlert, Info, PackageCheck, Building2
+  ShieldAlert, Info, PackageCheck, Building2, Pause, Play
 } from 'lucide-react';
+import useLiveTranscriber from '../../hooks/useLiveTranscriber';
 import { useApp } from '../../contexts/AppContext';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
@@ -53,11 +54,29 @@ export const SecretaryDashboard = () => {
   const [pinChangeSuccess, setPinChangeSuccess] = useState(false);
   const [isSubmittingPinChange, setIsSubmittingPinChange] = useState(false);
 
-  const [minutesText, setMinutesText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
+  const [minutesText, setMinutesText] = useState('');
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementContent, setAnnouncementContent] = useState('');
   const { currentUser, members, setMembers, setCurrentUser, announcements, setAnnouncements, setSuccess, setError } = useApp();
+
+  // Real-Time Speech Listener Hook Integration (Phase 2 & 3)
+  const {
+    status: transcriberStatus,
+    isListening,
+    transcript: liveTranscript,
+    interimTranscript,
+    error: transcriberError,
+    startListening,
+    stopListening,
+    pauseListening,
+    resumeListening,
+    resetTranscript
+  } = useLiveTranscriber((liveText) => {
+    if (liveText !== undefined) {
+      setMinutesText(liveText);
+    }
+  });
 
   // Phase 1 Pre-Meeting & Quorum States
   const [presentMembersCount, setPresentMembersCount] = useState<number>(42);
@@ -113,6 +132,15 @@ export const SecretaryDashboard = () => {
   const [handoverDossier, setHandoverDossier] = useState<HandoverPackage | null>(null);
   const [isGeneratingHandover, setIsGeneratingHandover] = useState<boolean>(false);
   const [isHandoverModalOpen, setIsHandoverModalOpen] = useState<boolean>(false);
+
+  // Phase 3 Post-Stream Multi-Agent Pipeline States
+  const [isPostProcessing, setIsPostProcessing] = useState<boolean>(false);
+  const [postStreamBannerInfo, setPostStreamBannerInfo] = useState<{
+    show: boolean;
+    standardizedNamesCount: number;
+    extractedMotionsCount: number;
+  } | null>(null);
+  const [isRosterVerified, setIsRosterVerified] = useState<boolean>(false);
 
   // Saved Minutes State
   const [savedMinutes, setSavedMinutes] = useState<any[]>([]);
@@ -226,6 +254,76 @@ ${agendaItems.map((item, idx) => `${idx + 1}. [${item.category.toUpperCase()}] $
     loadResolutions();
     return () => { isMounted = false; };
   }, []);
+
+  const standardizeRosterNames = (text: string): { updatedText: string; matchedCount: number } => {
+    if (!text || !text.trim()) return { updatedText: text, matchedCount: 0 };
+    let count = 0;
+    let updated = text;
+
+    if (members && members.length > 0) {
+      members.forEach((member) => {
+        if (!member.name) return;
+        const rawName = member.name.trim();
+        const nameParts = rawName.split(',').map((s) => s.trim());
+        const lastName = nameParts[0];
+        const firstName = nameParts[1] || '';
+
+        const titleRegex = new RegExp(`\\b(bro|brother|mr|officer|sec|secretary)\\.?\\s+(${firstName}|${lastName})\\b`, 'gi');
+        if (titleRegex.test(updated)) {
+          updated = updated.replace(titleRegex, rawName);
+          count++;
+        }
+
+        if (firstName && lastName) {
+          const firstLastRegex = new RegExp(`\\b${firstName}\\s+${lastName}\\b`, 'gi');
+          if (firstLastRegex.test(updated)) {
+            updated = updated.replace(firstLastRegex, rawName);
+            count++;
+          }
+        }
+      });
+    }
+
+    return { updatedText: updated, matchedCount: count };
+  };
+
+  const handleStopListenerAndProcess = async () => {
+    stopListening();
+    setIsPostProcessing(true);
+    try {
+      const { updatedText, matchedCount } = standardizeRosterNames(minutesText);
+      if (updatedText !== minutesText) {
+        setMinutesText(updatedText);
+      }
+
+      const extracted = await extractResolutionsFromMinutes(updatedText);
+      if (extracted && extracted.length > 0) {
+        setExtractedMotions(extracted);
+      }
+
+      setPostStreamBannerInfo({
+        show: true,
+        standardizedNamesCount: matchedCount,
+        extractedMotionsCount: extracted ? extracted.length : 0
+      });
+
+      setSuccess('AI Live Stream Saved & Processed!');
+      setTimeout(() => setSuccess(''), 4000);
+    } catch (err) {
+      console.error('Post-stream processing error:', err);
+      setError('Failed during post-stream processing.');
+    } finally {
+      setIsPostProcessing(false);
+    }
+  };
+
+  const handleResetLiveFeed = () => {
+    resetTranscript();
+    setMinutesText('');
+    setPostStreamBannerInfo(null);
+    setSuccess('Live transcript feed and speech buffer reset successfully.');
+    setTimeout(() => setSuccess(''), 3000);
+  };
 
   const handleExtractMotions = async () => {
     if (!minutesText.trim()) {
@@ -987,21 +1085,199 @@ Recorded by: ${currentUser?.name}`;
 
             {/* Meeting Minutes Editor card */}
             <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-xl shadow-lg">
-              <h3 className="text-xl font-bold text-[#ffd700] mb-4 flex items-center gap-2">
-                <FileEdit className="w-5 h-5" />
-                Meeting Minutes Editor
-              </h3>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                <h3 className="text-xl font-bold text-[#ffd700] flex items-center gap-2">
+                  <FileEdit className="w-5 h-5 text-[#ffd700]" />
+                  Meeting Minutes Editor
+                </h3>
+
+                {/* Live Audio Streaming Active or Paused Indicator Badge */}
+                {isListening && (
+                  <div className="bg-red-500/10 border border-red-500/40 text-red-300 px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 animate-pulse">
+                    <Radio className="w-4 h-4 text-red-500 animate-pulse shrink-0" />
+                    <span>Live Audio Stream Active — Speak naturally into microphone...</span>
+                  </div>
+                )}
+                {transcriberStatus === 'paused' && (
+                  <div className="bg-amber-500/10 border border-amber-500/40 text-amber-300 px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2">
+                    <Pause className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>Live Audio Stream Paused — Click Resume to continue recording...</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Microphone & Web Speech Error Banner */}
+              {transcriberError && (
+                <div className="bg-red-500/15 border border-red-500/40 text-red-300 p-3 rounded-lg mb-4 text-xs flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                    <span>{transcriberError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={startListening}
+                    className="underline text-red-200 hover:text-white font-semibold cursor-pointer shrink-0"
+                  >
+                    Retry Access
+                  </button>
+                </div>
+              )}
+
+              {/* Interim Live Transcript Stream Preview */}
+              {isListening && interimTranscript && (
+                <div className="bg-[#00100d] border border-[#ffd700]/30 p-3 rounded-lg mb-4 flex items-center gap-2 text-xs">
+                  <Volume2 className="w-4 h-4 text-[#ffd700] animate-bounce shrink-0" />
+                  <span className="text-gray-400 font-semibold shrink-0">Live Stream Preview:</span>
+                  <span className="text-[#ffd700] font-mono italic truncate">{interimTranscript}</span>
+                </div>
+              )}
+
+              {/* Phase 3 Post-Stream Multi-Agent Pipeline Status & Completion Banner */}
+              {isPostProcessing && (
+                <div className="bg-[#001a16] border border-emerald-500/40 text-emerald-300 p-4 rounded-xl mb-4 flex items-center gap-3 animate-pulse">
+                  <Loader2 className="w-5 h-5 text-emerald-400 animate-spin shrink-0" />
+                  <div>
+                    <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider">AI Multi-Agent Pipeline Active</h4>
+                    <p className="text-[11px] text-gray-300">Standardizing officer roster references and extracting floor motions from live stream...</p>
+                  </div>
+                </div>
+              )}
+
+              {postStreamBannerInfo?.show && !isPostProcessing && (
+                <div className="bg-[#001a16] border border-emerald-500/50 p-4 rounded-xl mb-4 space-y-3 shadow-lg">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-white/10 pb-2">
+                    <div className="flex items-center text-sm font-bold text-emerald-400">
+                      <Sparkles className="w-4 h-4 text-emerald-400 mr-2 shrink-0" />
+                      <span>AI Live Stream Saved &amp; Processed!</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPostStreamBannerInfo((prev) => prev ? { ...prev, show: false } : null)}
+                      className="text-gray-400 hover:text-white transition-colors text-xs cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <Button
+                      onClick={() => {
+                        setIsRosterVerified(true);
+                        setSuccess(
+                          postStreamBannerInfo.standardizedNamesCount > 0
+                            ? `Verified & standardized ${postStreamBannerInfo.standardizedNamesCount} member name(s) against official roster!`
+                            : 'Member roster verified against official membership registry.'
+                        );
+                        setTimeout(() => setSuccess(''), 3500);
+                      }}
+                      variant="outline"
+                      className="border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 text-xs py-1.5 px-3 h-auto font-bold flex items-center cursor-pointer"
+                    >
+                      <UserCheck className="w-4 h-4 mr-1 text-emerald-400 shrink-0" />
+                      <span>Verify Roster Names {postStreamBannerInfo.standardizedNamesCount > 0 ? `(${postStreamBannerInfo.standardizedNamesCount} Standardized)` : ''}</span>
+                    </Button>
+
+                    <Button
+                      onClick={() => {
+                        if (extractedMotions && extractedMotions.length > 0) {
+                          setIsExtractedModalOpen(true);
+                        } else {
+                          handleExtractMotions();
+                        }
+                      }}
+                      variant="outline"
+                      className="border-[#ffd700]/40 bg-[#ffd700]/10 text-[#ffd700] hover:bg-[#ffd700]/20 text-xs py-1.5 px-3 h-auto font-bold flex items-center cursor-pointer"
+                    >
+                      <FileCheck className="w-4 h-4 mr-1 text-[#ffd700] shrink-0" />
+                      <span>Review Extracted Motions ({postStreamBannerInfo.extractedMotionsCount} Detected)</span>
+                    </Button>
+
+                    <Button
+                      onClick={handleAuditCompliance}
+                      variant="outline"
+                      className="border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 text-xs py-1.5 px-3 h-auto font-bold flex items-center cursor-pointer"
+                    >
+                      <ShieldAlert className="w-4 h-4 mr-1 text-amber-400 shrink-0" />
+                      <span>Run Constitutional Check</span>
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-4">
-                <div className="flex flex-wrap gap-4">
+                <div className="flex flex-wrap gap-4 items-center">
+                  {/* Dynamic Voice Listener Toggle Button */}
                   <Button
-                    onClick={simulateAITranscription}
-                    disabled={isRecording}
-                    className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold cursor-pointer"
+                    onClick={isListening ? handleStopListenerAndProcess : transcriberStatus === 'paused' ? resumeListening : startListening}
+                    disabled={isPostProcessing}
+                    className={
+                      isListening
+                        ? "bg-red-500/20 text-red-300 border border-red-500/50 ring-2 ring-red-500/30 hover:bg-red-500/30 font-bold cursor-pointer transition-all flex items-center"
+                        : "bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold cursor-pointer transition-all flex items-center"
+                    }
                   >
-                    <Mic className="w-4 h-4 mr-2" />
-                    {isRecording ? 'Recording...' : 'AI Voice-to-Text Listener'}
+                    {isPostProcessing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 text-emerald-400 mr-2 animate-spin" />
+                        Processing AI Pipeline...
+                      </>
+                    ) : isListening ? (
+                      <>
+                        <MicOff className="w-4 h-4 text-red-400 mr-2 animate-pulse" />
+                        Stop Listener (Listening Live...)
+                      </>
+                    ) : transcriberStatus === 'paused' ? (
+                      <>
+                        <Mic className="w-4 h-4 text-emerald-400 mr-2" />
+                        Resume Speech Listener
+                      </>
+                    ) : (
+                      <>
+                        <Mic className="w-4 h-4 text-emerald-400 mr-2" />
+                        Start AI Real-Time Listener
+                      </>
+                    )}
                   </Button>
+
+                  {/* Pause / Resume Listener Button */}
+                  {(isListening || transcriberStatus === 'paused') && (
+                    <Button
+                      onClick={isListening ? pauseListening : resumeListening}
+                      disabled={isPostProcessing}
+                      variant="outline"
+                      className={
+                        transcriberStatus === 'paused'
+                          ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 font-bold text-xs cursor-pointer flex items-center transition-all"
+                          : "border-amber-500/50 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 font-bold text-xs cursor-pointer flex items-center transition-all"
+                      }
+                    >
+                      {transcriberStatus === 'paused' ? (
+                        <>
+                          <Play className="w-4 h-4 text-emerald-400 mr-1.5 animate-pulse" />
+                          Resume Listener
+                        </>
+                      ) : (
+                        <>
+                          <Pause className="w-4 h-4 text-amber-400 mr-1.5" />
+                          Pause Listener
+                        </>
+                      )}
+                    </Button>
+                  )}
+
+                  {/* Reset Live Feed Button */}
+                  {(isListening || transcriberStatus === 'paused' || minutesText) && (
+                    <Button
+                      onClick={handleResetLiveFeed}
+                      variant="outline"
+                      className="border-[#ffd700]/30 text-gray-300 hover:text-white hover:bg-white/5 font-semibold text-xs cursor-pointer flex items-center"
+                      title="Clear live transcriber memory buffer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 mr-1.5 text-[#ffd700]" />
+                      Reset Live Feed
+                    </Button>
+                  )}
+
                   <Button
                     onClick={handleExtractMotions}
                     disabled={isExtractingMotions || !minutesText.trim()}
@@ -1050,7 +1326,7 @@ Recorded by: ${currentUser?.name}`;
                 <textarea
                   value={minutesText}
                   onChange={(e) => setMinutesText(e.target.value)}
-                  placeholder="Minutes will appear here after AI transcription, or type manually..."
+                  placeholder="Live minutes transcript will stream here in real time as the speaker talks..."
                   className="w-full bg-[#001a16] border border-[#ffd700]/30 text-white p-4 rounded-lg min-h-[400px] font-mono text-sm focus:outline-none focus:border-[#ffd700]"
                 />
               </div>

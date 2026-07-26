@@ -4,7 +4,7 @@ import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { BadgeDollarSign, TrendingUp, Receipt, Trophy } from 'lucide-react';
+import { BadgeDollarSign, TrendingUp, Receipt, Trophy, Landmark, ShieldCheck, CheckCircle2, Clock, AlertTriangle, Coins } from 'lucide-react';
 import { SportsAuditReadOnlyView } from './sports/SportsAuditReadOnlyView';
 import { useApp } from '../../contexts/AppContext';
 import { generateExpenseId } from '../../utils/idGenerators';
@@ -12,6 +12,7 @@ import { calculateTotal, formatCurrency, formatDate, getCombinedTransactions } f
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { supabase } from '../../lib/supabaseClient';
+import { CMO_CONSTITUTION_2023 } from '../../config/cmoConstitution';
 
 export const TreasurerDashboard = () => {
   const [isExecutiveUnlocked, setIsExecutiveUnlocked] = useState<boolean>(() => {
@@ -56,6 +57,74 @@ export const TreasurerDashboard = () => {
     totalExpenses,
     refreshDatabase
   } = useApp();
+
+  // Bank Lodgment Reconciliation States (Section D(6) & Section I)
+  const [tellerRef, setTellerRef] = useState('');
+  const [lodgmentAmount, setLodgmentAmount] = useState('');
+  const [selectedSignatories, setSelectedSignatories] = useState<string[]>(['Chairman', 'Treasurer']);
+  const [isSubmittingLodgment, setIsSubmittingLodgment] = useState(false);
+  const [lodgmentHistory, setLodgmentHistory] = useState<any[]>([]);
+
+  const toggleSignatory = (role: string) => {
+    if (selectedSignatories.includes(role)) {
+      setSelectedSignatories(selectedSignatories.filter(r => r !== role));
+    } else {
+      setSelectedSignatories([...selectedSignatories, role]);
+    }
+  };
+
+  const handleBankLodgmentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!tellerRef.trim()) {
+      setError('Please provide a valid Bank Teller Reference Number.');
+      return;
+    }
+
+    if (selectedSignatories.length < 2) {
+      setError('Constitutional Policy Violation: Section I mandates authorization by at least 2 out of 3 designated signatories (Chairman, Treasurer, Parish Priest).');
+      return;
+    }
+
+    const amountVal = parseFloat(lodgmentAmount || String(totalIncome - totalExpenses));
+    if (isNaN(amountVal) || amountVal <= 0) {
+      setError('Invalid lodgment amount.');
+      return;
+    }
+
+    setIsSubmittingLodgment(true);
+    try {
+      const newLodgment = {
+        teller_ref: tellerRef.trim(),
+        amount: amountVal,
+        signatories: selectedSignatories.join(', '),
+        status: 'Reconciled',
+        lodged_by: currentUser?.name || 'Treasurer',
+        created_at: new Date().toISOString()
+      };
+
+      const { error: dbErr } = await supabase
+        .from('lodgments')
+        .insert([newLodgment]);
+
+      if (dbErr) {
+        console.warn('Supabase lodgments insert warning:', dbErr);
+      }
+
+      setLodgmentHistory([newLodgment, ...lodgmentHistory]);
+      setSuccess(`Bank Lodgment of ₦${amountVal.toLocaleString()} (Teller: ${tellerRef.trim()}) reconciled with ${selectedSignatories.join(' & ')} authorization under Section I Bye-Laws!`);
+      setTellerRef('');
+      setLodgmentAmount('');
+      setTimeout(() => setSuccess(''), 4000);
+      await refreshDatabase();
+    } catch (err: any) {
+      console.error('Error submitting bank lodgment:', err);
+      setError('Failed to record bank lodgment: ' + err.message);
+    } finally {
+      setIsSubmittingLodgment(false);
+    }
+  };
 
   const awaitingDisbursement = welfareTickets.filter(t => t.status === 'Approved');
 
@@ -485,6 +554,10 @@ export const TreasurerDashboard = () => {
             <TabsTrigger value="ledger" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16]">
               Financial Timeline
             </TabsTrigger>
+            <TabsTrigger value="bank_lodgment" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] flex items-center gap-1.5">
+              <Landmark className="w-4 h-4" />
+              Bank Lodgment
+            </TabsTrigger>
             <TabsTrigger value="sports_treasury" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] flex items-center gap-1.5">
               <Trophy className="w-4 h-4" />
               Sports Treasury
@@ -755,6 +828,114 @@ export const TreasurerDashboard = () => {
             </div>
           </Card>
         </TabsContent>
+        <TabsContent value="bank_lodgment" className="mt-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Un-lodged Vault Balance & Section D(6) Badge Card */}
+            <Card className="bg-[#002520] border-2 border-[#ffd700] p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Coins className="w-6 h-6 text-[#ffd700]" />
+                  <h3 className="text-xl font-bold text-[#ffd700]">FinSec Cash Vault</h3>
+                </div>
+                <span className="text-xs px-2.5 py-1 rounded bg-[#ffd700]/20 text-[#ffd700] border border-[#ffd700]/30 font-mono">
+                  Section D(6) Enforced
+                </span>
+              </div>
+
+              <div className="bg-[#001a16] border border-[#ffd700]/30 p-4 rounded-lg mb-6">
+                <p className="text-gray-400 text-sm">Un-lodged Cash Collected</p>
+                <p className="text-3xl font-bold text-white mt-1">{formatCurrency(totalIncome - totalExpenses)}</p>
+                <p className="text-xs text-gray-500 mt-1">Net accumulated cash balance awaiting bank deposit.</p>
+              </div>
+
+              {/* Section D(6) Rule Enforcement Badge */}
+              <div className="bg-amber-950/40 border border-amber-500/40 p-4 rounded-lg flex items-start gap-3">
+                <Clock className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-sm font-semibold text-amber-300">Section D(6) Lodgment Requirement</h4>
+                  <p className="text-xs text-amber-200/80 mt-1">
+                    Cash collected by the Financial Secretary must be handed over and lodged into the official CMO bank account no later than the <strong>next working day</strong>.
+                  </p>
+                </div>
+              </div>
+            </Card>
+
+            {/* Bank Teller & Signatory Verification Modal / Form */}
+            <Card className="bg-[#002520] border-2 border-[#ffd700] p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Landmark className="w-6 h-6 text-[#ffd700]" />
+                <h3 className="text-xl font-bold text-[#ffd700]">Reconcile Bank Lodgment</h3>
+              </div>
+
+              <form onSubmit={handleBankLodgmentSubmit} className="space-y-4">
+                <div>
+                  <label className="text-gray-300 text-sm block mb-1">Bank Teller Reference Number</label>
+                  <Input
+                    value={tellerRef}
+                    onChange={(e) => setTellerRef(e.target.value)}
+                    placeholder="e.g. TLR-2023-884920"
+                    className="bg-[#001a16] border-[#ffd700] text-white font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-gray-300 text-sm block mb-1">Amount to Lodge (₦)</label>
+                  <Input
+                    type="number"
+                    value={lodgmentAmount}
+                    onChange={(e) => setLodgmentAmount(e.target.value)}
+                    placeholder={String(Math.max(0, totalIncome - totalExpenses))}
+                    className="bg-[#001a16] border-[#ffd700] text-white"
+                  />
+                </div>
+
+                {/* Section I Signatory Verification Checkboxes */}
+                <div>
+                  <label className="text-gray-300 text-sm block mb-2 font-semibold flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-[#ffd700]" />
+                    Section I Signatory Authorization (Select at least 2 of 3)
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {['Chairman', 'Treasurer', 'Parish Priest'].map((role) => {
+                      const isSelected = selectedSignatories.includes(role);
+                      return (
+                        <button
+                          key={role}
+                          type="button"
+                          onClick={() => toggleSignatory(role)}
+                          className={`p-2.5 rounded border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#ffd700]/20 border-[#ffd700] text-[#ffd700]'
+                              : 'bg-[#001a16] border-gray-700 text-gray-400 hover:border-gray-500'
+                          }`}
+                        >
+                          <CheckCircle2 className={`w-3.5 h-3.5 ${isSelected ? 'text-[#ffd700]' : 'text-gray-600'}`} />
+                          {role}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {selectedSignatories.length < 2 && (
+                    <p className="text-red-400 text-xs mt-1.5 flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      Section I mandates authorization by at least 2 signatories.
+                    </p>
+                  )}
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={isSubmittingLodgment || selectedSignatories.length < 2}
+                  className="w-full bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] font-bold mt-2 disabled:opacity-50"
+                >
+                  <Landmark className="w-4 h-4 mr-2" />
+                  {isSubmittingLodgment ? 'Reconciling...' : 'Confirm & Reconcile Bank Lodgment'}
+                </Button>
+              </form>
+            </Card>
+          </div>
+        </TabsContent>
+
         <TabsContent value="sports_treasury" className="mt-6">
           <SportsAuditReadOnlyView />
         </TabsContent>

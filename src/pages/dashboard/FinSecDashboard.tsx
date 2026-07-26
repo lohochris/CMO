@@ -15,6 +15,7 @@ import { supabase } from '../../lib/supabaseClient';
 import logoImage from '../../imports/CMO.png';
 import { Member, Family, MemberStatus } from '../../types';
 import { FinesEscrowVerificationLedger } from '../../app/components/common/FinesEscrowVerificationLedger';
+import { CMO_CONSTITUTION_2023 } from '../../config/cmoConstitution';
 
 
 export const FinSecDashboard = () => {

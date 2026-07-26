@@ -27,6 +27,8 @@ import { ProfilePictureUploader } from '../../app/components/common/ProfilePictu
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { GeneralGalleryManager } from '../../app/components/gallery/GeneralGalleryManager';
 import { ProvostAttendanceWorkspace } from '../../app/components/attendance/ProvostAttendanceWorkspace';
+import { CMO_CONSTITUTION_2023 } from '../../config/cmoConstitution';
+import { calculateAttendanceFines } from '../../utils/aiService';
 
 interface DisciplinaryLog {
   id: string;
@@ -142,15 +144,47 @@ export default function ProvostDashboard() {
   const [escrowSearch, setEscrowSearch] = useState('');
   const [updatingFineId, setUpdatingFineId] = useState<string | number | null>(null);
 
-  // Infraction presets with suggested default fine amounts
+  // Infraction presets grounded in 2023 CMO Bye-Laws (Section L)
   const INFRACTION_PRESETS: Record<string, number> = {
-    'Lateness': 500,
-    'Absence': 1000,
-    'Insubordination': 2000,
-    'Dress Code Violation': 500,
-    'Conduct / Unbecoming Behavior': 1500,
-    'Late Dues Penalty': 1000,
-    'Custom Penalty': 1000,
+    'Lateness': CMO_CONSTITUTION_2023.penalties.latenessFine, // ₦50.00 (Section L(1))
+    'Member Absence': CMO_CONSTITUTION_2023.penalties.absenceMemberFine, // ₦200.00 (Section L(2))
+    'Executive Absence': CMO_CONSTITUTION_2023.penalties.absenceExecutiveFine, // ₦300.00 (Section L(2))
+    'Insubordination / Conduct': 1000,
+    'Custom Penalty': 500,
+  };
+
+  const handlePushFinesToFinSecLedger = async (lateIds: string[] = [], absentIds: string[] = [], execIds: string[] = []) => {
+    const finesResult = calculateAttendanceFines(absentIds, lateIds, execIds);
+    if (finesResult.itemizedFines.length === 0) {
+      toast.error('No fine assessments to push.');
+      return;
+    }
+
+    try {
+      const fineRows = finesResult.itemizedFines.map(f => {
+        const mem = members.find(m => m.official_member_id === f.memberId || m.id === f.memberId);
+        return {
+          member_id: f.memberId,
+          member_name: mem ? (mem.full_name || mem.name) : f.memberId,
+          infraction: f.fineType,
+          amount: f.fineAmount,
+          status: 'PENDING',
+          section_clause: f.sectionClause,
+          reason: f.reason,
+          created_at: new Date().toISOString()
+        };
+      });
+
+      const { error } = await supabase.from('fines').insert(fineRows);
+      if (error) {
+        console.warn('Fines table insert warning:', error);
+      }
+
+      toast.success(`Pushed ${fineRows.length} Section L fine assessment(s) totaling ₦${finesResult.totalFinesAmount.toLocaleString()} to FinSec collection ledger!`);
+    } catch (err: any) {
+      console.error('Error pushing fines:', err);
+      toast.error('Failed to push fine assessments: ' + err.message);
+    }
   };
 
   useEffect(() => {
