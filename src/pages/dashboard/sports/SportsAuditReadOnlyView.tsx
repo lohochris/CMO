@@ -130,7 +130,7 @@ export const SportsAuditReadOnlyView = () => {
   const loggerName =
     currentUser?.full_name ||
     currentUser?.name ||
-    (currentUser?.user_metadata as any)?.full_name ||
+    ((currentUser as any)?.user_metadata as any)?.full_name ||
     'Parish Executive Auditor';
 
   // ── Fetch Data ─────────────────────────────────────────────────────────────

@@ -480,7 +480,7 @@ export const SportsFinancialHub = () => {
   const loggerName =
     currentUser?.full_name ||
     currentUser?.name ||
-    (currentUser?.user_metadata as any)?.full_name ||
+    ((currentUser as any)?.user_metadata as any)?.full_name ||
     'Loho Christopher Dondo (Sports Treasurer)';
 
   // ── Fetch Data ─────────────────────────────────────────────────────────────

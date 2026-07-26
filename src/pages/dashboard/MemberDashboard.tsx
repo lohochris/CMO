@@ -980,13 +980,13 @@ export const MemberDashboard = () => {
                     <div className="flex justify-between items-start mb-1">
                       <h5 className="text-white font-bold text-xs sm:text-sm">{ann.title}</h5>
                       <span className="text-[10px] text-gray-400 font-mono">
-                        {new Date(ann.date || ann.created_at || new Date()).toLocaleDateString()}
+                        {new Date((ann as any).date || (ann as any).created_at || ann.timestamp || new Date()).toLocaleDateString()}
                       </span>
                     </div>
                     <p className="text-gray-300 text-xs leading-relaxed">{ann.content}</p>
-                    {ann.category && (
+                    {(ann as any).category && (
                       <span className="inline-block mt-2 text-[10px] uppercase font-bold text-[#ffd700] bg-[#ffd700]/10 px-2 py-0.5 rounded border border-[#ffd700]/20">
-                        {ann.category}
+                        {(ann as any).category}
                       </span>
                     )}
                   </div>
