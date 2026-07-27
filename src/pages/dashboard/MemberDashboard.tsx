@@ -3,7 +3,7 @@ import type { WeddingStatus, Family } from '../../types';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
-import { CheckCircle, FileText, Settings, X, Users, BookOpen, Sparkles, UserCheck, Calendar, MapPin, ArrowRight, Bell, Clock, LayoutDashboard, Trophy, CreditCard, Church } from 'lucide-react';
+import { CheckCircle, FileText, Settings, X, Users, BookOpen, Sparkles, UserCheck, Calendar, MapPin, ArrowRight, Bell, Clock, LayoutDashboard, Trophy, CreditCard, Church, Download, ExternalLink, ShieldCheck, Search, Scale } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { formatCurrency, formatDateTime } from '../../utils/helpers';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
@@ -15,7 +15,8 @@ import { MemberAttendanceAndNotificationWidget } from '../../app/components/atte
 export const MemberDashboard = () => {
   const { currentUser, members, transactions, setMembers, setCurrentUser, setSuccess, setError, setCurrentPage, announcements } = useApp();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'sports' | 'financials' | 'spiritual'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'sports' | 'financials' | 'spiritual' | 'constitution'>('overview');
+  const [constitutionSearchQuery, setConstitutionSearchQuery] = useState('');
   const [editName, setEditName] = useState(currentUser?.name || '');
   const [editPhone, setEditPhone] = useState(currentUser?.phone || '');
   const [editEmail, setEditEmail] = useState(currentUser?.email || '');
@@ -634,6 +635,16 @@ export const MemberDashboard = () => {
           >
             <Church className="w-4 h-4" /> Spiritual & Welfare
           </button>
+          <button
+            onClick={() => setActiveTab('constitution')}
+            className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 transition-all ${
+              activeTab === 'constitution'
+                ? 'bg-[#ffd700] text-[#001a16] shadow-lg font-bold'
+                : 'bg-[#001a16] text-[#ffd700] hover:bg-[#ffd700]/10 border border-[#ffd700]/20'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" /> 2023 Bye-Laws
+          </button>
         </div>
       </Card>
 
@@ -995,6 +1006,171 @@ export const MemberDashboard = () => {
             ) : (
               <p className="text-gray-400 text-center py-4 text-xs">No welfare announcements at this time.</p>
             )}
+          </div>
+        </Card>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 6. activeTab === 'constitution' Panel                         */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {activeTab === 'constitution' && (
+        <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 md:p-8 space-y-6 rounded-2xl shadow-xl">
+          {/* Header Card */}
+          <div className="bg-[#001a16] border border-[#ffd700]/30 rounded-xl p-6 shadow-inner flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-[#ffd700]" />
+                <span className="text-xs uppercase tracking-wider text-[#ffd700] font-bold">Official Document</span>
+              </div>
+              <h3 className="text-xl md:text-2xl font-extrabold text-white">
+                Holy Cross Catholic Men Organization 2023 Bye-Laws & Constitution
+              </h3>
+              <p className="text-xs text-gray-300">
+                Official governing rules, welfare guidelines, disciplinary penalties, and executive policies.
+              </p>
+            </div>
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 shrink-0">
+              <a
+                href="/docs/CMO_CONSTITUTION_2023.pdf"
+                download="CMO_CONSTITUTION_2023.pdf"
+                className="bg-[#ffd700] hover:bg-[#ffc700] text-[#001a16] text-xs font-bold px-4 py-2.5 rounded-xl shadow transition-all duration-150 flex items-center gap-2 cursor-pointer"
+              >
+                <Download className="w-4 h-4" /> Download PDF
+              </a>
+              <a
+                href="/docs/CMO_CONSTITUTION_2023.pdf"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-[#002520] hover:bg-[#003830] text-[#ffd700] border border-[#ffd700]/40 text-xs font-bold px-4 py-2.5 rounded-xl shadow transition-all duration-150 flex items-center gap-2 cursor-pointer"
+              >
+                <ExternalLink className="w-4 h-4" /> Open Fullscreen
+              </a>
+            </div>
+          </div>
+
+          {/* Quick Search Bar */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Input
+              type="text"
+              placeholder="Search Bye-Laws (e.g. Penalties, Lateness, Welfare, Bereavement, Signatories)..."
+              value={constitutionSearchQuery}
+              onChange={(e) => setConstitutionSearchQuery(e.target.value)}
+              className="bg-[#001a16] border-[#ffd700]/40 text-white pl-10 text-xs sm:text-sm placeholder:text-gray-500 rounded-xl"
+            />
+          </div>
+
+          {/* Quick Reference Cards */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <BookOpen className="w-4 h-4 text-[#ffd700]" />
+              <h4 className="text-white font-bold text-sm uppercase tracking-wider">Quick Reference Sections</h4>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Section L: Penalties */}
+              {('Section L (Penalties) ₦50 Lateness ₦200 Member Absence ₦300 Exec Absence fine penalty').toLowerCase().includes(constitutionSearchQuery.toLowerCase()) && (
+                <div className="bg-[#001a16] border border-red-500/30 rounded-xl p-4 space-y-3 shadow-inner hover:border-red-500/60 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Scale className="w-4 h-4 text-red-400" />
+                      <h5 className="text-red-400 font-bold text-sm">Section L (Penalties)</h5>
+                    </div>
+                    <span className="text-[10px] uppercase font-bold text-red-400 bg-red-950/60 px-2 py-0.5 rounded border border-red-500/30">Penalties</span>
+                  </div>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between items-center bg-[#002520] p-2 rounded border border-[#ffd700]/10">
+                      <span className="text-gray-300">Lateness</span>
+                      <span className="text-white font-extrabold font-mono">₦50</span>
+                    </div>
+                    <div className="flex justify-between items-center bg-[#002520] p-2 rounded border border-[#ffd700]/10">
+                      <span className="text-gray-300">Member Absence</span>
+                      <span className="text-white font-extrabold font-mono">₦200</span>
+                    </div>
+                    <div className="flex justify-between items-center bg-[#002520] p-2 rounded border border-[#ffd700]/10">
+                      <span className="text-gray-300">Exec Absence</span>
+                      <span className="text-white font-extrabold font-mono">₦300</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Section K: Welfare Caps */}
+              {('Section K (Welfare Caps) ₦50k Bereavement ₦20k Surgery/Wedding ₦10k Naming welfare cap').toLowerCase().includes(constitutionSearchQuery.toLowerCase()) && (
+                <div className="bg-[#001a16] border border-emerald-500/30 rounded-xl p-4 space-y-3 shadow-inner hover:border-emerald-500/60 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-emerald-400" />
+                      <h5 className="text-emerald-400 font-bold text-sm">Section K (Welfare Caps)</h5>
+                    </div>
+                    <span className="text-[10px] uppercase font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">Welfare Caps</span>
+                  </div>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between items-center bg-[#002520] p-2 rounded border border-[#ffd700]/10">
+                      <span className="text-gray-300">Bereavement</span>
+                      <span className="text-white font-extrabold font-mono">₦50k</span>
+                    </div>
+                    <div className="flex justify-between items-center bg-[#002520] p-2 rounded border border-[#ffd700]/10">
+                      <span className="text-gray-300">Surgery / Wedding</span>
+                      <span className="text-white font-extrabold font-mono">₦20k</span>
+                    </div>
+                    <div className="flex justify-between items-center bg-[#002520] p-2 rounded border border-[#ffd700]/10">
+                      <span className="text-gray-300">Naming Ceremony</span>
+                      <span className="text-white font-extrabold font-mono">₦10k</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Section I: Signatories */}
+              {('Section I (Signatories) 2-of-3 Executive Approval Rule approval signatories executive').toLowerCase().includes(constitutionSearchQuery.toLowerCase()) && (
+                <div className="bg-[#001a16] border border-amber-500/30 rounded-xl p-4 space-y-3 shadow-inner hover:border-amber-500/60 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-[#ffd700]" />
+                      <h5 className="text-[#ffd700] font-bold text-sm">Section I (Signatories)</h5>
+                    </div>
+                    <span className="text-[10px] uppercase font-bold text-[#ffd700] bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/30">Signatories</span>
+                  </div>
+                  <div className="bg-[#002520] p-3 rounded border border-[#ffd700]/10 space-y-1.5">
+                    <p className="text-xs font-semibold text-white">2-of-3 Executive Approval Rule</p>
+                    <p className="text-[11px] text-gray-300 leading-relaxed">
+                      All official disbursements and administrative mandates require explicit authorization from at least two (2) designated Executive Officers.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Embedded PDF Viewer */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-white font-bold text-sm uppercase tracking-wider flex items-center gap-2">
+                <FileText className="w-4 h-4 text-[#ffd700]" /> Official Document Viewer
+              </h4>
+              <span className="text-[11px] text-gray-400 font-mono">2023 Edition</span>
+            </div>
+            <div className="relative w-full rounded-xl overflow-hidden border border-[#ffd700]/30 bg-[#001a16] shadow-2xl">
+              <iframe
+                src="/docs/CMO_CONSTITUTION_2023.pdf"
+                title="Holy Cross Catholic Men Organization 2023 Bye-Laws & Constitution"
+                className="w-full h-[700px] rounded-lg border border-slate-700"
+              />
+              <div className="p-4 bg-[#001a16] border-t border-[#ffd700]/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-300">
+                <p className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-[#ffd700] shrink-0" />
+                  PDF preview restricted or not rendering on your mobile browser?
+                </p>
+                <a
+                  href="/docs/CMO_CONSTITUTION_2023.pdf"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#ffd700]/15 hover:bg-[#ffd700] text-[#ffd700] hover:text-[#001a16] font-bold transition-all border border-[#ffd700]/30 shrink-0 cursor-pointer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> Open Interactive Fallback Link
+                </a>
+              </div>
+            </div>
           </div>
         </Card>
       )}
