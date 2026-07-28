@@ -3,8 +3,9 @@ import type { WeddingStatus, Family } from '../../types';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
-import { CheckCircle, FileText, Settings, X, Users, BookOpen, Sparkles, UserCheck, Calendar, MapPin, ArrowRight, Bell, Clock, LayoutDashboard, Trophy, CreditCard, Church, Download, ExternalLink, ShieldCheck, Search, Scale } from 'lucide-react';
+import { CheckCircle, FileText, Settings, X, Users, BookOpen, Sparkles, UserCheck, Calendar, MapPin, ArrowRight, Bell, Clock, LayoutDashboard, Trophy, CreditCard, Church, Download, ExternalLink, ShieldCheck, Search, Scale, Radio, Mic, MicOff } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
+import useLiveTranscriber from '../../hooks/useLiveTranscriber';
 import { formatCurrency, formatDateTime } from '../../utils/helpers';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
@@ -13,7 +14,37 @@ import { toast } from 'sonner';
 import { MemberAttendanceAndNotificationWidget } from '../../app/components/attendance/MemberAttendanceAndNotificationWidget';
 
 export const MemberDashboard = () => {
-  const { currentUser, members, transactions, setMembers, setCurrentUser, setSuccess, setError, setCurrentPage, announcements } = useApp();
+  const { 
+    currentUser, 
+    members, 
+    transactions, 
+    setMembers, 
+    setCurrentUser, 
+    setSuccess, 
+    setError, 
+    setCurrentPage, 
+    announcements,
+    isFloorActive,
+    activeSpeaker,
+    speakQueue,
+    requestFloor,
+    leaveQueue,
+    broadcastLiveTranscript
+  } = useApp();
+
+  const myId = currentUser?.official_member_id || currentUser?.id || '';
+  const isMyTurn = Boolean(
+    activeSpeaker && currentUser && 
+    (activeSpeaker.id === currentUser.id || activeSpeaker.official_member_id === myId || activeSpeaker.id === myId)
+  );
+  const isMyInQueue = Boolean(currentUser && speakQueue.includes(myId));
+  const myQueuePosition = isMyInQueue ? speakQueue.indexOf(myId) + 1 : 0;
+
+  const { isListening: isFloorMicListening, startListening: startFloorMic, stopListening: stopFloorMic } = useLiveTranscriber((liveText) => {
+    if (isMyTurn && liveText) {
+      broadcastLiveTranscript(liveText);
+    }
+  });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'sports' | 'financials' | 'spiritual' | 'constitution'>('overview');
   const [constitutionSearchQuery, setConstitutionSearchQuery] = useState('');
@@ -653,6 +684,125 @@ export const MemberDashboard = () => {
       {/* ───────────────────────────────────────────────────────────── */}
       {activeTab === 'overview' && (
         <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 md:p-8 space-y-6 rounded-2xl">
+          {/* Live Floor Microphone Push-To-Talk Widget */}
+          <Card className="bg-[#001a16] border-2 border-emerald-500/40 p-4 sm:p-5 rounded-2xl shadow-xl space-y-3">
+            <div className="flex items-center justify-between border-b border-emerald-500/20 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2 rounded-lg ${isFloorActive ? 'bg-emerald-500/20 text-emerald-400 animate-pulse' : 'bg-gray-800 text-gray-400'}`}>
+                  <Radio className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-[#ffd700] text-sm sm:text-base flex items-center gap-2">
+                    Meeting Floor Microphone
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${isFloorActive ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-gray-800 text-gray-400'}`}>
+                      {isFloorActive ? 'Floor Open' : 'Floor Closed'}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-gray-300">Speak live to the general assembly during meetings</p>
+                </div>
+              </div>
+            </div>
+
+            {!isFloorActive ? (
+              <div className="p-3.5 bg-[#002520] border border-gray-800 rounded-xl flex items-center justify-between text-xs text-gray-400">
+                <div className="flex items-center gap-2">
+                  <MicOff className="w-4 h-4 text-gray-500 shrink-0" />
+                  <span>Floor mic is currently locked by the General Secretary.</span>
+                </div>
+                <span className="text-[10px] bg-gray-800 px-2 py-0.5 rounded text-gray-400">Locked</span>
+              </div>
+            ) : isMyTurn ? (
+              <div className="p-4 bg-red-950/40 border-2 border-red-500/60 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-red-500 animate-ping" />
+                    <span className="font-bold text-red-400 text-sm">YOU ARE LIVE ON THE FLOOR</span>
+                  </div>
+                  <span className="text-[10px] bg-red-500/20 text-red-300 px-2 py-0.5 rounded border border-red-500/40 font-bold uppercase">Broadcasting</span>
+                </div>
+                <p className="text-xs text-gray-200">
+                  Your device microphone is streaming live audio transcription into the Secretary's minutes editor.
+                </p>
+                <div className="flex gap-2">
+                  {!isFloorMicListening ? (
+                    <Button
+                      onClick={startFloorMic}
+                      className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold text-xs cursor-pointer py-2.5 flex items-center justify-center gap-2"
+                    >
+                      <Mic className="w-4 h-4" />
+                      <span>Unmute & Start Speaking Live</span>
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={stopFloorMic}
+                      className="flex-1 bg-red-500/30 text-red-200 border border-red-500/60 hover:bg-red-500/40 font-bold text-xs cursor-pointer py-2.5 flex items-center justify-center gap-2"
+                    >
+                      <MicOff className="w-4 h-4 text-red-400 animate-pulse" />
+                      <span>Finish & Mute Speaker</span>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : activeSpeaker ? (
+              <div className="p-3.5 bg-[#002520] border border-amber-500/40 rounded-xl flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center font-bold text-xs shrink-0">
+                    {activeSpeaker.name.charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-amber-300 truncate">Speaker: {activeSpeaker.name}</p>
+                    <p className="text-[10px] text-gray-400 truncate">Currently holding the floor</p>
+                  </div>
+                </div>
+                {isMyInQueue ? (
+                  <Button
+                    onClick={leaveQueue}
+                    variant="outline"
+                    className="border-red-500/40 text-red-300 hover:bg-red-500/10 text-xs py-1 px-2.5 h-auto font-semibold shrink-0 cursor-pointer"
+                  >
+                    Leave Queue (#{myQueuePosition})
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={requestFloor}
+                    className="bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/40 text-xs py-1 px-2.5 h-auto font-bold shrink-0 cursor-pointer"
+                  >
+                    Join Speak Queue
+                  </Button>
+                )}
+              </div>
+            ) : isMyInQueue ? (
+              <div className="p-3.5 bg-[#002520] border border-emerald-500/40 rounded-xl flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <div>
+                    <p className="font-bold text-emerald-300">You are in Queue (Position #{myQueuePosition})</p>
+                    <p className="text-[10px] text-gray-400">Waiting for Secretary to grant floor mic</p>
+                  </div>
+                </div>
+                <Button
+                  onClick={leaveQueue}
+                  variant="outline"
+                  className="border-red-500/40 text-red-300 hover:bg-red-500/10 text-xs py-1 px-2.5 h-auto font-semibold shrink-0 cursor-pointer"
+                >
+                  Cancel Request
+                </Button>
+              </div>
+            ) : (
+              <div className="p-3.5 bg-[#002520] border border-emerald-500/30 rounded-xl flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <Radio className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="text-gray-200">Floor is open. Push to request speaking permission.</span>
+                </div>
+                <Button
+                  onClick={requestFloor}
+                  className="bg-emerald-500 text-[#001a16] hover:bg-emerald-400 font-bold text-xs py-1.5 px-3 h-auto shrink-0 cursor-pointer shadow-md"
+                >
+                  Push to Speak
+                </Button>
+              </div>
+            )}
+          </Card>
           {/* Pastoral Office Messages Alert */}
           {pastoralMessages.length > 0 && (
             <Card className="bg-[#001a16] border-2 border-[#ffd700] p-5 rounded-xl shadow-lg relative overflow-hidden">

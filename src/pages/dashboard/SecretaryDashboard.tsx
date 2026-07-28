@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
+import { toast } from 'sonner';
 import { 
   FileEdit, Mic, MicOff, Volume2, Radio, RotateCcw, Download, Megaphone, Users, CheckCircle2, 
   AlertTriangle, Sparkles, Search, FileText, Clock, Loader2, 
   Copy, BookOpen, ChevronDown, ChevronUp, X, CheckSquare, 
   FileCheck, Upload, ExternalLink, UserCheck, Plus, Filter, ShieldCheck, Eye,
-  ShieldAlert, Info, PackageCheck, Building2, Pause, Play
+  ShieldAlert, Info, PackageCheck, Building2, Pause, Play, Paperclip, Camera, Image as ImageIcon
 } from 'lucide-react';
 import useLiveTranscriber from '../../hooks/useLiveTranscriber';
 import { useApp } from '../../contexts/AppContext';
@@ -26,6 +27,7 @@ import {
   extractResolutionsFromMinutes,
   evaluateConstitutionalCompliance,
   generateHandoverPackage,
+  extractTextFromDocumentImage,
   AgendaItem, 
   QuorumStatus, 
   KnowledgeQueryResult,
@@ -58,7 +60,91 @@ export const SecretaryDashboard = () => {
   const [minutesText, setMinutesText] = useState('');
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementContent, setAnnouncementContent] = useState('');
-  const { currentUser, members, setMembers, setCurrentUser, announcements, setAnnouncements, setSuccess, setError } = useApp();
+  const { 
+    currentUser, 
+    members, 
+    setMembers, 
+    setCurrentUser, 
+    announcements, 
+    setAnnouncements, 
+    setSuccess, 
+    setError,
+    isFloorActive,
+    activeSpeaker,
+    speakQueue,
+    liveTranscriptListener,
+    toggleFloor,
+    grantFloor,
+    revokeFloor
+  } = useApp();
+
+  const lastProcessedTranscriptTimestampRef = useRef<number>(0);
+
+  // Auto-append floor speaker transcribed chunks to minutes editor
+  useEffect(() => {
+    if (
+      liveTranscriptListener &&
+      liveTranscriptListener.timestamp > lastProcessedTranscriptTimestampRef.current &&
+      liveTranscriptListener.text
+    ) {
+      lastProcessedTranscriptTimestampRef.current = liveTranscriptListener.timestamp;
+      setMinutesText((prev) => 
+        prev 
+          ? `${prev}\n\n[🎤 ${liveTranscriptListener.speakerName}]:\n${liveTranscriptListener.text}` 
+          : `[🎤 ${liveTranscriptListener.speakerName}]:\n${liveTranscriptListener.text}`
+      );
+    }
+  }, [liveTranscriptListener]);
+
+  // Attachment Drawer & Vision OCR States & Input Refs
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false);
+  const [isExtractingDocument, setIsExtractingDocument] = useState(false);
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsAttachmentMenuOpen(false);
+    setIsExtractingDocument(true);
+    const toastId = toast.loading('AI is transcribing & translating document...');
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const base64Data = reader.result as string;
+          const extractedText = await extractTextFromDocumentImage(base64Data, file.type);
+          
+          setMinutesText((prev) => 
+            prev ? `${prev}\n\n[📄 Extracted Document Note]:\n${extractedText}` : `[📄 Extracted Document Note]:\n${extractedText}`
+          );
+          
+          toast.success('Document transcribed and appended to live minutes!', { id: toastId });
+        } catch (err: any) {
+          toast.error(err?.message || 'Failed to extract text from document.', { id: toastId });
+        } finally {
+          setIsExtractingDocument(false);
+          if (event.target) event.target.value = '';
+        }
+      };
+
+      reader.onerror = () => {
+        toast.error('Failed to read file.', { id: toastId });
+        setIsExtractingDocument(false);
+        if (event.target) event.target.value = '';
+      };
+
+      reader.readAsDataURL(file);
+    } catch (err: any) {
+      toast.error(err?.message || 'Error processing document.', { id: toastId });
+      setIsExtractingDocument(false);
+      if (event.target) event.target.value = '';
+    }
+  };
 
   // Real-Time Speech Listener Hook Integration (Phase 2 & 3)
   const {
@@ -1205,6 +1291,132 @@ Recorded by: ${currentUser?.name}`;
               )}
 
               <div className="space-y-4">
+                {/* Hidden native inputs for multimodal document OCR */}
+                <input 
+                  type="file" 
+                  ref={cameraInputRef} 
+                  accept="image/*" 
+                  capture="environment" 
+                  className="hidden" 
+                  onChange={handleFileUpload} 
+                />
+                <input 
+                  type="file" 
+                  ref={photoInputRef} 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={handleFileUpload} 
+                />
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  accept=".pdf,.txt,.doc,.docx,image/*" 
+                  className="hidden" 
+                  onChange={handleFileUpload} 
+                />
+
+                {/* Real-Time Floor Mic Management Panel */}
+                <div className="p-4 bg-[#001a16] border-2 border-emerald-500/40 rounded-xl space-y-4 shadow-lg">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-500/20 pb-3">
+                    <div className="flex items-center gap-2">
+                      <div className={`p-2 rounded-lg ${isFloorActive ? 'bg-emerald-500/20 text-emerald-400 animate-pulse' : 'bg-gray-800 text-gray-400'}`}>
+                        <Radio className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-white text-sm sm:text-base flex items-center gap-2">
+                          Floor Mic Control Center
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${isFloorActive ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-gray-800 text-gray-400'}`}>
+                            {isFloorActive ? 'Floor Open' : 'Floor Locked'}
+                          </span>
+                        </h4>
+                        <p className="text-xs text-gray-300">Master controls for member push-to-talk audio streaming</p>
+                      </div>
+                    </div>
+
+                    <Button
+                      onClick={() => toggleFloor(!isFloorActive)}
+                      className={
+                        isFloorActive
+                          ? "bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/30 font-bold text-xs cursor-pointer"
+                          : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 font-bold text-xs cursor-pointer"
+                      }
+                    >
+                      {isFloorActive ? 'Lock Floor Mics' : 'Open Floor for Members'}
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Active Speaker Card */}
+                    <div className="p-3.5 bg-[#002520] border border-amber-500/30 rounded-xl space-y-2">
+                      <div className="text-xs font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Mic className="w-3.5 h-3.5 text-amber-400" />
+                        Current Live Floor Speaker
+                      </div>
+                      {activeSpeaker ? (
+                        <div className="flex items-center justify-between gap-2 p-2 bg-[#001a16] rounded-lg border border-amber-500/20">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center justify-center font-bold text-xs shrink-0">
+                              {activeSpeaker.name.charAt(0)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-white text-xs truncate">{activeSpeaker.name}</p>
+                              <p className="text-[10px] text-gray-400 truncate">{activeSpeaker.official_member_id || activeSpeaker.id}</p>
+                            </div>
+                          </div>
+                          <Button
+                            onClick={revokeFloor}
+                            className="bg-red-500/20 text-red-300 hover:bg-red-500/30 text-[11px] py-1 px-2.5 h-auto font-bold border border-red-500/40 shrink-0 cursor-pointer"
+                          >
+                            Mute & Revoke Mic
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic p-2 bg-[#001a16] rounded-lg text-center">
+                          No active floor speaker. Grant mic to a member from the queue.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Speak Queue List */}
+                    <div className="p-3.5 bg-[#002520] border border-emerald-500/20 rounded-xl space-y-2">
+                      <div className="text-xs font-semibold text-emerald-300 uppercase tracking-wider flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Users className="w-3.5 h-3.5 text-emerald-400" />
+                          Speak Queue
+                        </span>
+                        <span className="text-[10px] bg-emerald-500/20 px-2 py-0.5 rounded text-emerald-300 border border-emerald-500/30">
+                          {speakQueue.length} Waiting
+                        </span>
+                      </div>
+                      {speakQueue.length > 0 ? (
+                        <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                          {speakQueue.map((mId, index) => {
+                            const memberObj = members.find(m => m.id === mId || m.official_member_id === mId);
+                            const mName = memberObj?.full_name || memberObj?.name || mId;
+                            return (
+                              <div key={mId} className="flex items-center justify-between gap-2 p-2 bg-[#001a16] rounded-lg text-xs">
+                                <span className="font-semibold text-gray-200 truncate">
+                                  #{index + 1} {mName}
+                                </span>
+                                <Button
+                                  onClick={() => grantFloor(mId)}
+                                  className="bg-emerald-500 text-[#001a16] hover:bg-emerald-400 text-[10px] py-0.5 px-2 h-auto font-bold shrink-0 cursor-pointer"
+                                >
+                                  Grant Floor
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic p-2 bg-[#001a16] rounded-lg text-center">
+                          Queue is empty. Members will appear here when they push to speak.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex flex-wrap gap-4 items-center">
                   {/* Dynamic Voice Listener Toggle Button */}
                   <Button
@@ -1235,6 +1447,25 @@ Recorded by: ${currentUser?.name}`;
                       <>
                         <Mic className="w-4 h-4 text-emerald-400 mr-2" />
                         Start AI Real-Time Listener
+                      </>
+                    )}
+                  </Button>
+
+                  {/* Attachment Button for Document & OCR Photo Extraction */}
+                  <Button
+                    onClick={() => setIsAttachmentMenuOpen(true)}
+                    disabled={isExtractingDocument}
+                    className="bg-[#002818] border border-amber-400/50 text-amber-300 hover:bg-emerald-900/60 font-bold cursor-pointer transition-all flex items-center gap-2"
+                  >
+                    {isExtractingDocument ? (
+                      <>
+                        <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+                        <span>Transcribing Document...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Paperclip className="w-4 h-4 text-amber-400" />
+                        <span>Attach Notes / OCR Photo</span>
                       </>
                     )}
                   </Button>
@@ -1331,6 +1562,121 @@ Recorded by: ${currentUser?.name}`;
                 />
               </div>
             </Card>
+
+            {/* Attachment Action Modal / Sheet */}
+            {isAttachmentMenuOpen && (
+              <div 
+                className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+                onClick={() => setIsAttachmentMenuOpen(false)}
+              >
+                {/* Modal / Bottom Sheet Box */}
+                <div 
+                  className="w-full sm:max-w-md bg-[#001f13] border-t-2 sm:border-2 border-amber-400/40 rounded-t-2xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 text-emerald-100 overflow-hidden max-h-[90vh] flex flex-col"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Modal Header */}
+                  <div className="flex items-center justify-between pb-3 border-b border-amber-500/20 mb-3">
+                    <div className="flex items-center gap-2">
+                      <Paperclip className="w-5 h-5 text-amber-400 shrink-0" />
+                      <h2 className="text-base sm:text-lg font-bold text-amber-400 tracking-tight leading-tight">
+                        Attach Document or Notes Photo
+                      </h2>
+                    </div>
+                    <button 
+                      onClick={() => setIsAttachmentMenuOpen(false)}
+                      className="p-1 text-emerald-300 hover:text-amber-400 hover:bg-emerald-900/50 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Helper Description */}
+                  <p className="text-xs sm:text-sm text-emerald-200/90 leading-relaxed mb-4">
+                    Choose a source to snap or upload handwritten meeting notes, printed reports, or physical resolutions. Multimodal AI will automatically extract, translate, and format the text into your live minutes editor.
+                  </p>
+
+                  {/* Action Buttons List */}
+                  <div className="space-y-3 overflow-y-auto pr-1">
+                    {/* Camera Option */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAttachmentMenuOpen(false);
+                        cameraInputRef.current?.click();
+                      }}
+                      className="w-full flex items-center gap-3 p-3 sm:p-3.5 bg-emerald-950/60 border border-emerald-700/60 hover:border-amber-400 rounded-xl text-left transition-all group cursor-pointer"
+                    >
+                      <div className="p-2.5 bg-emerald-900/80 text-emerald-300 group-hover:text-amber-400 rounded-lg shrink-0">
+                        <Camera className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-emerald-100 text-sm group-hover:text-amber-400 transition-colors">
+                          Camera
+                        </div>
+                        <div className="text-xs text-emerald-300/80 truncate">
+                          Snap a photo of handwritten notes or printed agenda directly
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Photos Option */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAttachmentMenuOpen(false);
+                        photoInputRef.current?.click();
+                      }}
+                      className="w-full flex items-center gap-3 p-3 sm:p-3.5 bg-emerald-950/60 border border-emerald-700/60 hover:border-amber-400 rounded-xl text-left transition-all group cursor-pointer"
+                    >
+                      <div className="p-2.5 bg-emerald-900/80 text-amber-400 rounded-lg shrink-0">
+                        <ImageIcon className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-emerald-100 text-sm group-hover:text-amber-400 transition-colors">
+                          Photos
+                        </div>
+                        <div className="text-xs text-emerald-300/80 truncate">
+                          Choose an image from your photo library or gallery
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Files Option */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAttachmentMenuOpen(false);
+                        fileInputRef.current?.click();
+                      }}
+                      className="w-full flex items-center gap-3 p-3 sm:p-3.5 bg-emerald-950/60 border border-emerald-700/60 hover:border-amber-400 rounded-xl text-left transition-all group cursor-pointer"
+                    >
+                      <div className="p-2.5 bg-emerald-900/80 text-sky-400 rounded-lg shrink-0">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-emerald-100 text-sm group-hover:text-amber-400 transition-colors">
+                          Files
+                        </div>
+                        <div className="text-xs text-emerald-300/80 truncate">
+                          Upload PDF, Word document, or text file from device
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Modal Cancel Footer */}
+                  <div className="mt-4 pt-3 border-t border-amber-500/20 flex justify-end">
+                    <button 
+                      type="button"
+                      onClick={() => setIsAttachmentMenuOpen(false)}
+                      className="px-4 py-2 text-xs font-semibold text-emerald-200 bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-700/50 rounded-lg transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Saved Minutes History / Archive table */}
             <Card className="bg-[#002520] border-2 border-[#ffd700]/30 p-6 rounded-xl shadow-lg">

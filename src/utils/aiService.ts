@@ -1348,5 +1348,48 @@ export function calculateAttendanceFines(
   };
 }
 
+/**
+ * Multimodal OCR Vision Extraction for Handwritten Notes, Photos, and Uploaded Documents
+ */
+export const extractTextFromDocumentImage = async (
+  base64Data: string,
+  mimeType: string
+): Promise<string> => {
+  if (!ai) {
+    throw new Error('Gemini AI service is not initialized. Please verify VITE_GEMINI_API_KEY.');
+  }
+
+  const prompt = `You are an expert multimodal document vision assistant for the Holy Cross Catholic Men Organisation (CMO).
+Extract all handwritten or printed text accurately from this image or document.
+If any non-English text is present (e.g. Hausa, Igbo, Yoruba, Latin), detect it and translate it into formal English.
+Format the output as clean, structured meeting minutes / motions / notes with appropriate bullet points, headings, and key decisions.
+Do NOT include preamble or conversational meta explanations, return the structured extracted text directly.`;
+
+  // Clean base64 string if data URL prefix exists
+  const cleanBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+  const effectiveMimeType = mimeType || 'image/jpeg';
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        {
+          inlineData: {
+            mimeType: effectiveMimeType,
+            data: cleanBase64
+          }
+        },
+        prompt
+      ]
+    });
+
+    return response.text?.trim() || 'No legible text could be extracted from the document.';
+  } catch (err: any) {
+    console.error('Multimodal OCR extraction failed:', err);
+    throw new Error(err?.message || 'Failed to extract text from document using Gemini Multimodal Vision API.');
+  }
+};
+
+
 
 
