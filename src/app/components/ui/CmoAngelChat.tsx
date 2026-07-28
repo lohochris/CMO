@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../../contexts/AppContext';
 import { processAIQuery } from '../../../utils/aiService';
+import useLiveTranscriber from '../../../hooks/useLiveTranscriber';
 import { Card } from './card';
 import { Button } from './button';
 import { Input } from './input';
@@ -17,7 +18,9 @@ import {
   UserCheck,
   BarChart,
   Moon,
-  Sun
+  Sun,
+  Mic,
+  MicOff
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -43,6 +46,10 @@ export const CmoAngelChat = () => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const { isListening, startListening, stopListening } = useLiveTranscriber((liveText) => {
+    if (liveText) setInput(liveText);
+  });
 
   // Dynamic message bolding formatter
   const renderFormattedText = (text: string) => {
@@ -289,16 +296,37 @@ export const CmoAngelChat = () => {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
+                  if (isListening) stopListening();
                   handleSend();
                 }}
                 className="flex gap-2"
               >
-                <Input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask CMO Angel anything..."
-                  className="bg-[#001a16] border-[#ffd700] text-white placeholder-gray-400 focus-visible:ring-1 focus-visible:ring-[#ffd700]"
-                />
+                <div className="relative flex-1">
+                  <Input
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder={isListening ? "Listening to your voice..." : "Ask CMO Angel anything..."}
+                    className={`bg-[#001a16] border-[#ffd700] text-white placeholder-gray-400 focus-visible:ring-1 focus-visible:ring-[#ffd700] pr-9 ${isListening ? 'border-emerald-400 ring-1 ring-emerald-400' : ''}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isListening) {
+                        stopListening();
+                      } else {
+                        startListening();
+                      }
+                    }}
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full transition-all cursor-pointer ${
+                      isListening
+                        ? 'text-emerald-400 animate-pulse bg-emerald-950/80'
+                        : 'text-gray-400 hover:text-[#ffd700]'
+                    }`}
+                    title={isListening ? "Stop voice listening" : "Speak to CMO Angel"}
+                  >
+                    {isListening ? <MicOff className="h-4 w-4 text-emerald-400" /> : <Mic className="h-4 w-4" />}
+                  </button>
+                </div>
                 <Button type="submit" className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] shrink-0">
                   <Send className="h-4 w-4" />
                 </Button>
