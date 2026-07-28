@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
@@ -76,6 +76,29 @@ export const TreasurerDashboard = () => {
   const [withdrawalCategory, setWithdrawalCategory] = useState<'Welfare Payout' | 'Major Project' | 'Operational Expense' | 'General'>('Welfare Payout');
   const [isSubmittingWithdrawal, setIsSubmittingWithdrawal] = useState(false);
   const [authorizingWthId, setAuthorizingWthId] = useState<string | null>(null);
+
+  // Real-Time Supabase Subscription for Treasurer Dashboard
+  useEffect(() => {
+    const fetchLiveRealtimeData = async () => {
+      await refreshDatabase();
+    };
+
+    fetchLiveRealtimeData();
+
+    const channel = supabase
+      .channel('treasurer-realtime-channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => refreshDatabase())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, () => refreshDatabase())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, () => refreshDatabase())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => refreshDatabase())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lodgments' }, () => refreshDatabase())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bank_withdrawals' }, () => refreshDatabase())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refreshDatabase]);
 
   const handleCreateWithdrawal = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -264,7 +287,11 @@ export const TreasurerDashboard = () => {
     return false;
   };
 
-  const combinedTransactions = getCombinedTransactions(transactions, expenses);
+  const visibleTransactions = transactions.filter(t => 
+    !t.status || ['Approved', 'Completed', 'Cleared'].includes(t.status)
+  );
+
+  const combinedTransactions = getCombinedTransactions(visibleTransactions, expenses);
 
   const handleIncomeRecord = async () => {
     setError('');
@@ -283,6 +310,7 @@ export const TreasurerDashboard = () => {
       const { error: txErr } = await supabase
         .from('transactions')
         .insert([{
+          id: crypto.randomUUID(),
           official_member_id: 'GENERAL-INCOME',
           member_name: 'CMO General Account',
           amount: amount,
@@ -823,7 +851,7 @@ export const TreasurerDashboard = () => {
             <Card className="bg-[#002520] border-2 border-[#ffd700] p-6">
               <h3 className="text-xl font-bold text-[#ffd700] mb-4">Recent Income</h3>
               <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                {transactions.slice().reverse().map((txn, idx) => (
+                {visibleTransactions.slice().reverse().map((txn, idx) => (
                   <div key={`${txn.memberId}-${idx}`} className="bg-[#001a16] border border-[#ffd700] p-4 rounded">
                     <div className="flex justify-between items-start">
                       <div>
@@ -835,7 +863,7 @@ export const TreasurerDashboard = () => {
                     </div>
                   </div>
                 ))}
-                {transactions.length === 0 && (
+                {visibleTransactions.length === 0 && (
                   <p className="text-gray-400 text-center py-8">No income recorded yet</p>
                 )}
               </div>
