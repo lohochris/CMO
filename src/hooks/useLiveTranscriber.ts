@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { toast } from 'sonner';
 
-// Web Speech API Type Declarations for TypeScript
+// Extended Web Speech API interfaces for cross-browser TypeScript compatibility
 interface SpeechRecognitionErrorEvent extends Event {
   error: string;
   message?: string;
@@ -13,7 +14,6 @@ interface SpeechRecognitionAlternative {
 
 interface SpeechRecognitionResult {
   isFinal: boolean;
-  length: number;
   item(index: number): SpeechRecognitionAlternative;
   [index: number]: SpeechRecognitionAlternative;
 }
@@ -25,7 +25,6 @@ interface SpeechRecognitionResultList {
 }
 
 interface SpeechRecognitionEvent extends Event {
-  resultIndex: number;
   results: SpeechRecognitionResultList;
 }
 
@@ -33,10 +32,9 @@ interface SpeechRecognitionInstance extends EventTarget {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
-  maxAlternatives: number;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
+  start(): void;
+  stop(): void;
+  abort(): void;
   onstart: ((this: SpeechRecognitionInstance, ev: Event) => void) | null;
   onresult: ((this: SpeechRecognitionInstance, ev: SpeechRecognitionEvent) => void) | null;
   onerror: ((this: SpeechRecognitionInstance, ev: SpeechRecognitionErrorEvent) => void) | null;
@@ -51,8 +49,31 @@ declare global {
   interface Window {
     SpeechRecognition?: SpeechRecognitionConstructor;
     webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    AudioContext?: typeof AudioContext;
+    webkitAudioContext?: typeof AudioContext;
   }
 }
+
+/**
+ * Mobile-compatible MIME Type Detector for MediaRecorder / WebAudio chunk encoding
+ */
+export const getSupportedAudioMimeType = (): string => {
+  if (typeof MediaRecorder === 'undefined') return '';
+  const candidateTypes = [
+    'audio/mp4',
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/aac',
+    'audio/ogg',
+    'audio/wav'
+  ];
+  for (const type of candidateTypes) {
+    if (MediaRecorder.isTypeSupported(type)) {
+      return type;
+    }
+  }
+  return '';
+};
 
 export type TranscriberStatus = 'idle' | 'listening' | 'paused' | 'error';
 
@@ -69,6 +90,17 @@ export interface UseLiveTranscriberReturn {
   resetTranscript: () => void;
 }
 
+/**
+ * Mobile-Sanitized Audio Constraints for iOS Safari & Android Chrome
+ */
+const MOBILE_AUDIO_CONSTRAINTS: MediaStreamConstraints = {
+  audio: {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+  }
+};
+
 export function useLiveTranscriber(
   onTranscriptChange?: (text: string) => void
 ): UseLiveTranscriberReturn {
@@ -79,21 +111,38 @@ export function useLiveTranscriber(
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const isListeningRef = useRef<boolean>(false);
   const isPausedRef = useRef<boolean>(false);
+
   const baseTranscriptRef = useRef<string>('');
   const transcriptRef = useRef<string>('');
-  const onTranscriptChangeRef = useRef(onTranscriptChange);
+  transcriptRef.current = transcript;
 
-  // Keep callback ref updated
+  const onTranscriptChangeRef = useRef(onTranscriptChange);
   useEffect(() => {
     onTranscriptChangeRef.current = onTranscriptChange;
   }, [onTranscriptChange]);
 
-  // Keep transcriptRef synchronized with transcript state
-  useEffect(() => {
-    transcriptRef.current = transcript;
-  }, [transcript]);
+  /**
+   * Unlocks AudioContext directly inside user touch/click gesture
+   * Required for iOS Safari & Android Chrome autoplay/audio policies
+   */
+  const unlockAudioContextOnGesture = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+          audioContextRef.current = new AudioCtx();
+        }
+        if (audioContextRef.current.state === 'suspended') {
+          audioContextRef.current.resume().catch((e) => console.warn('AudioContext resume catch:', e));
+        }
+      }
+    } catch (err) {
+      console.warn('AudioContext unlock gesture attempt:', err);
+    }
+  }, []);
 
   // Stop active media stream tracks
   const stopMediaStream = useCallback(() => {
@@ -103,40 +152,35 @@ export function useLiveTranscriber(
     }
   }, []);
 
-  // Safely stop recognition completely
+  // Stop recognition completely
   const stopListening = useCallback(() => {
     isListeningRef.current = false;
     isPausedRef.current = false;
-    stopMediaStream();
-
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
       } catch {
-        // Handle case where recognition was already stopped
+        // Ignore errors on stop
       }
-      recognitionRef.current = null;
     }
-
+    stopMediaStream();
     setStatus('idle');
     setInterimTranscript('');
   }, [stopMediaStream]);
 
-  // Pause recognition temporarily without terminating session context
+  // Pause listening session
   const pauseListening = useCallback(() => {
     isListeningRef.current = false;
     isPausedRef.current = true;
-    stopMediaStream();
-
+    baseTranscriptRef.current = transcriptRef.current;
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
       } catch {
-        // Ignore stop error
+        // Ignore errors on pause
       }
-      recognitionRef.current = null;
     }
-
+    stopMediaStream();
     setStatus('paused');
     setInterimTranscript('');
   }, [stopMediaStream]);
@@ -159,21 +203,44 @@ export function useLiveTranscriber(
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognitionClass) {
-      setError('Web Speech API is not supported in this browser.');
+      const noSupportMsg = 'Speech Recognition is not supported in this browser. Please try Chrome or Safari.';
+      setError(noSupportMsg);
       setStatus('error');
+      toast.error(noSupportMsg);
       return;
     }
 
-    // Acquire media stream to ensure microphone access
+    // Acquire media stream with sanitized mobile audio constraints
     try {
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(MOBILE_AUDIO_CONSTRAINTS);
+        } catch (constraintErr: any) {
+          if (constraintErr.name === 'OverconstrainedError') {
+            console.warn('Mobile audio overconstrained, falling back to default audio constraint');
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          } else {
+            throw constraintErr;
+          }
+        }
         mediaStreamRef.current = stream;
       }
-    } catch (err: unknown) {
-      const errMsg =
-        err instanceof Error ? err.message : 'Microphone permission denied';
-      setError(`Microphone access error: ${errMsg}`);
+    } catch (err: any) {
+      let friendlyError = 'Microphone access denied or unavailable.';
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        friendlyError = 'Microphone permission denied. Please allow microphone access in your browser settings.';
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        friendlyError = 'No microphone detected on your device.';
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        friendlyError = 'Microphone is currently in use by another app.';
+      } else if (err.message) {
+        friendlyError = `Microphone error: ${err.message}`;
+      }
+
+      console.error('getUserMedia mobile error:', err);
+      toast.error(friendlyError);
+      setError(friendlyError);
       setStatus('error');
       isListeningRef.current = false;
       isPausedRef.current = false;
@@ -193,7 +260,7 @@ export function useLiveTranscriber(
     const recognition = new SpeechRecognitionClass();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = 'en-NG'; // Nigerian English compatibility (falls back gracefully)
+    recognition.lang = 'en-US';
 
     recognition.onstart = () => {
       setStatus('listening');
@@ -234,12 +301,16 @@ export function useLiveTranscriber(
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      // Don't treat transient no-speech or aborted as fatal error if still listening or paused
       if (event.error === 'no-speech' || event.error === 'aborted') {
         return;
       }
 
-      setError(`Speech recognition error: ${event.error}`);
+      let errText = `Speech recognition error: ${event.error}`;
+      if (event.error === 'not-allowed') {
+        errText = 'Microphone access was blocked or denied.';
+      }
+      toast.error(errText);
+      setError(errText);
       setStatus('error');
       isListeningRef.current = false;
       isPausedRef.current = false;
@@ -247,13 +318,11 @@ export function useLiveTranscriber(
     };
 
     recognition.onend = () => {
-      // Auto-reconnect on silent gaps while user has not explicitly stopped or paused listening
       if (isListeningRef.current) {
         baseTranscriptRef.current = transcriptRef.current;
         try {
           recognition.start();
         } catch {
-          // If restart fails, attempt full re-init after brief delay
           setTimeout(() => {
             if (isListeningRef.current) {
               initAndStartRecognition();
@@ -278,6 +347,7 @@ export function useLiveTranscriber(
     } catch (err: unknown) {
       const errMsg =
         err instanceof Error ? err.message : 'Failed to start speech recognition';
+      toast.error(errMsg);
       setError(errMsg);
       setStatus('error');
       isListeningRef.current = false;
@@ -286,23 +356,25 @@ export function useLiveTranscriber(
     }
   }, [stopMediaStream]);
 
-  // Public startListening trigger
+  // Public startListening trigger (executes AudioContext unlock synchronously on touch gesture)
   const startListening = useCallback(() => {
+    unlockAudioContextOnGesture();
     setError(null);
     isListeningRef.current = true;
     isPausedRef.current = false;
     baseTranscriptRef.current = transcriptRef.current;
     initAndStartRecognition();
-  }, [initAndStartRecognition]);
+  }, [unlockAudioContextOnGesture, initAndStartRecognition]);
 
   // Public resumeListening trigger from paused state
   const resumeListening = useCallback(() => {
+    unlockAudioContextOnGesture();
     setError(null);
     isListeningRef.current = true;
     isPausedRef.current = false;
     baseTranscriptRef.current = transcriptRef.current;
     initAndStartRecognition();
-  }, [initAndStartRecognition]);
+  }, [unlockAudioContextOnGesture, initAndStartRecognition]);
 
   // Clean up on unmount
   useEffect(() => {
@@ -310,6 +382,13 @@ export function useLiveTranscriber(
       isListeningRef.current = false;
       isPausedRef.current = false;
       stopMediaStream();
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        try {
+          audioContextRef.current.close();
+        } catch {
+          // Ignore close errors
+        }
+      }
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
