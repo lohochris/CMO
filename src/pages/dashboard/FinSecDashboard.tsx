@@ -63,6 +63,7 @@ export const FinSecDashboard = () => {
     };
 
     fetchLiveCounts();
+    fetchTransactions();
   }, [members]);
 
   // Step-up authentication states
@@ -88,6 +89,8 @@ export const FinSecDashboard = () => {
   const [manualMemberId, setManualMemberId] = useState('');
   const [manualSearchQuery, setManualSearchQuery] = useState('');
   const [manualSearchIndex, setManualSearchIndex] = useState(-1);
+  const [manualSearchResults, setManualSearchResults] = useState<any[]>([]);
+  const [isSearchingMembers, setIsSearchingMembers] = useState(false);
   const [manualAmount, setManualAmount] = useState('');
   const [manualPurpose, setManualPurpose] = useState('');
   const [customLevyNotes, setCustomLevyNotes] = useState('');
@@ -205,8 +208,16 @@ export const FinSecDashboard = () => {
   const pendingTickets = welfareTickets.filter(t => t.status === 'Awaiting Financial Audit' || t.status === 'Pending');
   const totalSessionCash = vaultBalance;
 
-  const filteredTransactions = transactions.filter(tx => {
-    const txDate = new Date((tx as any).created_at || tx.timestamp);
+  const validStatus = ['Approved', 'Completed', 'Cleared'];
+
+  const visibleTransactions = transactions.filter(t => 
+    !t.status || validStatus.includes(t.status)
+  );
+
+  const filteredTransactions = visibleTransactions.filter(tx => {
+    const rawDate = (tx as any).created_at || tx.timestamp || (tx as any).date || (tx as any).transaction_date;
+    if (!rawDate) return true;
+    const txDate = new Date(rawDate);
     const start = new Date(filterStartDate + "T00:00:00");
     const end = new Date(filterEndDate + "T23:59:59");
     return txDate >= start && txDate <= end;
@@ -216,26 +227,62 @@ export const FinSecDashboard = () => {
   const filteredIncome = filteredSummary.totalIncome;
   const filteredExpenses = filteredSummary.totalExpenses;
 
-  const manualSearchResults = manualSearchQuery.trim()
-    ? rosterList
-        .filter(m => {
-          const fullName = (m.full_name || '').toLowerCase();
-          const officialMemberId = (m.official_member_id || '').toLowerCase();
-          const query = manualSearchQuery.toLowerCase();
-          
-          // Exclude Deceased members and administrative accounts
-          const existingMem = members.find(x => (x.official_member_id || x.id) === m.official_member_id);
-          const isDeceased = existingMem?.status === 'Deceased';
-          const memberId = m.official_member_id || '';
-          const isNotAdmin = memberId.startsWith('HCC-') 
-            ? true 
-            : !isAdministrativeId(memberId);
-          
-          return !isDeceased && isNotAdmin && (fullName.includes(query) || officialMemberId.includes(query));
-        })
-        .slice(0, 10)
-    : [];
-  const selectedManualMember = rosterList.find(m => m.official_member_id === manualMemberId);
+  const incomeRecords = filteredTransactions.filter(tx => (tx.transactionType === 'income' || (tx as any).transaction_type === 'income') && validStatus.includes((tx as any).status || 'Approved'));
+  console.log("4. TOTAL RAW STATE ARRAY COUNT:", transactions.length);
+  console.log("4. FILTERED INFLOWS COUNT:", incomeRecords.length);
+
+  // Direct Supabase member search effect on public.members
+  useEffect(() => {
+    const searchMembersFromSupabase = async () => {
+      const searchTerm = manualSearchQuery.trim();
+      if (!searchTerm) {
+        setManualSearchResults([]);
+        return;
+      }
+
+      const selectedMem = dbMembersList.find(m => m.official_member_id === manualMemberId) ||
+        rosterList.find(m => m.official_member_id === manualMemberId);
+
+      if (selectedMem && manualSearchQuery === `${selectedMem.full_name} — ${selectedMem.official_member_id}`) {
+        setManualSearchResults([]);
+        return;
+      }
+
+      setIsSearchingMembers(true);
+      try {
+        const { data, error } = await supabase
+          .from('members')
+          .select('id, official_member_id, full_name, cmo_family, status, role')
+          .or(`full_name.ilike.%${searchTerm}%,official_member_id.ilike.%${searchTerm}%`)
+          .limit(10);
+
+        if (!error && data) {
+          const filtered = data.filter(m => {
+            if (m.status === 'Deceased') return false;
+            const mId = m.official_member_id || m.id || '';
+            return mId.startsWith('HCC-') ? true : !isAdministrativeId(mId);
+          });
+          setManualSearchResults(filtered);
+        } else if (error) {
+          console.error("Supabase member search error:", error);
+        }
+      } catch (err) {
+        console.error("Member search catch exception:", err);
+      } finally {
+        setIsSearchingMembers(false);
+      }
+    };
+
+    const timer = setTimeout(searchMembersFromSupabase, 200);
+    return () => clearTimeout(timer);
+  }, [manualSearchQuery, manualMemberId, dbMembersList, rosterList]);
+
+  const selectedManualMember =
+    manualSearchResults.find(m => m.official_member_id === manualMemberId) ||
+    dbMembersList.find(m => m.official_member_id === manualMemberId) ||
+    rosterList.find(m => m.official_member_id === manualMemberId) ||
+    members.find(m => m.official_member_id === manualMemberId);
+
   const showManualSearchResults = Boolean(
     manualSearchQuery.trim() &&
     manualSearchResults.length > 0 &&
@@ -245,6 +292,7 @@ export const FinSecDashboard = () => {
   const selectManualMember = (memberId: string, displayText: string) => {
     setManualMemberId(memberId);
     setManualSearchQuery(displayText);
+    setManualSearchResults([]);
     setManualSearchIndex(-1);
   };
 
@@ -307,7 +355,7 @@ export const FinSecDashboard = () => {
       return;
     }
 
-    const member = members.find(m => m.id === ticket.memberId);
+    const member = members.find(m => m.official_member_id === ticket.memberId || m.id === ticket.memberId);
     if (!member) {
       setError('Associated member not found.');
       return;
@@ -478,8 +526,13 @@ export const FinSecDashboard = () => {
       return;
     }
 
-    const member = members.find(m => m.id === manualMemberId) || rosterList.find(m => m.official_member_id === manualMemberId);
-    if (!member) {
+    const selectedMemberObj =
+      manualSearchResults.find(m => m.official_member_id === manualMemberId) ||
+      dbMembersList.find(m => m.official_member_id === manualMemberId) ||
+      rosterList.find(m => m.official_member_id === manualMemberId) ||
+      members.find(m => m.official_member_id === manualMemberId || m.id === manualMemberId);
+
+    if (!selectedMemberObj) {
       setError('Member ID not found');
       return;
     }
@@ -490,7 +543,7 @@ export const FinSecDashboard = () => {
       return;
     }
 
-    const selectedMemberId = (member as any).official_member_id || member.id;
+    const selectedMemberId = selectedMemberObj.official_member_id || selectedMemberObj.id || manualMemberId;
     
     // Validate if member is Deceased or Admin
     const actualMember = members.find(m => (m.official_member_id || m.id) === selectedMemberId);
@@ -503,23 +556,32 @@ export const FinSecDashboard = () => {
       return;
     }
 
-    const selectedMemberName = (member as any).full_name || (member as any).name || 'Member';
+    const selectedMemberName = selectedMemberObj.full_name || selectedMemberObj.name || 'Member';
     const amountInput = manualAmount;
     const purposeInput = manualPurpose;
 
+    const newTransaction = {
+      id: crypto.randomUUID(),
+      official_member_id: selectedMemberObj.official_member_id || selectedMemberId,
+      member_name: selectedMemberName,
+      amount: parseFloat(amountInput),
+      purpose: purposeInput,
+      notes: purposeInput === 'Other Levy' ? customLevyNotes : null,
+      transaction_type: 'income',
+      recorded_by: 'FIN-SEC-2026',
+      status: 'Approved',
+      created_at: new Date().toISOString()
+    };
+
+    console.log("1. SUBMITTING PAYLOAD TO SUPABASE:", newTransaction);
+
     const { data: insertedData, error: txErr } = await supabase
       .from('transactions')
-      .insert([{
-        official_member_id: selectedMemberId,
-        member_name: selectedMemberName,
-        amount: parseFloat(amountInput),
-        purpose: purposeInput,
-        notes: purposeInput === 'Other Levy' ? customLevyNotes : null,
-        transaction_type: 'income',
-        recorded_by: 'FIN-SEC-2026',
-        status: 'Approved'
-      }])
-      .select('id, official_member_id, member_name, amount, purpose, notes, transaction_type, created_at');
+      .insert([newTransaction])
+      .select('id, official_member_id, member_name, amount, purpose, notes, transaction_type, created_at, status');
+
+    console.log("2. SUPABASE INSERT RESPONSE DATA:", insertedData);
+    console.log("2. SUPABASE INSERT ERROR:", txErr);
 
     if (txErr) {
       console.error("Transaction Insert Error:", txErr);
@@ -547,7 +609,7 @@ export const FinSecDashboard = () => {
     if (dbMem) {
       currentMemberBalance = parseFloat(dbMem.balance) || 0;
     } else {
-      currentMemberBalance = parseFloat(member.balance) || 0;
+      currentMemberBalance = parseFloat(selectedMemberObj.balance) || 0;
     }
 
     const newBalance = (parseFloat(currentMemberBalance as any) || 0) + parseFloat(amountInput);
@@ -572,7 +634,7 @@ export const FinSecDashboard = () => {
     }
 
     const updatedMembers = members.map(m =>
-      m.id === manualMemberId || m.id === selectedMemberId
+      (m.official_member_id || m.id) === selectedMemberId
         ? { ...m, balance: newBalance, status: 'Active' as const }
         : m
     );
@@ -590,8 +652,9 @@ export const FinSecDashboard = () => {
     };
     setTransactions([...transactions, transaction]);
 
-    const memberName = (member as any).name || (member as any).full_name || 'Member';
-    setSuccess(`Transaction recorded: ${formatCurrency(amount)} for ${memberName}`);
+    const displayName = selectedMemberObj.full_name || selectedMemberObj.name || selectedMemberName;
+    const displayOfficialId = selectedMemberObj.official_member_id || selectedMemberId;
+    setSuccess(`Transaction recorded: ${formatCurrency(amount)} for ${displayName} (${displayOfficialId})`);
     setManualMemberId('');
     setManualSearchQuery('');
     setCustomLevyNotes('');
@@ -599,7 +662,8 @@ export const FinSecDashboard = () => {
     setManualPurpose('');
     setTimeout(() => setSuccess(''), 3000);
     
-    // Refresh to synchronize totals across all dashboards
+    // Instantly refresh live transactions and database context
+    await fetchTransactions();
     await refreshDatabase();
   };
 
@@ -665,23 +729,34 @@ export const FinSecDashboard = () => {
   };
 
   const fetchTransactions = async () => {
+    console.log("3. FETCHING TRANSACTIONS FROM SUPABASE...");
     try {
       const { data, error } = await supabase
         .from('transactions')
-        .select('id, official_member_id, member_name, amount, purpose, notes, transaction_type, created_at');
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      console.log("3. RAW TRANSACTIONS FETCHED:", data);
+      console.log("3. FETCH ERROR:", error);
+
       if (error) throw error;
       if (data) {
         setTransactions(
-          data.map((t: any) => ({
-            id: t.id,
-            memberId: t.official_member_id,
-            memberName: t.member_name,
-            amount: Number(t.amount),
-            purpose: t.purpose,
-            notes: t.notes || undefined,
-            transactionType: t.transaction_type,
-            timestamp: t.created_at
-          }))
+          data.map((t: any) => {
+            return {
+              id: t.id,
+              memberId: t.official_member_id || t.member_id || t.memberId,
+              memberName: t.member_name || t.memberName || 'Member',
+              amount: Number(t.amount),
+              purpose: t.purpose,
+              notes: t.notes || undefined,
+              transactionType: t.transaction_type || t.transactionType,
+              transaction_type: t.transaction_type || t.transactionType,
+              timestamp: t.created_at || t.timestamp,
+              created_at: t.created_at || t.timestamp,
+              status: t.status || 'Approved'
+            };
+          })
         );
       }
     } catch (err) {
@@ -753,7 +828,8 @@ export const FinSecDashboard = () => {
       setIncomeDate(new Date().toISOString().split('T')[0]);
       setTimeout(() => setSuccess(''), 3000);
 
-      // Refresh transactions
+      // Refresh transactions and ledger
+      await fetchTransactions();
       await refreshDatabase();
     } catch (err: any) {
       console.error('Record income failed:', err);
@@ -799,7 +875,8 @@ export const FinSecDashboard = () => {
       setExpenseDate(new Date().toISOString().split('T')[0]);
       setTimeout(() => setSuccess(''), 3000);
 
-      // Refresh transactions
+      // Refresh transactions and ledger
+      await fetchTransactions();
       await refreshDatabase();
     } catch (err: any) {
       console.error('Record expense failed:', err);
@@ -908,7 +985,8 @@ export const FinSecDashboard = () => {
             amount,
             purpose,
             transactionType: 'income',
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            status: 'Approved'
           });
 
           processedCount++;
@@ -1306,7 +1384,7 @@ export const FinSecDashboard = () => {
                 </TableHeader>
                 <TableBody>
                   {pendingTickets.map(ticket => {
-                    const member = members.find(m => m.id === ticket.memberId);
+                    const member = members.find(m => m.official_member_id === ticket.memberId || m.id === ticket.memberId);
                     return (
                       <TableRow key={ticket.ticketId} className="border-[#ffd700]/30 hover:bg-[#001a16]">
                         <TableCell className="text-white">{ticket.ticketId}</TableCell>
@@ -1796,21 +1874,20 @@ export const FinSecDashboard = () => {
                 </TableHeader>
                 <TableBody>
                   {filteredTransactions
-                    .filter(tx => tx.transactionType === 'income')
+                    .filter(tx => (tx.transactionType === 'income' || (tx as any).transaction_type === 'income') && validStatus.includes((tx as any).status || 'Approved'))
                     .slice()
                     .reverse()
                     .map((transaction) => {
                       const isEditing = editingTxId === transaction.id;
-                      let memberName = 'N/A (General Entry)';
+                      let memberName = (transaction as any).member_name || transaction.memberName || '';
                       if (transaction.memberId === 'GENERAL-INCOME') {
                         memberName = 'CMO General Account';
                       } else if (transaction.memberId === 'GENERAL-EXPENSE') {
                         memberName = 'CMO Operational Expense';
-                      } else {
-                        const member = rosterList.find(r => r.official_member_id === transaction.memberId) || members.find(m => m.id === transaction.memberId);
-                        if (member) {
-                          memberName = member.full_name || member.name || 'N/A (General Entry)';
-                        }
+                      } else if (!memberName || memberName === 'Member' || memberName === 'Unknown Member') {
+                        const matchedMember = members.find(m => m.official_member_id === transaction.memberId) ||
+                                              rosterList.find(r => r.official_member_id === transaction.memberId);
+                        memberName = matchedMember ? (matchedMember.full_name || matchedMember.name) : (transaction.memberId || 'N/A (General Entry)');
                       }
 
                       const paymentDate = new Date(transaction.timestamp);
@@ -1919,7 +1996,7 @@ export const FinSecDashboard = () => {
                         </TableRow>
                       );
                     })}
-                  {filteredTransactions.filter(tx => tx.transactionType === 'income').length === 0 && (
+                  {filteredTransactions.filter(tx => (tx.transactionType === 'income' || (tx as any).transaction_type === 'income') && validStatus.includes((tx as any).status || 'Approved')).length === 0 && (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center text-gray-400 py-8">
                         No matching income records registered for this date period.
@@ -1950,21 +2027,20 @@ export const FinSecDashboard = () => {
                 </TableHeader>
                 <TableBody>
                   {filteredTransactions
-                    .filter(tx => tx.transactionType === 'expense')
+                    .filter(tx => (tx.transactionType === 'expense' || (tx as any).transaction_type === 'expense') && validStatus.includes((tx as any).status || 'Approved'))
                     .slice()
                     .reverse()
                     .map((transaction) => {
                       const isEditing = editingTxId === transaction.id;
-                      let memberName = 'N/A (General Entry)';
+                      let memberName = (transaction as any).member_name || transaction.memberName || '';
                       if (transaction.memberId === 'GENERAL-INCOME') {
                         memberName = 'CMO General Account';
                       } else if (transaction.memberId === 'GENERAL-EXPENSE') {
                         memberName = 'CMO Operational Expense';
-                      } else {
-                        const member = rosterList.find(r => r.official_member_id === transaction.memberId) || members.find(m => m.id === transaction.memberId);
-                        if (member) {
-                          memberName = member.full_name || member.name || 'N/A (General Entry)';
-                        }
+                      } else if (!memberName || memberName === 'Member' || memberName === 'Unknown Member') {
+                        const matchedMember = members.find(m => m.official_member_id === transaction.memberId) ||
+                                              rosterList.find(r => r.official_member_id === transaction.memberId);
+                        memberName = matchedMember ? (matchedMember.full_name || matchedMember.name) : (transaction.memberId || 'N/A (General Entry)');
                       }
 
                       const paymentDate = new Date(transaction.timestamp);
@@ -2073,7 +2149,7 @@ export const FinSecDashboard = () => {
                         </TableRow>
                       );
                     })}
-                  {filteredTransactions.filter(tx => tx.transactionType === 'expense').length === 0 && (
+                  {filteredTransactions.filter(tx => (tx.transactionType === 'expense' || (tx as any).transaction_type === 'expense') && validStatus.includes((tx as any).status || 'Approved')).length === 0 && (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center text-gray-400 py-8">
                         No matching expense records registered for this date period.

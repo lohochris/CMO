@@ -65,9 +65,13 @@ export const ChairmanDashboard = () => {
     authorizeBankWithdrawal
   } = useApp();
 
-  // Executive Oversight & Bank Lodgment States
+  // Executive Oversight & Bank Lodgment & Realtime Transaction States
+  const visibleTransactions = transactions.filter(t => 
+    !t.status || ['Approved', 'Completed', 'Cleared'].includes(t.status)
+  );
   const [lodgmentsList, setLodgmentsList] = useState<any[]>([]);
   const [finesList, setFinesList] = useState<any[]>([]);
+  const [liveTransactionsList, setLiveTransactionsList] = useState<any[]>([]);
   const [loadingLodgments, setLoadingLodgments] = useState(false);
   const [authorizingWthId, setAuthorizingWthId] = useState<string | null>(null);
   const [authorizingLodgmentId, setAuthorizingLodgmentId] = useState<string | number | null>(null);
@@ -78,6 +82,21 @@ export const ChairmanDashboard = () => {
       await authorizeBankWithdrawal(wthId, role);
     } finally {
       setAuthorizingWthId(null);
+    }
+  };
+
+  const fetchLiveTransactions = async () => {
+    try {
+      const { data: dbTx, error: txErr } = await supabase
+        .from('transactions')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!txErr && dbTx) {
+        setLiveTransactionsList(dbTx);
+      }
+    } catch (err) {
+      console.error('Error fetching live transactions in ChairmanDashboard:', err);
     }
   };
 
@@ -104,9 +123,20 @@ export const ChairmanDashboard = () => {
 
   useEffect(() => {
     fetchLodgmentsAndFines();
+    fetchLiveTransactions();
 
     const channel = supabase
-      .channel('chairman-lodgments-fines')
+      .channel('chairman-realtime-oversight')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => {
+        fetchLiveTransactions();
+        refreshDatabase();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, () => {
+        refreshDatabase();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, () => {
+        refreshDatabase();
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lodgments' }, () => fetchLodgmentsAndFines())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'fines' }, () => fetchLodgmentsAndFines())
       .subscribe();
@@ -114,7 +144,7 @@ export const ChairmanDashboard = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [refreshDatabase]);
 
   useEffect(() => {
     if (lodgments && lodgments.length > 0) {
@@ -1578,7 +1608,7 @@ export const ChairmanDashboard = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {transactions.slice(0, 5).map((tx) => (
+                    {visibleTransactions.slice(0, 5).map((tx) => (
                       <TableRow key={tx.id} className="border-b border-[#ffd700]/10 hover:bg-[#001a16]/50">
                         <TableCell className="text-white text-xs">{formatDate((tx as any).created_at || tx.timestamp)}</TableCell>
                         <TableCell className="text-white font-medium">{tx.memberName || tx.memberId}</TableCell>
@@ -1588,7 +1618,7 @@ export const ChairmanDashboard = () => {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {transactions.length === 0 && (
+                    {visibleTransactions.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={4} className="text-center text-gray-500 py-4">No recent financial logs recorded.</TableCell>
                       </TableRow>
@@ -1680,18 +1710,18 @@ export const ChairmanDashboard = () => {
               <div className="bg-[#001a16] border border-emerald-500/30 p-4 rounded-lg">
                 <p className="text-xs text-emerald-400 uppercase font-semibold">Total Revenue Inflows</p>
                 <p className="text-2xl font-bold text-emerald-400 mt-1">
-                  {formatCurrency(transactions.filter(t => t.transactionType === 'income' || t.transactionType === 'inflow').reduce((sum, t) => sum + (t.amount || 0), 0))}
+                  {formatCurrency(visibleTransactions.filter(t => t.transactionType === 'income' || t.transactionType === 'inflow').reduce((sum, t) => sum + (t.amount || 0), 0))}
                 </p>
               </div>
               <div className="bg-[#001a16] border border-rose-500/30 p-4 rounded-lg">
                 <p className="text-xs text-rose-400 uppercase font-semibold">Total Outflows & Expenses</p>
                 <p className="text-2xl font-bold text-rose-400 mt-1">
-                  {formatCurrency(transactions.filter(t => t.transactionType === 'expense' || t.transactionType === 'outflow').reduce((sum, t) => sum + (t.amount || 0), 0))}
+                  {formatCurrency(visibleTransactions.filter(t => t.transactionType === 'expense' || t.transactionType === 'outflow').reduce((sum, t) => sum + (t.amount || 0), 0))}
                 </p>
               </div>
               <div className="bg-[#001a16] border border-[#ffd700]/30 p-4 rounded-lg">
                 <p className="text-xs text-gray-400 uppercase font-semibold">Total Ledger Entries</p>
-                <p className="text-2xl font-bold text-white mt-1">{transactions.length} Records</p>
+                <p className="text-2xl font-bold text-white mt-1">{visibleTransactions.length} Records</p>
               </div>
             </div>
 
@@ -1710,7 +1740,7 @@ export const ChairmanDashboard = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {transactions.slice(0, 15).map((t, idx) => (
+                    {visibleTransactions.slice(0, 15).map((t, idx) => (
                       <TableRow key={t.id || idx} className="border-b border-[#ffd700]/10 hover:bg-[#001a16]/50">
                         <TableCell className="text-white font-medium">{t.memberName || t.memberId || 'General CMO'}</TableCell>
                         <TableCell className="text-gray-300 text-xs">{t.purpose}</TableCell>

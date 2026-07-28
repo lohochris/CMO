@@ -216,29 +216,38 @@ const memberToDb = (m: Member): any => ({
   updated_at: m.updatedAt || null
 });
 
-const dbToTransaction = (t: any): Transaction => ({
-  id: t.id,
-  memberId: t.official_member_id || t.member_id,
-  memberName: t.member_name,
-  amount: Number(t.amount),
-  purpose: t.purpose,
-  notes: t.notes,
-  transactionType: t.transaction_type,
-  timestamp: t.created_at || t.timestamp,
-  status: t.status
-});
+const dbToTransaction = (t: any): Transaction => {
+  return {
+    id: t.id,
+    memberId: t.official_member_id || t.member_id || t.memberId,
+    memberName: t.member_name || t.memberName || 'Member',
+    amount: Number(t.amount),
+    purpose: t.purpose,
+    notes: t.notes,
+    transactionType: t.transaction_type || t.transactionType,
+    timestamp: t.created_at || t.timestamp,
+    status: t.status || 'Approved'
+  };
+};
 
-const transactionToDb = (t: Transaction): any => ({
-  id: t.id,
-  official_member_id: t.memberId,
-  member_name: t.memberName,
-  amount: t.amount,
-  purpose: t.purpose,
-  notes: t.notes,
-  transaction_type: t.transactionType,
-  created_at: t.timestamp,
-  status: t.status
-});
+const transactionToDb = (t: Transaction): any => {
+  const payload: any = {
+    official_member_id: t.memberId,
+    member_name: t.memberName,
+    amount: t.amount,
+    purpose: t.purpose,
+    notes: t.notes,
+    transaction_type: t.transactionType || (t as any).transaction_type,
+    created_at: t.timestamp || (t as any).created_at || new Date().toISOString(),
+    status: t.status || 'Approved'
+  };
+  if (t.id && typeof t.id === 'string' && t.id.includes('-')) {
+    payload.id = t.id;
+  } else {
+    payload.id = crypto.randomUUID();
+  }
+  return payload;
+};
 
 const dbToWelfareTicket = (t: any, membersList?: Member[]): WelfareTicket => {
   const memberId = t.official_member_id;
@@ -612,7 +621,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const { data: dbTx, error: txErr } = await supabase
         .from('transactions')
-        .select('id, official_member_id, member_name, amount, purpose, notes, transaction_type, created_at');
+        .select('*')
+        .order('created_at', { ascending: false });
       if (txErr) {
         console.error("Transactions query error:", txErr);
       } else if (dbTx) {
@@ -869,6 +879,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setLodgments(prev => prev.map(l => l.id === payload.new.id ? (payload.new as Lodgment) : l));
           } else if (payload.eventType === 'DELETE') {
             setLodgments(prev => prev.filter(l => l.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Real-time Supabase Postgres changes subscription to transactions
+  useEffect(() => {
+    const channel = supabase
+      .channel('transactions-real-time')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions' },
+        (payload) => {
+          console.log('Real-time transactions payload received:', payload);
+          if (payload.eventType === 'INSERT') {
+            const newTx = dbToTransaction(payload.new);
+            setTransactionsState(prev => {
+              if (prev.some(t => t.id === newTx.id)) return prev;
+              return [newTx, ...prev];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedTx = dbToTransaction(payload.new);
+            setTransactionsState(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
+          } else if (payload.eventType === 'DELETE') {
+            const txId = payload.old.id;
+            setTransactionsState(prev => prev.filter(t => t.id !== txId));
           }
         }
       )
