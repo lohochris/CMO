@@ -51,6 +51,17 @@ interface AppContextType {
   refreshUserContext: () => Promise<void>;
   executives: Member[];
   setExecutives: React.Dispatch<React.SetStateAction<Member[]>>;
+  // Decentralized Floor Mic System
+  isFloorActive: boolean;
+  activeSpeaker: Member | null;
+  speakQueue: string[];
+  liveTranscriptListener: { speakerName: string; text: string; timestamp: number } | null;
+  toggleFloor: (active: boolean) => void;
+  grantFloor: (memberId: string) => void;
+  revokeFloor: () => void;
+  requestFloor: () => void;
+  leaveQueue: () => void;
+  broadcastLiveTranscript: (text: string) => void;
 }
 
 const HARDCODED_OFFICES = [
@@ -432,6 +443,107 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(true);
   const [dbError, setDbError] = useState<string | null>(null);
+
+  // Decentralized Floor Mic State
+  const [isFloorActive, setIsFloorActive] = useState<boolean>(false);
+  const [activeSpeaker, setActiveSpeaker] = useState<Member | null>(null);
+  const [speakQueue, setSpeakQueue] = useState<string[]>([]);
+  const [liveTranscriptListener, setLiveTranscriptListener] = useState<{ speakerName: string; text: string; timestamp: number } | null>(null);
+
+  // Supabase Realtime Channel Subscription for cmo_meeting_floor
+  useEffect(() => {
+    const floorChannel = supabase.channel('cmo_meeting_floor', {
+      config: {
+        broadcast: { self: true }
+      }
+    });
+
+    floorChannel
+      .on('broadcast', { event: 'FLOOR_STATE_CHANGE' }, ({ payload }) => {
+        if (payload) {
+          if (payload.isFloorActive !== undefined) setIsFloorActive(payload.isFloorActive);
+          if (payload.activeSpeaker !== undefined) setActiveSpeaker(payload.activeSpeaker);
+          if (payload.speakQueue !== undefined) setSpeakQueue(payload.speakQueue);
+        }
+      })
+      .on('broadcast', { event: 'LIVE_TRANSCRIPT_CHUNK' }, ({ payload }) => {
+        if (payload && payload.text) {
+          setLiveTranscriptListener(payload);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(floorChannel);
+    };
+  }, []);
+
+  const broadcastFloorState = useCallback((newActive: boolean, newSpeaker: Member | null, newQueue: string[]) => {
+    setIsFloorActive(newActive);
+    setActiveSpeaker(newSpeaker);
+    setSpeakQueue(newQueue);
+
+    supabase.channel('cmo_meeting_floor').send({
+      type: 'broadcast',
+      event: 'FLOOR_STATE_CHANGE',
+      payload: {
+        isFloorActive: newActive,
+        activeSpeaker: newSpeaker,
+        speakQueue: newQueue
+      }
+    }).catch((err) => console.warn('Realtime floor broadcast err:', err));
+  }, []);
+
+  const toggleFloor = useCallback((active: boolean) => {
+    const nextSpeaker = active ? activeSpeaker : null;
+    const nextQueue = active ? speakQueue : [];
+    broadcastFloorState(active, nextSpeaker, nextQueue);
+    toast(active ? 'Floor microphone system is now OPEN.' : 'Floor microphone system is now LOCKED.');
+  }, [activeSpeaker, speakQueue, broadcastFloorState]);
+
+  const grantFloor = useCallback((memberId: string) => {
+    const memberObj = members.find(m => m.id === memberId || m.official_member_id === memberId);
+    const nextSpeaker = memberObj || { id: memberId, name: 'Bro. Member', official_member_id: memberId, role: 'member', status: 'Active', balance: 0 };
+    const nextQueue = speakQueue.filter(id => id !== memberId);
+    broadcastFloorState(true, nextSpeaker as Member, nextQueue);
+    toast.success(`Floor mic granted to ${nextSpeaker.name || 'member'}.`);
+  }, [members, speakQueue, broadcastFloorState]);
+
+  const revokeFloor = useCallback(() => {
+    broadcastFloorState(isFloorActive, null, speakQueue);
+    toast('Floor mic revoked.');
+  }, [isFloorActive, speakQueue, broadcastFloorState]);
+
+  const requestFloor = useCallback(() => {
+    if (!currentUser) return;
+    const myId = currentUser.official_member_id || currentUser.id;
+    if (!speakQueue.includes(myId)) {
+      const nextQueue = [...speakQueue, myId];
+      broadcastFloorState(isFloorActive, activeSpeaker, nextQueue);
+      toast.info('You joined the speak queue.');
+    }
+  }, [currentUser, speakQueue, isFloorActive, activeSpeaker, broadcastFloorState]);
+
+  const leaveQueue = useCallback(() => {
+    if (!currentUser) return;
+    const myId = currentUser.official_member_id || currentUser.id;
+    const nextQueue = speakQueue.filter(id => id !== myId);
+    broadcastFloorState(isFloorActive, activeSpeaker, nextQueue);
+    toast('Left the speak queue.');
+  }, [currentUser, speakQueue, isFloorActive, activeSpeaker, broadcastFloorState]);
+
+  const broadcastLiveTranscript = useCallback((text: string) => {
+    if (!currentUser || !text.trim()) return;
+    const speakerName = currentUser.full_name || currentUser.name;
+    const payload = { speakerName, text, timestamp: Date.now() };
+    setLiveTranscriptListener(payload);
+
+    supabase.channel('cmo_meeting_floor').send({
+      type: 'broadcast',
+      event: 'LIVE_TRANSCRIPT_CHUNK',
+      payload
+    }).catch((err) => console.warn('Realtime transcript chunk err:', err));
+  }, [currentUser]);
 
   // Auto-dismiss success notification toast after 3 seconds
   useEffect(() => {
@@ -1240,7 +1352,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     refreshDatabase,
     refreshUserContext,
     executives,
-    setExecutives
+    setExecutives,
+    isFloorActive,
+    activeSpeaker,
+    speakQueue,
+    liveTranscriptListener,
+    toggleFloor,
+    grantFloor,
+    revokeFloor,
+    requestFloor,
+    leaveQueue,
+    broadcastLiveTranscript
   }), [
     members,
     setMembers,
@@ -1275,7 +1397,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     vaultBalance,
     refreshDatabase,
     refreshUserContext,
-    executives
+    executives,
+    isFloorActive,
+    activeSpeaker,
+    speakQueue,
+    liveTranscriptListener,
+    toggleFloor,
+    grantFloor,
+    revokeFloor,
+    requestFloor,
+    leaveQueue,
+    broadcastLiveTranscript
   ]);
 
   return (
