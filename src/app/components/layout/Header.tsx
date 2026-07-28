@@ -84,18 +84,22 @@ export const Header = () => {
   };
 
   return (
-    <header className="bg-[#001a16] border-b border-[#ffd700]/20">
-      <div className="mx-auto max-w-7xl px-4 md:px-8 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+    <header className="w-full bg-[#001a16] border-b border-[#ffd700]/20 py-2.5 px-3 sm:px-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
             <img
               src={logoImage}
-              alt="Holy Cross CMO Logo"
-              className="w-14 h-14 md:w-16 md:h-16 rounded-full border-2 border-[#ffd700] object-cover"
+              alt="CMO Logo"
+              className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#ffd700] object-cover shrink-0"
             />
-            <div className="min-w-0">
-              <h1 className="text-lg md:text-xl font-bold text-[#ffd700]">CATHOLIC MEN ORGANIZATION</h1>
-              <p className="text-xs md:text-sm text-gray-300 whitespace-normal break-words">Holy Cross Catholic Church, Badawa: Kano Diocese</p>
+            <div className="flex flex-col min-w-0">
+              <h1 className="text-[11px] xs:text-[13px] sm:text-xl md:text-2xl font-black uppercase tracking-tight text-[#ffd700] whitespace-nowrap overflow-hidden text-ellipsis leading-tight">
+                CATHOLIC MEN ORGANIZATION
+              </h1>
+              <p className="text-[9px] sm:text-xs text-emerald-100/90 font-medium leading-tight truncate">
+                Holy Cross Catholic Church, Badawa: Kano Diocese
+              </p>
             </div>
           </div>
 
@@ -169,14 +173,12 @@ export const Header = () => {
           <button
             type="button"
             onClick={() => setMenuOpen((prev) => !prev)}
-            className="inline-flex items-center justify-center rounded-md border border-[#ffd700]/30 bg-[#001a16] px-3 py-2 text-[#ffd700] hover:bg-[#ffd700]/10 md:hidden"
+            className="p-1.5 text-[#ffd700] border border-[#ffd700]/40 rounded-lg shrink-0 hover:bg-[#ffd700]/10 transition-colors md:hidden"
             aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
           >
-            {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {menuOpen ? <X className="w-5 h-5 sm:w-6 sm:h-6" /> : <Menu className="w-5 h-5 sm:w-6 sm:h-6" />}
           </button>
         </div>
-
-
 
         <div className={`overflow-hidden transition-all duration-300 md:hidden ${menuOpen ? 'max-h-[480px] mt-4' : 'max-h-0'}`}>
           <div className="space-y-4 pb-4">
@@ -194,8 +196,6 @@ export const Header = () => {
                 </button>
               ))}
             </div>
-
-
 
             {currentUser ? (
               <div className="space-y-3 rounded-xl border border-[#ffd700]/30 bg-[#001a16] p-4">
