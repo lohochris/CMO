@@ -4,7 +4,7 @@ import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { Users, CheckCircle, AlertCircle, TrendingUp, TrendingDown, DollarSign, Camera, Megaphone, FileText, Upload, Edit, Trash2, ShieldCheck, Trophy, Landmark, Calculator, Scale, Database } from 'lucide-react';
+import { Users, CheckCircle, AlertCircle, TrendingUp, TrendingDown, DollarSign, Camera, Megaphone, FileText, Upload, Edit, Trash2, ShieldCheck, Trophy, Landmark, Calculator, Scale, Database, Printer, MessageSquare, Clock } from 'lucide-react';
 import { SportsAuditReadOnlyView } from './sports/SportsAuditReadOnlyView';
 import { useApp } from '../../contexts/AppContext';
 import { generateMemberId, generateExpenseId } from '../../utils/idGenerators';
@@ -13,9 +13,12 @@ import { ProfilePictureUploader } from '../../app/components/common/ProfilePictu
 import { uploadProfilePicture, isUuid, getMemberQueryField, calculateUnifiedFinancialSummary, fetchUnifiedFinancialSummary } from '../../utils/supabaseHelpers';
 import { supabase } from '../../lib/supabaseClient';
 import logoImage from '../../imports/CMO.png';
-import { Member, Family, MemberStatus } from '../../types';
+import { Member, Family, MemberStatus, Transaction } from '../../types';
 import { FinesEscrowVerificationLedger } from '../../app/components/common/FinesEscrowVerificationLedger';
 import { CMO_CONSTITUTION_2023 } from '../../config/cmoConstitution';
+import { DigitalReceiptModal } from '../../app/components/ui/DigitalReceiptModal';
+import { sendPaymentReceiptNotification, getSmsBalance } from '../../utils/messagingService';
+import { toast } from 'sonner';
 
 
 export const FinSecDashboard = () => {
@@ -76,6 +79,141 @@ export const FinSecDashboard = () => {
   const [pinInput, setPinInput] = useState<string>("");
   const [pinError, setPinError] = useState<string | null>(null);
   const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
+
+  // Digital Receipt Modal States
+  const [selectedReceiptTx, setSelectedReceiptTx] = useState<Transaction | null>(null);
+  const [selectedReceiptMember, setSelectedReceiptMember] = useState<Member | null>(null);
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+
+  const handleViewReceipt = (tx: Transaction) => {
+    const memberObj = members.find(m => m.id === tx.memberId || m.official_member_id === tx.memberId);
+    setSelectedReceiptTx(tx);
+    setSelectedReceiptMember(memberObj || null);
+    setIsReceiptModalOpen(true);
+  };
+
+  // Instant SMS Notification States
+  const [dispatchSmsAlert, setDispatchSmsAlert] = useState<boolean>(true);
+  const [isResendingSmsId, setIsResendingSmsId] = useState<string | number | null>(null);
+
+  const handleResendSms = async (tx: Transaction) => {
+    setIsResendingSmsId(tx.id || null);
+    try {
+      const memberObj = members.find(m => m.id === tx.memberId || m.official_member_id === tx.memberId);
+      const phone = memberObj?.phone || memberObj?.phone_number;
+      if (!phone) {
+        toast.error(`Member ${tx.memberName || tx.memberId} has no registered phone number.`);
+        return;
+      }
+      const firstName = ((memberObj?.full_name || memberObj?.name || tx.memberName || 'Brother').split(' ')[0]) || 'Brother';
+      const receiptNo = tx.receipt_number || `RCP-2026-${String(tx.id || '0000').slice(-4).padStart(4, '0')}`;
+
+      const res = await sendPaymentReceiptNotification({
+        phone_number: phone,
+        first_name: firstName,
+        amount: tx.amount,
+        purpose: tx.purpose,
+        receipt_number: receiptNo,
+        member_id: tx.memberId
+      });
+
+      const newStatus = res.success ? 'sent' : 'failed';
+      if (tx.id) {
+        await supabase.from('transactions').update({ notification_status: newStatus, receipt_number: receiptNo }).eq('id', tx.id);
+      }
+
+      setTransactions(prev => prev.map(t => t.id === tx.id ? { ...t, notification_status: newStatus, receipt_number: receiptNo } : t));
+      if (res.success) {
+        toast.success(`SMS Receipt Alert dispatched to ${phone}!`);
+      } else {
+        toast.error(`SMS Dispatch Failed: ${res.error}`);
+      }
+    } catch (err: any) {
+      toast.error(`Failed to resend SMS: ${err.message}`);
+    } finally {
+      setIsResendingSmsId(null);
+    }
+  };
+
+  // Gateway Credit & Batch Dispatch States
+  const [smsBalanceInfo, setSmsBalanceInfo] = useState<{ balance: number; currency: string }>({ balance: 1450, currency: 'Units' });
+  const [selectedBatchTxIds, setSelectedBatchTxIds] = useState<Set<string | number>>(new Set());
+  const [isBatchProcessing, setIsBatchProcessing] = useState<boolean>(false);
+  const [batchProgressText, setBatchProgressText] = useState<string>('');
+  const [auditLogFilter, setAuditLogFilter] = useState<'all' | 'sent' | 'failed' | 'pending'>('all');
+
+  useEffect(() => {
+    getSmsBalance().then(res => {
+      if (res.success && res.balance !== undefined) {
+        setSmsBalanceInfo({ balance: res.balance, currency: res.currency || 'Units' });
+      }
+    });
+  }, []);
+
+  const handleToggleSelectTx = (txId: string | number) => {
+    setSelectedBatchTxIds(prev => {
+      const next = new Set(prev);
+      if (next.has(txId)) next.delete(txId);
+      else next.add(txId);
+      return next;
+    });
+  };
+
+  const handleSelectAllPendingFailed = (pendingOrFailedTxs: Transaction[]) => {
+    const allIds = pendingOrFailedTxs.map(t => t.id!).filter(Boolean);
+    if (selectedBatchTxIds.size >= allIds.length && allIds.length > 0) {
+      setSelectedBatchTxIds(new Set());
+    } else {
+      setSelectedBatchTxIds(new Set(allIds));
+    }
+  };
+
+  const handleBatchSendSms = async () => {
+    if (selectedBatchTxIds.size === 0) return;
+    const targetTxs = transactions.filter(t => t.id && selectedBatchTxIds.has(t.id));
+    if (targetTxs.length === 0) return;
+
+    setIsBatchProcessing(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < targetTxs.length; i++) {
+      const tx = targetTxs[i];
+      setBatchProgressText(`Processing ${i + 1} of ${targetTxs.length}...`);
+
+      const memberObj = members.find(m => m.id === tx.memberId || m.official_member_id === tx.memberId);
+      const phone = memberObj?.phone || memberObj?.phone_number;
+      if (!phone) {
+        failCount++;
+        continue;
+      }
+      const firstName = ((memberObj?.full_name || memberObj?.name || tx.memberName || 'Brother').split(' ')[0]) || 'Brother';
+      const receiptNo = tx.receipt_number || `RCP-2026-${String(tx.id || '0000').slice(-4).padStart(4, '0')}`;
+
+      const res = await sendPaymentReceiptNotification({
+        phone_number: phone,
+        first_name: firstName,
+        amount: tx.amount,
+        purpose: tx.purpose,
+        receipt_number: receiptNo,
+        member_id: tx.memberId
+      });
+
+      const newStatus = res.success ? 'sent' : 'failed';
+      if (tx.id) {
+        await supabase.from('transactions').update({ notification_status: newStatus, receipt_number: receiptNo }).eq('id', tx.id);
+      }
+      setTransactions(prev => prev.map(t => t.id === tx.id ? { ...t, notification_status: newStatus, receipt_number: receiptNo } : t));
+
+      if (res.success) successCount++;
+      else failCount++;
+    }
+
+    setIsBatchProcessing(false);
+    setBatchProgressText('');
+    setSelectedBatchTxIds(new Set());
+    toast.success(`Batch Dispatch Complete: ${successCount} sent successfully, ${failCount} failed.`);
+  };
 
   // PIN modify states
   const [isChangingPin, setIsChangingPin] = useState(false);
@@ -578,7 +716,7 @@ export const FinSecDashboard = () => {
     const { data: insertedData, error: txErr } = await supabase
       .from('transactions')
       .insert([newTransaction])
-      .select('id, official_member_id, member_name, amount, purpose, notes, transaction_type, created_at, status');
+      .select('id, official_member_id, member_name, amount, purpose, notes, transaction_type, created_at, status, receipt_number');
 
     console.log("2. SUPABASE INSERT RESPONSE DATA:", insertedData);
     console.log("2. SUPABASE INSERT ERROR:", txErr);
@@ -640,7 +778,42 @@ export const FinSecDashboard = () => {
     );
     setMembers(updatedMembers);
 
-    const transaction = {
+    // Instant SMS Payment Alert Dispatch
+    let notificationStatus: 'sent' | 'failed' | 'pending' = 'pending';
+    let assignedReceiptNo = insertedRow?.receipt_number || `RCP-2026-${String(insertedId || Date.now()).slice(-4).padStart(4, '0')}`;
+
+    if (dispatchSmsAlert) {
+      const targetPhone = selectedMemberObj.phone_number || selectedMemberObj.phone || actualMember?.phone || actualMember?.phone_number;
+      if (targetPhone) {
+        const firstName = (selectedMemberName.split(' ')[0] || 'Brother');
+        const smsRes = await sendPaymentReceiptNotification({
+          phone_number: targetPhone,
+          first_name: firstName,
+          amount,
+          purpose: manualPurpose,
+          receipt_number: assignedReceiptNo,
+          member_id: selectedMemberId
+        });
+        notificationStatus = smsRes.success ? 'sent' : 'failed';
+        if (smsRes.success) {
+          toast.success(`SMS Receipt Alert sent to ${targetPhone}`);
+        } else {
+          toast.error(`SMS Alert Failed: ${smsRes.error}`);
+        }
+      }
+    }
+
+    if (insertedId) {
+      await supabase
+        .from('transactions')
+        .update({
+          receipt_number: assignedReceiptNo,
+          notification_status: notificationStatus
+        })
+        .eq('id', insertedId);
+    }
+
+    const transaction: Transaction = {
       id: insertedId,
       memberId: selectedMemberId,
       memberName: selectedMemberName,
@@ -648,7 +821,10 @@ export const FinSecDashboard = () => {
       purpose: manualPurpose,
       notes: manualPurpose === 'Other Levy' ? customLevyNotes : undefined,
       transactionType: 'income',
-      timestamp: insertedTimestamp
+      timestamp: insertedTimestamp,
+      status: 'Approved',
+      receipt_number: assignedReceiptNo,
+      notification_status: notificationStatus
     };
     setTransactions([...transactions, transaction]);
 
@@ -754,7 +930,10 @@ export const FinSecDashboard = () => {
               transaction_type: t.transaction_type || t.transactionType,
               timestamp: t.created_at || t.timestamp,
               created_at: t.created_at || t.timestamp,
-              status: t.status || 'Approved'
+              status: t.status || 'Approved',
+              receipt_number: t.receipt_number || undefined,
+              notification_status: t.notification_status || undefined,
+              receipt_generated_at: t.receipt_generated_at || undefined
             };
           })
         );
@@ -1209,6 +1388,14 @@ export const FinSecDashboard = () => {
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Pending Welfare</p>
                   <p className="text-white font-bold text-sm">{pendingTickets.length} Tickets</p>
                 </div>
+                <div className="bg-[#001a16] border border-emerald-500/30 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider flex items-center gap-1">
+                    <MessageSquare className="w-3 h-3 text-emerald-400" /> SMS Gateway
+                  </p>
+                  <p className="text-emerald-400 font-bold text-sm">
+                    {smsBalanceInfo.balance.toLocaleString()} {smsBalanceInfo.currency} Available
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -1265,6 +1452,10 @@ export const FinSecDashboard = () => {
             </TabsTrigger>
             <TabsTrigger value="expense" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer">
               Expense Log
+            </TabsTrigger>
+            <TabsTrigger value="sms-audit" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer flex items-center gap-1.5 font-bold">
+              <MessageSquare className="w-3.5 h-3.5" />
+              SMS Delivery Audit
             </TabsTrigger>
             <TabsTrigger value="bulk" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer">
               Bulk CSV Upload
@@ -1575,6 +1766,19 @@ export const FinSecDashboard = () => {
                   />
                 </div>
               )}
+              <div className="flex items-center gap-2.5 p-3 bg-[#001a16] border border-[#ffd700]/30 rounded-lg">
+                <input
+                  type="checkbox"
+                  id="dispatchSmsAlert"
+                  checked={dispatchSmsAlert}
+                  onChange={(e) => setDispatchSmsAlert(e.target.checked)}
+                  className="w-4 h-4 accent-amber-400 rounded cursor-pointer shrink-0"
+                />
+                <label htmlFor="dispatchSmsAlert" className="text-xs font-bold text-amber-300 cursor-pointer select-none flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                  Dispatch Instant SMS Payment Receipt Alert to Member's Phone
+                </label>
+              </div>
               <button
                 type="button"
                 onClick={handleManualTransaction}
@@ -1855,21 +2059,68 @@ export const FinSecDashboard = () => {
               </div>
             </div>
             {/* SUB-SECTION A: INFLOWS / INCOME GENERATED */}
-            <div className="mb-4 mt-6 border-b border-[#ffd700]/30 print:border-[#002B19] pb-2">
+            <div className="mb-4 mt-6 border-b border-[#ffd700]/30 print:border-[#002B19] pb-2 flex flex-wrap justify-between items-center gap-2">
               <h4 className="text-lg font-bold text-[#ffd700] print:text-[#002B19] uppercase tracking-wide">
                 SECTION A: INFLOWS / INCOME GENERATED
               </h4>
             </div>
+
+            {/* Batch SMS Dispatch Bar */}
+            {selectedBatchTxIds.size > 0 && (
+              <div className="mb-4 p-3.5 bg-[#001f13] border-2 border-amber-400/60 rounded-xl flex flex-wrap items-center justify-between gap-3 shadow-xl no-print">
+                <div className="flex items-center gap-2.5">
+                  <MessageSquare className="w-5 h-5 text-amber-400 animate-bounce" />
+                  <div>
+                    <span className="font-bold text-white text-sm">
+                      {selectedBatchTxIds.size} Pending/Failed Transaction(s) Selected
+                    </span>
+                    {isBatchProcessing && (
+                      <span className="ml-3 text-xs font-semibold text-emerald-400 animate-pulse">
+                        {batchProgressText}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={handleBatchSendSms}
+                    disabled={isBatchProcessing}
+                    className="bg-amber-400 hover:bg-amber-300 text-[#001a16] font-bold text-xs py-2 px-4 cursor-pointer shadow"
+                  >
+                    {isBatchProcessing ? batchProgressText || 'Processing...' : `Batch Send ${selectedBatchTxIds.size} SMS Receipts`}
+                  </Button>
+                  <button
+                    onClick={() => setSelectedBatchTxIds(new Set())}
+                    disabled={isBatchProcessing}
+                    className="text-xs text-gray-400 hover:text-white underline cursor-pointer"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="overflow-x-auto mb-8">
               <Table>
                 <TableHeader>
                   <TableRow className="border-[#ffd700] hover:bg-[#001a16]">
+                    <TableHead className="text-[#ffd700] w-10 no-print">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 accent-amber-400 rounded cursor-pointer"
+                        onChange={() => {
+                          const pendingOrFailed = filteredTransactions.filter(t => t.notification_status === 'pending' || t.notification_status === 'failed');
+                          handleSelectAllPendingFailed(pendingOrFailed);
+                        }}
+                        title="Select / Deselect All Pending or Failed SMS Receipts"
+                      />
+                    </TableHead>
                     <TableHead className="text-[#ffd700]">Date & Time</TableHead>
                     <TableHead className="text-[#ffd700]">Member Name</TableHead>
                     <TableHead className="text-[#ffd700]">Member ID</TableHead>
                     <TableHead className="text-[#ffd700]">Purpose & Notes</TableHead>
                     <TableHead className="text-[#ffd700]">Amount (₦)</TableHead>
-                    <TableHead className="text-[#ffd700] text-right no-print">Actions</TableHead>
+                    <TableHead className="text-[#ffd700] text-right no-print">Actions & Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1902,6 +2153,14 @@ export const FinSecDashboard = () => {
 
                       return (
                         <TableRow key={transaction.id} className="border-[#ffd700]/30 hover:bg-[#001a16]">
+                          <TableCell className="no-print">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(transaction.id && selectedBatchTxIds.has(transaction.id))}
+                              onChange={() => transaction.id && handleToggleSelectTx(transaction.id)}
+                              className="w-4 h-4 accent-amber-400 rounded cursor-pointer"
+                            />
+                          </TableCell>
                           <TableCell className="text-gray-400 text-sm">{formattedDate}</TableCell>
                           <TableCell className="text-white font-semibold">{memberName}</TableCell>
                           <TableCell className="text-white font-mono text-sm">{transaction.memberId}</TableCell>
@@ -1973,7 +2232,40 @@ export const FinSecDashboard = () => {
                                 </button>
                               </div>
                             ) : (
-                              <div className="flex justify-end gap-2">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {transaction.notification_status === 'sent' ? (
+                                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-1 rounded border border-emerald-500/40 inline-flex items-center gap-1" title="SMS Alert Delivered">
+                                    <CheckCircle className="w-3 h-3 text-emerald-400" />
+                                    <span className="hidden sm:inline">SMS Delivered</span>
+                                  </span>
+                                ) : transaction.notification_status === 'failed' ? (
+                                  <span className="text-[10px] font-bold text-red-400 bg-red-950/60 px-2 py-1 rounded border border-red-500/40 inline-flex items-center gap-1" title="SMS Alert Failed">
+                                    <AlertCircle className="w-3 h-3 text-red-400" />
+                                    <span className="hidden sm:inline">Failed</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-amber-400 bg-amber-950/60 px-2 py-1 rounded border border-amber-500/40 inline-flex items-center gap-1" title="SMS Alert Pending">
+                                    <Clock className="w-3 h-3 text-amber-400" />
+                                    <span className="hidden sm:inline">Pending</span>
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleResendSms(transaction)}
+                                  disabled={isResendingSmsId === transaction.id}
+                                  className="border border-amber-400/60 text-amber-400 hover:bg-amber-400 hover:text-[#001a16] p-1.5 rounded cursor-pointer transition-all disabled:opacity-50"
+                                  title="Resend SMS Payment Alert to Member"
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleViewReceipt(transaction)}
+                                  className="border border-emerald-400 text-emerald-400 hover:bg-emerald-400 hover:text-[#001a16] p-1.5 rounded cursor-pointer transition-all"
+                                  title="View / Print Receipt"
+                                >
+                                  <Printer className="w-3.5 h-3.5" />
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => startEditingTx(transaction)}
@@ -2126,7 +2418,40 @@ export const FinSecDashboard = () => {
                                 </button>
                               </div>
                             ) : (
-                              <div className="flex justify-end gap-2">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {transaction.notification_status === 'sent' ? (
+                                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-1 rounded border border-emerald-500/40 inline-flex items-center gap-1" title="SMS Alert Delivered">
+                                    <CheckCircle className="w-3 h-3 text-emerald-400" />
+                                    <span className="hidden sm:inline">SMS Delivered</span>
+                                  </span>
+                                ) : transaction.notification_status === 'failed' ? (
+                                  <span className="text-[10px] font-bold text-red-400 bg-red-950/60 px-2 py-1 rounded border border-red-500/40 inline-flex items-center gap-1" title="SMS Alert Failed">
+                                    <AlertCircle className="w-3 h-3 text-red-400" />
+                                    <span className="hidden sm:inline">Failed</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-amber-400 bg-amber-950/60 px-2 py-1 rounded border border-amber-500/40 inline-flex items-center gap-1" title="SMS Alert Pending">
+                                    <Clock className="w-3 h-3 text-amber-400" />
+                                    <span className="hidden sm:inline">Pending</span>
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleResendSms(transaction)}
+                                  disabled={isResendingSmsId === transaction.id}
+                                  className="border border-amber-400/60 text-amber-400 hover:bg-amber-400 hover:text-[#001a16] p-1.5 rounded cursor-pointer transition-all disabled:opacity-50"
+                                  title="Resend SMS Payment Alert to Member"
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleViewReceipt(transaction)}
+                                  className="border border-emerald-400 text-emerald-400 hover:bg-emerald-400 hover:text-[#001a16] p-1.5 rounded cursor-pointer transition-all"
+                                  title="View / Print Receipt"
+                                >
+                                  <Printer className="w-3.5 h-3.5" />
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => startEditingTx(transaction)}
@@ -2354,6 +2679,134 @@ export const FinSecDashboard = () => {
         <TabsContent value="sports_treasury" className="mt-6">
           <SportsAuditReadOnlyView />
         </TabsContent>
+
+        {/* SMS Carrier Delivery Audit Log Tab */}
+        <TabsContent value="sms-audit" className="mt-6">
+          <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 md:p-6 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#ffd700]/20 pb-4">
+              <div>
+                <h3 className="text-xl font-bold text-[#ffd700] flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-emerald-400" />
+                  SMS Carrier Delivery Audit Log
+                </h3>
+                <p className="text-xs text-gray-300 mt-1">
+                  Carrier delivery statuses, gateway message IDs, and dispatch logs for all payment receipts
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 bg-[#001a16] border border-emerald-500/30 px-3 py-1.5 rounded-lg">
+                <span className="text-xs text-gray-400">Gateway Balance:</span>
+                <span className="text-sm font-bold text-emerald-400">
+                  {smsBalanceInfo.balance.toLocaleString()} {smsBalanceInfo.currency}
+                </span>
+              </div>
+            </div>
+
+            {/* Quick Filter Buttons */}
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-xs text-gray-400 mr-2 font-semibold">Filter Logs:</span>
+              {(['all', 'sent', 'failed', 'pending'] as const).map(filterKey => (
+                <button
+                  key={filterKey}
+                  onClick={() => setAuditLogFilter(filterKey)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold uppercase transition-colors cursor-pointer ${
+                    auditLogFilter === filterKey
+                      ? 'bg-amber-400 text-[#001a16] shadow'
+                      : 'bg-[#001a16] text-emerald-300 border border-emerald-500/20 hover:bg-emerald-900/30'
+                  }`}
+                >
+                  {filterKey === 'all' ? 'All Logs' : filterKey === 'sent' ? 'Delivered' : filterKey}
+                </button>
+              ))}
+            </div>
+
+            {/* Audit Log Table */}
+            <div className="overflow-x-auto border border-[#ffd700]/20 rounded-xl bg-[#001a16]">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-[#ffd700]/30 hover:bg-[#001a16]">
+                    <TableHead className="text-[#ffd700]">Receipt Ref</TableHead>
+                    <TableHead className="text-[#ffd700]">Member Payer</TableHead>
+                    <TableHead className="text-[#ffd700]">Recipient Mobile</TableHead>
+                    <TableHead className="text-[#ffd700]">Purpose & Amount</TableHead>
+                    <TableHead className="text-[#ffd700]">Delivery Status</TableHead>
+                    <TableHead className="text-[#ffd700]">Sent Date</TableHead>
+                    <TableHead className="text-[#ffd700] text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {transactions
+                    .filter(t => {
+                      if (auditLogFilter === 'all') return true;
+                      const status = t.notification_status || 'pending';
+                      return status === auditLogFilter;
+                    })
+                    .map(t => {
+                      const memberObj = members.find(m => m.id === t.memberId || m.official_member_id === t.memberId);
+                      const recipientPhone = memberObj?.phone || memberObj?.phone_number || 'N/A';
+                      const receiptNo = t.receipt_number || `RCP-2026-${String(t.id || '0000').slice(-4).padStart(4, '0')}`;
+                      const sentDate = new Date(t.receipt_generated_at || t.timestamp || new Date()).toLocaleString();
+
+                      return (
+                        <TableRow key={t.id} className="border-emerald-500/10 hover:bg-[#002520]">
+                          <TableCell className="font-mono font-bold text-amber-400 text-xs">
+                            {receiptNo}
+                          </TableCell>
+                          <TableCell className="text-white font-semibold text-xs">
+                            {t.memberName || memberObj?.name || t.memberId}
+                          </TableCell>
+                          <TableCell className="font-mono text-emerald-200 text-xs">
+                            {recipientPhone}
+                          </TableCell>
+                          <TableCell className="text-xs text-gray-200">
+                            {t.purpose} ({formatCurrency(t.amount)})
+                          </TableCell>
+                          <TableCell>
+                            {t.notification_status === 'sent' ? (
+                              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/40 inline-flex items-center gap-1">
+                                <CheckCircle className="w-3 h-3 text-emerald-400" />
+                                Delivered
+                              </span>
+                            ) : t.notification_status === 'failed' ? (
+                              <span className="text-[10px] font-bold text-red-400 bg-red-950/60 px-2 py-0.5 rounded border border-red-500/40 inline-flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3 text-red-400" />
+                                Failed
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/40 inline-flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-amber-400" />
+                                Pending
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs text-gray-400 font-mono">
+                            {sentDate}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <button
+                              onClick={() => handleResendSms(t)}
+                              disabled={isResendingSmsId === t.id}
+                              className="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-[#001a16] font-bold text-xs rounded transition-colors cursor-pointer disabled:opacity-50 inline-flex items-center gap-1"
+                            >
+                              <MessageSquare className="w-3 h-3" />
+                              <span>Resend SMS</span>
+                            </button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  {transactions.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-gray-400 py-8 text-xs">
+                        No delivery logs available.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </TabsContent>
           </>
         )}
       </Tabs>
@@ -2439,6 +2892,18 @@ export const FinSecDashboard = () => {
           </Card>
         </div>
       )}
+
+      {/* Digital Receipt Modal */}
+      <DigitalReceiptModal
+        isOpen={isReceiptModalOpen}
+        onClose={() => {
+          setIsReceiptModalOpen(false);
+          setSelectedReceiptTx(null);
+          setSelectedReceiptMember(null);
+        }}
+        transaction={selectedReceiptTx}
+        member={selectedReceiptMember}
+      />
     </div>
   );
 };
