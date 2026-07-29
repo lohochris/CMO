@@ -237,7 +237,10 @@ const dbToTransaction = (t: any): Transaction => {
     notes: t.notes,
     transactionType: t.transaction_type || t.transactionType,
     timestamp: t.created_at || t.timestamp,
-    status: t.status || 'Approved'
+    status: t.status || 'Approved',
+    receipt_number: t.receipt_number || undefined,
+    notification_status: t.notification_status || undefined,
+    receipt_generated_at: t.receipt_generated_at || undefined
   };
 };
 
@@ -250,7 +253,10 @@ const transactionToDb = (t: Transaction): any => {
     notes: t.notes,
     transaction_type: t.transactionType || (t as any).transaction_type,
     created_at: t.timestamp || (t as any).created_at || new Date().toISOString(),
-    status: t.status || 'Approved'
+    status: t.status || 'Approved',
+    receipt_number: t.receipt_number || null,
+    notification_status: t.notification_status || 'pending',
+    receipt_generated_at: t.receipt_generated_at || null
   };
   if (t.id && typeof t.id === 'string' && t.id.includes('-')) {
     payload.id = t.id;

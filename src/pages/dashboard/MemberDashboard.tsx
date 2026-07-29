@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import type { WeddingStatus, Family } from '../../types';
+import type { WeddingStatus, Family, Transaction } from '../../types';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
-import { CheckCircle, FileText, Settings, X, Users, BookOpen, Sparkles, UserCheck, Calendar, MapPin, ArrowRight, Bell, Clock, LayoutDashboard, Trophy, CreditCard, Church, Download, ExternalLink, ShieldCheck, Search, Scale, Radio, Mic, MicOff } from 'lucide-react';
+import { CheckCircle, FileText, Settings, X, Users, BookOpen, Sparkles, UserCheck, Calendar, MapPin, ArrowRight, Bell, Clock, LayoutDashboard, Trophy, CreditCard, Church, Download, ExternalLink, ShieldCheck, Search, Scale, Radio, Mic, MicOff, MessageSquare } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import useLiveTranscriber from '../../hooks/useLiveTranscriber';
 import { formatCurrency, formatDateTime } from '../../utils/helpers';
@@ -12,6 +12,8 @@ import { ProfilePictureUploader } from '../../app/components/common/ProfilePictu
 import { supabase } from '../../lib/supabaseClient';
 import { toast } from 'sonner';
 import { MemberAttendanceAndNotificationWidget } from '../../app/components/attendance/MemberAttendanceAndNotificationWidget';
+import { DigitalReceiptModal } from '../../app/components/ui/DigitalReceiptModal';
+import { sendPaymentReceiptNotification } from '../../utils/messagingService';
 
 export const MemberDashboard = () => {
   const { 
@@ -47,6 +49,55 @@ export const MemberDashboard = () => {
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'sports' | 'financials' | 'spiritual' | 'constitution'>('overview');
+  const [selectedReceiptTx, setSelectedReceiptTx] = useState<Transaction | null>(null);
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [smsCooldownMap, setSmsCooldownMap] = useState<Record<string, number>>({});
+
+  const getCooldownRemaining = (txId: string | number) => {
+    const key = `cmo_sms_cooldown_${txId}`;
+    const stored = localStorage.getItem(key);
+    if (!stored) return 0;
+    const diff = Math.max(0, Math.ceil((Number(stored) - Date.now()) / 1000));
+    return diff;
+  };
+
+  const handleMemberResendSms = async (txn: Transaction) => {
+    if (!txn.id) return;
+    const remainingSec = getCooldownRemaining(txn.id);
+    if (remainingSec > 0) {
+      const mins = Math.ceil(remainingSec / 60);
+      toast.error(`Please wait ${mins} minute(s) before requesting another SMS alert for this receipt.`);
+      return;
+    }
+
+    const phone = currentUser?.phone || currentUser?.phone_number;
+    if (!phone) {
+      toast.error('No mobile phone number registered on your profile. Please edit your profile settings.');
+      return;
+    }
+
+    const firstName = ((currentUser?.full_name || currentUser?.name || 'Brother').split(' ')[0]) || 'Brother';
+    const receiptNo = txn.receipt_number || `RCP-2026-${String(txn.id || '0000').slice(-4).padStart(4, '0')}`;
+
+    toast.info('Dispatching payment receipt SMS alert...');
+    const res = await sendPaymentReceiptNotification({
+      phone_number: phone,
+      first_name: firstName,
+      amount: txn.amount,
+      purpose: txn.purpose,
+      receipt_number: receiptNo,
+      member_id: currentUser?.official_member_id || currentUser?.id || 'MEMBER'
+    });
+
+    if (res.success) {
+      const expireTime = Date.now() + 15 * 60 * 1000;
+      localStorage.setItem(`cmo_sms_cooldown_${txn.id}`, String(expireTime));
+      setSmsCooldownMap(prev => ({ ...prev, [String(txn.id)]: expireTime }));
+      toast.success(`Receipt SMS alert sent to ${phone}!`);
+    } else {
+      toast.error(`SMS alert dispatch failed: ${res.error}`);
+    }
+  };
   const [constitutionSearchQuery, setConstitutionSearchQuery] = useState('');
   const [editName, setEditName] = useState(currentUser?.name || '');
   const [editPhone, setEditPhone] = useState(currentUser?.phone || '');
@@ -256,10 +307,7 @@ export const MemberDashboard = () => {
   const fetchRefereeDuties = async () => {
     if (!currentUser?.id) return;
     try {
-      const memberId = currentUser.id;
-      const officialId = (currentUser as any).official_member_id;
-
-      let query = supabase
+      const { data, error } = await supabase
         .from('sports_fixtures')
         .select(`
           id, match_date, venue, status,
@@ -267,15 +315,9 @@ export const MemberDashboard = () => {
           away_team:away_team_id ( team_name )
         `)
         .in('status', ['Scheduled', 'Live', 'Ongoing'])
+        .eq('referee_id', currentUser.id)
         .order('match_date', { ascending: true });
 
-      if (officialId && officialId !== memberId) {
-        query = query.or(`referee_id.eq.${memberId},referee_id.eq.${officialId}`);
-      } else {
-        query = query.eq('referee_id', memberId);
-      }
-
-      const { data, error } = await query;
       if (error) throw error;
       setRefereeDuties(data || []);
     } catch (err) {
@@ -301,7 +343,7 @@ export const MemberDashboard = () => {
     if (!currentUser?.id) return;
     setSquadLoading(true);
     try {
-      const officialId = currentUser.official_member_id || currentUser.id;
+      const memberUuid = currentUser.id;
 
       let { data, error } = await supabase
         .from('sports_team_rosters')
@@ -316,7 +358,7 @@ export const MemberDashboard = () => {
             sports_tournaments (title)
           )
         `)
-        .eq('member_id', officialId)
+        .eq('member_id', memberUuid)
         .maybeSingle();
 
       if (!data) {
@@ -324,7 +366,7 @@ export const MemberDashboard = () => {
         const { data: regData } = await supabase
           .from('sports_athletes_registry')
           .select('id')
-          .or(`member_id.eq.${currentUser.id},member_id.eq.${officialId}`)
+          .eq('member_id', memberUuid)
           .maybeSingle();
 
         if (regData?.id) {
@@ -1072,12 +1114,48 @@ export const MemberDashboard = () => {
                         ? `Other Levy (${txn.notes})`
                         : txn.purpose;
                     return (
-                      <div key={idx} className="flex justify-between items-center py-2.5 border-b border-[#ffd700]/15 last:border-0">
+                      <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 border-b border-[#ffd700]/15 last:border-0">
                         <div>
                           <p className="text-white font-semibold text-sm">{displayPurpose}</p>
                           <p className="text-gray-400 text-xs font-mono">{formattedTimestamp}</p>
+                          {txn.receipt_number && (
+                            <span className="text-[10px] text-amber-400 font-mono bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/30 inline-block mt-1">
+                              {txn.receipt_number}
+                            </span>
+                          )}
                         </div>
-                        <p className="text-green-400 font-bold text-sm">{formatCurrency(txn.amount)}</p>
+                        <div className="flex items-center gap-3 self-end sm:self-center">
+                          <p className="text-green-400 font-bold text-sm">{formatCurrency(txn.amount)}</p>
+                          {(!txn.status || txn.status.toUpperCase() === 'APPROVED') && (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setSelectedReceiptTx(txn);
+                                  setIsReceiptModalOpen(true);
+                                }}
+                                className="flex items-center gap-1 text-[11px] font-bold bg-[#ffd700]/15 hover:bg-[#ffd700] hover:text-[#001a16] text-[#ffd700] px-2.5 py-1 rounded border border-[#ffd700]/40 transition-colors cursor-pointer"
+                                title="View / Download Official Digital Receipt"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                <span>Receipt</span>
+                              </button>
+                              {txn.id && getCooldownRemaining(txn.id) > 0 ? (
+                                <span className="text-[10px] font-semibold text-amber-400/80 bg-amber-950/40 px-2 py-1 rounded border border-amber-500/20">
+                                  Wait {Math.ceil(getCooldownRemaining(txn.id) / 60)}m
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => handleMemberResendSms(txn)}
+                                  className="flex items-center gap-1 text-[11px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-2.5 py-1 rounded border border-amber-500/40 transition-colors cursor-pointer"
+                                  title="Send SMS Payment Receipt Alert to My Phone"
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5" />
+                                  <span>Resend SMS</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -1085,6 +1163,16 @@ export const MemberDashboard = () => {
               )}
             </div>
           </div>
+
+          <DigitalReceiptModal
+            isOpen={isReceiptModalOpen}
+            onClose={() => {
+              setIsReceiptModalOpen(false);
+              setSelectedReceiptTx(null);
+            }}
+            transaction={selectedReceiptTx}
+            member={currentUser}
+          />
         </Card>
       )}
 

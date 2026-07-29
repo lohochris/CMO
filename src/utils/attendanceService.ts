@@ -307,7 +307,28 @@ export async function fetchMemberNotifications(memberId: string, officialMemberI
       .limit(30);
 
     if (error) {
-      console.warn('cmo_notifications query error:', error.message);
+      console.warn('cmo_notifications primary query warning:', error.message);
+
+      // Fallback 1: Query by member_id
+      const { data: fb1, error: err1 } = await supabase
+        .from('cmo_notifications')
+        .select('*')
+        .eq('member_id', memberId)
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      if (!err1 && fb1) return fb1;
+
+      // Fallback 2: Query by user_id
+      const { data: fb2, error: err2 } = await supabase
+        .from('cmo_notifications')
+        .select('*')
+        .eq('user_id', memberId)
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      if (!err2 && fb2) return fb2;
+
       return [];
     }
     return data || [];

@@ -1,3 +1,42 @@
 @import './fonts.css';
 @import './tailwind.css';
 @import './theme.css';
+
+/* ==========================================================================
+   PRINT ISOLATION STYLES - RECEIPT PDF DOWNLOAD ONLY
+   ========================================================================== */
+@media print {
+  /* 1. Hide everything on the DOM by default */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* 2. Show ONLY the receipt modal container and its child elements */
+  #receipt-print-area,
+  #receipt-print-area * {
+    visibility: visible !important;
+  }
+ /* 3. Position the receipt modal at top left of the print sheet */
+ #receipt-print-area {
+   position: absolute !important;
+   left: 0 !important;
+   top: 0 !important;
+   width: 100% !important;
+   margin: 0 !important;
+   padding: 20px !important;
+   box-shadow: none !important;
+   border: 2px solid #f59e0b !important; /* Retain Gold Border */
+   background-color: #001f13 !important; /* Retain Deep Green Theme */
+   -webkit-print-color-adjust: exact !important;
+   print-color-adjust: exact !important;
+ }
+ /* 4. Hide print modal action buttons (Print/Close) during print */
+ .no-print {
+   display: none !important;
+ }
+ /* 5. Force clean single page margins */
+ @page {
+   size: A4 portrait;
+   margin: 10mm;
+ }
+}

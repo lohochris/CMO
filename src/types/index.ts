@@ -92,6 +92,9 @@ export interface Transaction {
   transactionType?: string;
   timestamp: string;
   status?: string;
+  receipt_number?: string;
+  notification_status?: 'pending' | 'sent' | 'failed';
+  receipt_generated_at?: string;
 }
 
 export interface FamilyTransaction extends Transaction {
