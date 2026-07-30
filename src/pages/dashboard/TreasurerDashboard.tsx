@@ -13,6 +13,8 @@ import { uploadProfilePicture, calculateUnifiedFinancialSummary, fetchUnifiedFin
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { supabase } from '../../lib/supabaseClient';
 import { CMO_CONSTITUTION_2023 } from '../../config/cmoConstitution';
+import { sendWelfareDisbursalNotification } from '../../utils/messagingService';
+
 
 export const TreasurerDashboard = () => {
   const [isExecutiveUnlocked, setIsExecutiveUnlocked] = useState<boolean>(() => {
@@ -381,6 +383,58 @@ export const TreasurerDashboard = () => {
         console.error("Failed to insert transaction in Supabase:", txErr);
         setError(`Database Error: ${txErr.message}`);
         return;
+      }
+
+      // 2b. Log credit benefit entry in transactions table for beneficiary member
+      if (ticket.memberId) {
+        await supabase
+          .from('transactions')
+          .insert([{
+            official_member_id: ticket.memberId,
+            member_name: ticket.memberName,
+            amount: ticket.requestedAmount,
+            purpose: `Welfare Assistance: ${ticket.category || 'Disbursal'}`,
+            transaction_type: 'Welfare Disbursal',
+            category: 'Welfare',
+            receipt_number: ticket.ticketId,
+            timestamp: new Date().toISOString(),
+            status: 'Approved'
+          }]);
+      }
+
+      // 2c. Dispatch automatic beneficiary SMS notification
+      try {
+        const targetMember = members.find(
+          m => m.id === ticket.memberId || m.official_member_id === ticket.memberId
+        );
+        let memberPhone = targetMember?.phone_number || targetMember?.phone;
+        let firstName = (targetMember?.full_name || targetMember?.name || ticket.memberName || '').split(' ')[0] || 'Member';
+
+        if (!memberPhone && ticket.memberId) {
+          const { data: dbMem } = await supabase
+            .from('members')
+            .select('phone_number, full_name, name')
+            .or(`official_member_id.eq.${ticket.memberId},id.eq.${ticket.memberId}`)
+            .maybeSingle();
+          if (dbMem) {
+            memberPhone = dbMem.phone_number;
+            if (dbMem.full_name || dbMem.name) {
+              firstName = (dbMem.full_name || dbMem.name).split(' ')[0];
+            }
+          }
+        }
+
+        if (memberPhone) {
+          await sendWelfareDisbursalNotification({
+            phone_number: memberPhone,
+            first_name: firstName,
+            amount: ticket.requestedAmount,
+            purpose: ticket.category || 'Welfare Assistance',
+            receipt_number: ticket.ticketId
+          });
+        }
+      } catch (smsErr) {
+        console.error('SMS notification error on welfare disbursal:', smsErr);
       }
 
       // 3. Update local state context (which also handles local state sync to expenses table if applicable)

@@ -15,6 +15,16 @@ import { MemberAttendanceAndNotificationWidget } from '../../app/components/atte
 import { DigitalReceiptModal } from '../../app/components/ui/DigitalReceiptModal';
 import { sendPaymentReceiptNotification } from '../../utils/messagingService';
 
+const formatRefCode = (ref?: string, type?: string) => {
+  if (!ref) return '';
+  // If it's a long raw UUID (36 chars), format cleanly
+  if (ref.length > 20 && ref.includes('-')) {
+    const shortHash = ref.split('-').pop()?.substring(0, 4).toUpperCase() || '2026';
+    return type === 'Welfare Payout' ? `Ref: WLF-${shortHash}` : `Ref: RCP-${shortHash}`;
+  }
+  return ref.startsWith('Ref:') ? ref : `Ref: ${ref}`;
+};
+
 export const MemberDashboard = () => {
   const { 
     currentUser, 
@@ -209,16 +219,101 @@ export const MemberDashboard = () => {
     const fetchTransactions = async () => {
       setTxLoading(true);
       try {
-        const { data: userLogs, error } = await supabase
-          .from('transactions')
-          .select('*')
-          .eq('official_member_id', (currentUser as any).official_member_id || currentUser.id)
-          .order('created_at', { ascending: false });
+        const currentMember = currentUser as any;
+        const memberCode = currentMember?.member_code || currentMember?.official_member_id || currentMember?.id;
+        if (!memberCode) return;
 
-        if (error) throw error;
-        setLiveTransactions(userLogs || []);
+        // 1. Fetch direct member transactions in a try/catch block
+        let userLogs: any[] = [];
+        try {
+          const { data: txs, error: txError } = await supabase
+            .from('transactions')
+            .select('*')
+            .or(`official_member_id.eq.${memberCode},member_id.eq.${memberCode},member_code.eq.${memberCode}`)
+            .order('created_at', { ascending: false });
+
+          if (txError) {
+            console.warn('Warning fetching member transactions:', txError);
+          } else if (txs) {
+            userLogs = txs;
+          }
+        } catch (txCatch) {
+          console.warn('Transactions query exception caught:', txCatch);
+        }
+
+        // 2. Fetch completed/settled/disbursed welfare tickets in a try/catch block
+        let welfareLogs: any[] = [];
+        try {
+          const { data: tickets, error: wErr } = await supabase
+            .from('welfare_tickets')
+            .select('*')
+            .or(`official_member_id.eq.${memberCode},member_id.eq.${memberCode},member_code.eq.${memberCode}`)
+            .in('status', ['Completed', 'Settled & Cleared', 'Approved', 'Disbursed']);
+
+          if (wErr) {
+            console.warn('Warning fetching welfare tickets:', wErr);
+          } else if (tickets) {
+            welfareLogs = tickets;
+          }
+        } catch (wlfCatch) {
+          console.warn('Welfare tickets query exception caught:', wlfCatch);
+        }
+
+        // Map transactions as type: 'Payment' (Outflow)
+        const mappedTransactions = userLogs.map((tx: any) => {
+          const isDisbursal =
+            tx.transaction_type === 'Welfare Disbursal' ||
+            tx.type === 'Welfare Payout' ||
+            tx.category === 'Welfare';
+          return {
+            ...tx,
+            type: isDisbursal ? 'Welfare Payout' : 'Payment',
+            isWelfareBenefit: isDisbursal
+          };
+        });
+
+        // Map disbursed welfare tickets as type: 'Welfare Payout' (Inflow/Benefit)
+        const mappedWelfareTickets = welfareLogs.map((t: any) => ({
+          id: `wlf_tx_${t.ticket_id || t.id}`,
+          ticket_id: t.ticket_id || t.id,
+          official_member_id: myId,
+          member_id: myId,
+          memberName: t.member_name || currentUser?.name,
+          amount: Number(t.requested_amount !== undefined ? t.requested_amount : (t.amount || 0)),
+          purpose: `Welfare Assistance: ${t.category || 'Disbursal'}`,
+          notes: t.reason_details || t.notes,
+          transaction_type: 'Welfare Disbursal',
+          category: 'Welfare',
+          type: 'Welfare Payout',
+          isWelfareBenefit: true,
+          created_at: t.settled_at || t.approved_at || t.created_at,
+          status: 'Approved',
+          receipt_number: t.ticket_id || `WLF-${t.id}`
+        }));
+
+        // Combine both into allActivityHistory deduplicating by ticket/receipt ID or ID
+        const allActivityHistory = [...mappedTransactions];
+        for (const wTx of mappedWelfareTickets) {
+          const exists = allActivityHistory.some(
+            tx =>
+              (tx.receipt_number && tx.receipt_number === wTx.receipt_number) ||
+              (tx.purpose && tx.purpose.includes(wTx.ticket_id)) ||
+              (tx.id && String(tx.id) === String(wTx.id))
+          );
+          if (!exists) {
+            allActivityHistory.push(wTx);
+          }
+        }
+
+        allActivityHistory.sort((a, b) => {
+          const dateA = new Date(a.created_at || a.timestamp || 0).getTime();
+          const dateB = new Date(b.created_at || b.timestamp || 0).getTime();
+          return dateB - dateA;
+        });
+
+        setLiveTransactions(allActivityHistory);
       } catch (err) {
-        console.error('Error fetching transactions:', err);
+        console.error('Error fetching activity history:', err);
       } finally {
         setTxLoading(false);
       }
@@ -233,8 +328,18 @@ export const MemberDashboard = () => {
         {
           event: '*',
           schema: 'public',
-          table: 'transactions',
-          filter: `official_member_id=eq.${(currentUser as any).official_member_id || currentUser.id}`
+          table: 'transactions'
+        },
+        () => {
+          fetchTransactions();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'welfare_tickets'
         },
         () => {
           fetchTransactions();
@@ -307,7 +412,11 @@ export const MemberDashboard = () => {
   const fetchRefereeDuties = async () => {
     if (!currentUser?.id) return;
     try {
-      const { data, error } = await supabase
+      const currentMember = currentUser as any;
+      const memberUuid = currentMember.id;
+      const memberCode = currentMember.member_code || currentMember.official_member_id || 'HCC-CMO-26-047';
+
+      const { data: fixtures, error: fixtureError } = await supabase
         .from('sports_fixtures')
         .select(`
           id, match_date, venue, status,
@@ -315,11 +424,13 @@ export const MemberDashboard = () => {
           away_team:away_team_id ( team_name )
         `)
         .in('status', ['Scheduled', 'Live', 'Ongoing'])
-        .eq('referee_id', currentUser.id)
+        .or(`referee_id.eq.${memberUuid},official_referee_id.eq.${memberCode}`)
         .order('match_date', { ascending: true });
 
-      if (error) throw error;
-      setRefereeDuties(data || []);
+      if (fixtureError) {
+        console.warn('Warning fetching referee duties:', fixtureError);
+      }
+      setRefereeDuties(fixtures || []);
     } catch (err) {
       console.error('Error fetching referee duties:', err);
     }
@@ -343,54 +454,21 @@ export const MemberDashboard = () => {
     if (!currentUser?.id) return;
     setSquadLoading(true);
     try {
-      const memberUuid = currentUser.id;
+      const currentMember = currentUser as any;
+      const memberUuid = currentMember.id;
+      const memberCode = currentMember.member_code || currentMember.official_member_id || 'HCC-CMO-26-047';
 
-      let { data, error } = await supabase
+      const { data: roster, error: rosterError } = await supabase
         .from('sports_team_rosters')
-        .select(`
-          id,
-          jersey_number,
-          position,
-          sports_teams!inner (
-            id,
-            team_name,
-            cmo_family,
-            sports_tournaments (title)
-          )
-        `)
-        .eq('member_id', memberUuid)
+        .select('id, jersey_number, position, sports_teams!inner(id, team_name, cmo_family, sports_tournaments(title))')
+        .or(`athlete_id.eq.${memberUuid},member_code.eq.${memberCode},official_member_id.eq.${memberCode}`)
         .maybeSingle();
 
-      if (!data) {
-        // Fallback check via sports_athletes_registry
-        const { data: regData } = await supabase
-          .from('sports_athletes_registry')
-          .select('id')
-          .eq('member_id', memberUuid)
-          .maybeSingle();
-
-        if (regData?.id) {
-          const { data: fallbackData } = await supabase
-            .from('sports_team_rosters')
-            .select(`
-              id,
-              jersey_number,
-              position,
-              sports_teams!inner (
-                id,
-                team_name,
-                cmo_family,
-                sports_tournaments (title)
-              )
-            `)
-            .eq('athlete_id', regData.id)
-            .maybeSingle();
-
-          if (fallbackData) data = fallbackData;
-        }
+      if (rosterError) {
+        console.warn('Warning fetching squad roster:', rosterError);
       }
 
-      setSquadData(data || null);
+      setSquadData(roster || null);
     } catch (err) {
       console.error('Error fetching active squad roster:', err);
     } finally {
@@ -1109,23 +1187,55 @@ export const MemberDashboard = () => {
                         hour: '2-digit',
                         minute: '2-digit',
                       });
-                    const displayPurpose =
+
+                    const isWelfare =
+                      txn.type === 'Welfare Payout' ||
+                      txn.isWelfareBenefit ||
+                      String(txn.transaction_type || txn.transactionType || '').toLowerCase().includes('welfare') ||
+                      String(txn.category || '').toLowerCase() === 'welfare' ||
+                      String(txn.purpose || '').toLowerCase().includes('welfare');
+
+                    let displayPurpose =
                       txn.purpose === 'Other Levy' && txn.notes
                         ? `Other Levy (${txn.notes})`
                         : txn.purpose;
+
+                    if (isWelfare) {
+                      if (!displayPurpose || !displayPurpose.toLowerCase().includes('welfare')) {
+                        displayPurpose = `Welfare Assistance (${displayPurpose || 'Benefit'})`;
+                      }
+                    }
+
                     return (
                       <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 border-b border-[#ffd700]/15 last:border-0">
                         <div>
-                          <p className="text-white font-semibold text-sm">{displayPurpose}</p>
-                          <p className="text-gray-400 text-xs font-mono">{formattedTimestamp}</p>
-                          {txn.receipt_number && (
-                            <span className="text-[10px] text-amber-400 font-mono bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/30 inline-block mt-1">
-                              {txn.receipt_number}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-white font-semibold text-sm">{displayPurpose}</p>
+                            {isWelfare ? (
+                              <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 rounded-full inline-block">
+                                + {formatCurrency(txn.amount)} (Welfare Benefit)
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full inline-block">
+                                Approved Payment
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-gray-400 text-xs font-mono mt-0.5">{formattedTimestamp}</p>
+                          {(txn.receipt_number || txn.id) && (
+                            <span className="text-[10px] text-amber-400 font-mono bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/30 inline-block mt-1 mr-2">
+                              {formatRefCode(String(txn.receipt_number || txn.id), txn.type || (isWelfare ? 'Welfare Payout' : 'Payment'))}
                             </span>
                           )}
                         </div>
                         <div className="flex items-center gap-3 self-end sm:self-center">
-                          <p className="text-green-400 font-bold text-sm">{formatCurrency(txn.amount)}</p>
+                          {isWelfare ? (
+                            <p className="text-emerald-400 font-extrabold text-base tracking-tight">
+                              +{formatCurrency(txn.amount)}
+                            </p>
+                          ) : (
+                            <p className="text-green-400 font-bold text-sm">{formatCurrency(txn.amount)}</p>
+                          )}
                           {(!txn.status || txn.status.toUpperCase() === 'APPROVED') && (
                             <div className="flex items-center gap-1.5">
                               <button

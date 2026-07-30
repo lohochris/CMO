@@ -35,6 +35,31 @@ export async function sendPaymentReceiptNotification(
   }
 }
 
+export async function sendWelfareDisbursalNotification(payload: {
+  phone_number?: string;
+  first_name?: string;
+  amount?: number;
+  purpose?: string;
+  receipt_number?: string;
+}) {
+  if (!payload.phone_number || String(payload.phone_number).trim() === '') {
+    return { success: false, error: 'Member phone number missing.' };
+  }
+
+  const messageText = `Hello Brother ${payload.first_name || 'Member'}, your Welfare Assistance payout of N${Number(payload.amount).toLocaleString('en-NG')} for ${payload.purpose || 'Welfare'} has been disbursed. Ref: ${payload.receipt_number || 'WLF-2026'}. - CMO Badawa`;
+
+  return await supabase.functions.invoke('send-sms-receipt', {
+    body: {
+      phone_number: payload.phone_number,
+      first_name: payload.first_name,
+      amount: payload.amount,
+      purpose: `Welfare: ${payload.purpose}`,
+      receipt_number: payload.receipt_number,
+    },
+  });
+}
+
+
 export async function getTermiiBalance() {
   try {
     const { data, error } = await supabase.functions.invoke('send-sms-receipt', {
