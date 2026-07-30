@@ -12,6 +12,19 @@ interface DigitalReceiptModalProps {
   member?: Member | null;
 }
 
+const formatReceiptRef = (ref?: string, purpose?: string) => {
+  if (!ref) return 'RCP-2026';
+  
+  // If reference is a long UUID string (36 chars)
+  if (ref.length > 20 && ref.includes('-')) {
+    const shortHash = ref.split('-').pop()?.substring(0, 4).toUpperCase() || '2026';
+    const isWelfare = purpose?.toLowerCase().includes('welfare') || purpose?.toLowerCase().includes('assistance');
+    return isWelfare ? `Ref: WLF-2026-${shortHash}` : `Ref: RCP-2026-${shortHash}`;
+  }
+  
+  return ref.startsWith('Ref:') ? ref : `Ref: ${ref}`;
+};
+
 export const DigitalReceiptModal: React.FC<DigitalReceiptModalProps> = ({
   isOpen,
   onClose,
@@ -23,9 +36,10 @@ export const DigitalReceiptModal: React.FC<DigitalReceiptModalProps> = ({
 
   if (!isOpen || !transaction) return null;
 
-  const receiptNo =
-    transaction.receipt_number ||
-    `RCP-2026-${String(transaction.id || '0000').slice(-4).padStart(4, '0')}`;
+  const receiptNo = formatReceiptRef(
+    transaction.receipt_number || (transaction.id ? String(transaction.id) : undefined),
+    transaction.purpose
+  );
 
   const memberName =
     member?.full_name || member?.name || transaction.memberName || 'Bro. Member';
@@ -138,12 +152,12 @@ export const DigitalReceiptModal: React.FC<DigitalReceiptModalProps> = ({
           </div>
 
           {/* 2. Receipt Badge Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <span style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid #f59e0b', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', letterSpacing: '1px' }}>
-              OFFICIAL PAYMENT RECEIPT
+          <div className="flex items-center justify-between border-b border-amber-500/20 pb-3 mb-5" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider" style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid #f59e0b', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', letterSpacing: '1px' }}>
+              {transaction?.purpose?.toLowerCase().includes('welfare') ? 'Welfare Voucher' : 'Official Payment Receipt'}
             </span>
-            <span style={{ color: '#f59e0b', fontSize: '13px', fontWeight: 'bold', fontFamily: 'monospace' }}>
-              {receiptNo}
+            <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded-md border border-emerald-500/30" style={{ color: '#10b981', backgroundColor: 'rgba(6, 78, 59, 0.6)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', fontFamily: 'monospace' }}>
+              {formatReceiptRef(transaction?.receipt_number || (transaction?.id ? String(transaction.id) : undefined), transaction?.purpose)}
             </span>
           </div>
 
