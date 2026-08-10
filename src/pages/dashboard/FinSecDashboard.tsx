@@ -17,7 +17,7 @@ import { Member, Family, MemberStatus, Transaction } from '../../types';
 import { FinesEscrowVerificationLedger } from '../../app/components/common/FinesEscrowVerificationLedger';
 import { CMO_CONSTITUTION_2023 } from '../../config/cmoConstitution';
 import { DigitalReceiptModal } from '../../app/components/ui/DigitalReceiptModal';
-import { sendPaymentReceiptNotification, getSmsBalance } from '../../utils/messagingService';
+import { sendPaymentReceiptNotification, sendRejectionSmsNotification, getSmsBalance } from '../../utils/messagingService';
 import { toast } from 'sonner';
 
 
@@ -47,7 +47,9 @@ export const FinSecDashboard = () => {
         // Fetch all rows from master_roster
         const { data: rosterData, error: rosterErr } = await supabase
           .from('master_roster')
-          .select('*');
+          .select('*')
+          .neq('status', 'Rejected')
+          .neq('status', 'Pending');
 
         if (rosterErr) throw rosterErr;
         setRosterList(rosterData || []);
@@ -56,7 +58,9 @@ export const FinSecDashboard = () => {
         // Fetch all active profiles currently synced in the members table
         const { data: currentMembers, error: membersErr } = await supabase
           .from('members')
-          .select('*');
+          .select('*')
+          .neq('status', 'Rejected')
+          .neq('status', 'Pending');
 
         if (membersErr) throw membersErr;
         setDbMembersList(currentMembers || []);
@@ -244,6 +248,12 @@ export const FinSecDashboard = () => {
   const [decliningTicketId, setDecliningTicketId] = useState<string | null>(null);
   const [declineReasonText, setDeclineReasonText] = useState('');
 
+  // Application Rejection workflow states
+  const [rejectingMember, setRejectingMember] = useState<Member | null>(null);
+  const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [isSubmittingRejection, setIsSubmittingRejection] = useState(false);
+
   // Member editing states
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [editMemberName, setEditMemberName] = useState('');
@@ -331,7 +341,8 @@ export const FinSecDashboard = () => {
   });
   const pendingMembers = humanRoster.filter(m => m.status === 'Pending' || m.status === 'Inactive');
   const activeMembers = humanRoster.filter(m => m.status === 'Active');
-  const totalMembersCount = humanRoster.filter(m => m.status !== 'Deceased').length;
+  const validMembers = humanRoster.filter(m => m.status !== 'Rejected' && m.status !== 'Pending' && m.status !== 'Deceased');
+  const totalMembersCount = validMembers.length;
   const activeMembersCount = humanRoster.filter(m => m.status === 'Active').length;
 
   const filteredMembers = humanRoster.filter(m => {
@@ -434,27 +445,25 @@ export const FinSecDashboard = () => {
     setManualSearchIndex(-1);
   };
 
-  const validateMember = async (index: number) => {
-    const pendingMember = pendingMembers[index];
-    if (!pendingMember) return;
+  const handleValidateMember = async (member: Member) => {
+    if (!member) return;
 
-    const memberUUID = pendingMember.id;
-    const existingId = pendingMember.official_member_id || pendingMember.id || '';
+    const memberUUID = member.id;
+    const existingId = member.official_member_id || member.id || '';
     const hasValidId = existingId && existingId.startsWith('HCC-');
 
     let generatedNewId = existingId;
     if (!hasValidId) {
-      generatedNewId = generateMemberId(members, pendingMember.family);
+      generatedNewId = generateMemberId(members, member.family);
     }
 
     try {
-      // Update the registered member's official ID and status
       const queryField = getMemberQueryField(memberUUID);
       const { error } = await supabase
         .from('members')
         .update({ 
-          official_member_id: generatedNewId, // Write 'HCC-CMO-26-165' here!
-          status: 'Active'                    // Set them as validated
+          official_member_id: generatedNewId,
+          status: 'Active'
         })
         .eq(queryField, memberUUID);
 
@@ -464,8 +473,19 @@ export const FinSecDashboard = () => {
         return;
       }
 
+      // Also update master_roster table if present
+      await supabase
+        .from('master_roster')
+        .update({
+          official_member_id: generatedNewId,
+          status: 'Active'
+        })
+        .eq('id', memberUUID)
+        .then(() => {})
+        .catch(() => {});
+
       const updatedMembers = members.map(m =>
-        m === pendingMember
+        (m.id === member.id || (m.official_member_id && m.official_member_id === member.official_member_id))
           ? { 
               ...m, 
               id: generatedNewId, 
@@ -477,11 +497,109 @@ export const FinSecDashboard = () => {
       );
 
       setMembers(updatedMembers);
+      toast.success(hasValidId ? `Member validated! ID preserved: ${generatedNewId}` : `Member validated! ID assigned: ${generatedNewId}`);
       setSuccess(hasValidId ? `Member validated! ID preserved: ${generatedNewId}` : `Member validated! ID assigned: ${generatedNewId}`);
       setTimeout(() => setSuccess(''), 5000);
     } catch (err: any) {
       console.error("Validation error:", err);
       setError(`Validation failed: ${err.message}`);
+    }
+  };
+
+  const validateMember = async (index: number) => {
+    const pendingMember = pendingMembers[index];
+    if (pendingMember) {
+      await handleValidateMember(pendingMember);
+    }
+  };
+
+  const handleInitiateRejection = (member: Member) => {
+    setRejectingMember(member);
+    setRejectionReason('');
+    setIsRejectionModalOpen(true);
+  };
+
+  const handleConfirmRejection = async () => {
+    if (!rejectingMember) return;
+    setIsSubmittingRejection(true);
+
+    const memberUUID = rejectingMember.id;
+    const reason = rejectionReason.trim();
+    const rejectedAt = new Date().toISOString();
+
+    try {
+      // 1. Update members table
+      const queryField = getMemberQueryField(memberUUID);
+      const { error: memberErr } = await supabase
+        .from('members')
+        .update({
+          status: 'Rejected',
+          rejection_reason: reason || null,
+          rejected_at: rejectedAt
+        })
+        .eq(queryField, memberUUID);
+
+      if (memberErr) {
+        console.error("Database update error on reject member:", memberErr);
+        toast.error(`Failed to reject member in database: ${memberErr.message}`);
+        setIsSubmittingRejection(false);
+        return;
+      }
+
+      // 2. Update master_roster table
+      const { error: rosterErr } = await supabase
+        .from('master_roster')
+        .update({
+          status: 'Rejected'
+        })
+        .eq('id', memberUUID);
+
+      if (rosterErr) {
+        console.warn("master_roster update notice on rejection:", rosterErr.message);
+      }
+
+      // 3. Update local state
+      const updatedMembers = members.map(m =>
+        (m.id === rejectingMember.id || (rejectingMember.official_member_id && m.official_member_id === rejectingMember.official_member_id))
+          ? {
+              ...m,
+              status: 'Rejected' as const,
+              rejection_reason: reason,
+              rejected_at: rejectedAt
+            }
+          : m
+      );
+      setMembers(updatedMembers);
+
+      // 4. Dispatch SMS notification via Termii SMS
+      const phone = rejectingMember.phone_number || rejectingMember.phone;
+      const fullName = rejectingMember.full_name || rejectingMember.name || 'Member';
+
+      if (phone) {
+        const smsRes = await sendRejectionSmsNotification({
+          phone_number: phone,
+          full_name: fullName,
+          reason: reason || 'Criteria not met'
+        });
+
+        if (smsRes.success) {
+          toast.success(`Application rejected & SMS notification dispatched to ${phone}`);
+        } else {
+          toast.success(`Application rejected for ${fullName} (SMS notice: ${smsRes.error || 'skipped'})`);
+        }
+      } else {
+        toast.success(`Application rejected for ${fullName}`);
+      }
+
+      // 5. Reset modal state
+      setIsRejectionModalOpen(false);
+      setRejectingMember(null);
+      setRejectionReason('');
+    } catch (err: any) {
+      console.error("Rejection error:", err);
+      toast.error(`Rejection failed: ${err.message}`);
+    } finally {
+      setIsSubmittingRejection(false);
     }
   };
 
@@ -1530,19 +1648,27 @@ export const FinSecDashboard = () => {
                 ) : (
                   <div className="space-y-3">
                     {pendingMembers.map((member, index) => (
-                      <div key={index} className="bg-[#001a16] border border-[#ffd700] p-4 rounded flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                      <div key={member.id || index} className="bg-[#001a16] border border-[#ffd700] p-4 rounded flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
-                          <p className="text-white font-semibold">{member.name}</p>
-                          <p className="text-gray-400 text-sm">{member.phone}</p>
+                          <p className="text-white font-semibold">{member.full_name || member.name}</p>
+                          <p className="text-gray-400 text-sm">{member.phone_number || member.phone}</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => validateMember(index)}
-                          className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] w-full md:w-auto cursor-pointer rounded px-4 py-2"
-                        >
-                          <CheckCircle className="w-4 h-4 mr-2 inline" />
-                          Validate & Generate ID
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleInitiateRejection(member)}
+                            className="px-3.5 py-2 rounded-lg bg-red-950/60 border border-red-500/40 text-red-400 hover:bg-red-900/60 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <span>✕</span> Reject
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleValidateMember(member)}
+                            className="px-4 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-black font-bold text-xs flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
+                          >
+                            <span>✓</span> Validate & Generate ID
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2904,6 +3030,99 @@ export const FinSecDashboard = () => {
         transaction={selectedReceiptTx}
         member={selectedReceiptMember}
       />
+
+      {/* Application Rejection Modal */}
+      {isRejectionModalOpen && rejectingMember && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <Card className="bg-[#002520] border-2 border-red-500/50 p-6 max-w-md w-full shadow-2xl rounded-xl">
+            <div className="flex justify-between items-center mb-4 border-b border-red-500/20 pb-3">
+              <div className="flex items-center gap-2 text-red-400">
+                <AlertCircle className="w-5 h-5" />
+                <h3 className="text-lg font-bold">Reject Application</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRejectionModalOpen(false);
+                  setRejectingMember(null);
+                  setRejectionReason('');
+                }}
+                className="text-gray-400 hover:text-white transition-colors cursor-pointer text-sm font-bold px-2 py-1"
+                disabled={isSubmittingRejection}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <p className="text-gray-300 text-sm mb-1">
+                You are rejecting the public membership registration for:
+              </p>
+              <div className="bg-[#001a16] border border-red-500/30 p-3 rounded-lg">
+                <p className="text-white font-semibold text-base">
+                  {rejectingMember.full_name || rejectingMember.name}
+                </p>
+                <p className="text-gray-400 text-xs mt-0.5">
+                  Phone: {rejectingMember.phone_number || rejectingMember.phone || 'N/A'}
+                </p>
+              </div>
+            </div>
+
+            <div className="mb-5">
+              <label className="block text-gray-300 text-sm font-medium mb-1.5">
+                Rejection Reason <span className="text-gray-400 text-xs font-normal">(Optional)</span>
+              </label>
+              <textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="e.g. Incomplete credentials, Non-parishioner, or Criteria not met"
+                className="w-full bg-[#001a16] border border-red-500/40 focus:border-red-400 text-white p-3 rounded-lg text-sm focus:outline-none min-h-[90px] resize-none"
+                rows={3}
+                disabled={isSubmittingRejection}
+              />
+              
+              {/* Preset suggestion chips */}
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {['Incomplete credentials', 'Non-parishioner', 'Duplicate registration'].map((reasonPreset) => (
+                  <button
+                    key={reasonPreset}
+                    type="button"
+                    onClick={() => setRejectionReason(reasonPreset)}
+                    className="text-[11px] px-2.5 py-1 rounded bg-[#001a16] border border-gray-700 text-gray-300 hover:border-red-400 hover:text-red-300 transition-colors cursor-pointer"
+                    disabled={isSubmittingRejection}
+                  >
+                    + {reasonPreset}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsRejectionModalOpen(false);
+                  setRejectingMember(null);
+                  setRejectionReason('');
+                }}
+                className="flex-1 border-gray-700 text-gray-300 hover:bg-gray-800 cursor-pointer"
+                disabled={isSubmittingRejection}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleConfirmRejection}
+                className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold cursor-pointer"
+                disabled={isSubmittingRejection}
+              >
+                {isSubmittingRejection ? 'Rejecting...' : 'Confirm Rejection'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

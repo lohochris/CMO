@@ -1,4 +1,4 @@
-export type MemberStatus = 'Active' | 'Inactive' | 'Active (Cleared)' | 'Pending Validation' | 'Deceased' | 'Pending' | 'Transferred';
+export type MemberStatus = 'Active' | 'Inactive' | 'Active (Cleared)' | 'Pending Validation' | 'Deceased' | 'Pending' | 'Transferred' | 'Rejected';
 export type Family = 'Wisdom' | 'Honour' | 'Integrity' | 'Talent';
 export type MemberRole = 'member' | 'fin_sec' | 'welfare' | 'treasurer' | 'gen_sec' | 'pro' | 'family_chairman' | 'family_head' | 'FAMILY_HEAD' | 'family_secretary' | 'FAMILY_SEC' | 'family_sec' | 'chairman' | 'cmo_chairman' | 'provost' | 'liturgist' | 'sports_director' | 'coach' | 'athlete' | 'referee' | 'medical_officer' | 'Sports_Director' | 'Treasurer' | 'Medical_Officer' | 'Coach' | 'Referee';
 export type MaritalStatus = 'Married' | 'Divorced' | 'Widowed';
@@ -80,6 +80,8 @@ export interface Member {
   nok_phone?: string | null;
   office_title?: string;
   is_assigned?: boolean;
+  rejection_reason?: string;
+  rejected_at?: string;
 }
 
 export interface Transaction {

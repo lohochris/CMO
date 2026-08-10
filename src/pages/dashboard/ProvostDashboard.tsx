@@ -473,7 +473,7 @@ export default function ProvostDashboard() {
 
   // Filters for General Members Directory
   const generalMembers = members.filter(m => 
-    m.role === 'member' && m.status !== 'Deceased'
+    m.role === 'member' && m.status !== 'Deceased' && m.status !== 'Rejected' && m.status !== 'Pending'
   );
 
   const filteredMembers = generalMembers.filter(m => {

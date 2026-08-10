@@ -820,12 +820,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const { count, error: rosterErr } = await supabase
         .from('members')
-        .select('*', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true })
+        .neq('status', 'Rejected')
+        .neq('status', 'Pending');
       if (!rosterErr && count !== null) {
         setRosterCount(count);
       } else {
         // Fallback to local count of loaded members
-        setRosterCount(loadedMembersList.length);
+        const validMembers = loadedMembersList.filter(
+          (m) => m.status !== 'Rejected' && m.status !== 'Pending'
+        );
+        setRosterCount(validMembers.length);
       }
     } catch (err) {
       console.error("AppContext member census count fetch error:", err);
