@@ -947,7 +947,8 @@ export const ChairmanDashboard = () => {
   const churchMembers  = members.filter(isHumanChurchMember);
   const activeMembers  = churchMembers.filter(m => m.status === 'Active');
   const pendingMembers = churchMembers.filter(m => m.status === 'Inactive');
-  const totalMembersCount = churchMembers.filter(m => m.status !== 'Deceased').length;
+  const validMembers   = churchMembers.filter(m => m.status !== 'Rejected' && m.status !== 'Pending' && m.status !== 'Deceased');
+  const totalMembersCount = validMembers.length;
   const activeMembersCount = churchMembers.filter(m => m.status === 'Active').length;
 
   // Registry table source — displays the complete, unfiltered database roster

@@ -440,7 +440,7 @@ export default function FamilyHeadDashboard() {
   }, [activeFamilyUnit, currentUser]);
 
   // Calculations
-  const activeMembers = familyMembers.filter(m => m.status !== 'Deceased');
+  const activeMembers = familyMembers.filter(m => m.status !== 'Deceased' && m.status !== 'Rejected' && m.status !== 'Pending');
   const totalMembersCount = activeMembers.length;
 
   const totalPresent = attendance.filter(a => a.status === 'Present').length;

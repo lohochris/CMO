@@ -51,7 +51,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const { phone_number, first_name, amount, purpose, receipt_number } = body;
+    const { phone_number, first_name, amount, purpose, receipt_number, custom_message, message } = body;
 
     if (!phone_number) {
       return new Response(
@@ -69,7 +69,7 @@ Deno.serve(async (req: Request) => {
     const safeAmount = amount ? Number(amount).toLocaleString("en-NG") : "0";
     const safeRef = receipt_number || "RCP-2026";
 
-    const messageText = `Hello Brother ${safeName}, payment of N${safeAmount} for ${safePurpose} is confirmed. Ref: ${safeRef}. Thank you! - CMO Badawa`;
+    const messageText = custom_message || message || `Hello Brother ${safeName}, payment of N${safeAmount} for ${safePurpose} is confirmed. Ref: ${safeRef}. Thank you! - CMO Badawa`;
 
     const response = await fetch("https://v4.api.termii.com/api/sms/send", {
       method: "POST",

@@ -148,7 +148,7 @@ export default function LiturgistDashboard() {
       const generatedMeetingId = data[0].id;
       setActiveMeetingId(generatedMeetingId);
       
-      const activeMembers = members.filter(m => m.status !== 'Deceased' && m.name);
+      const activeMembers = members.filter(m => m.status !== 'Deceased' && m.status !== 'Rejected' && m.status !== 'Pending' && m.name);
       const initialMap: Record<string, 'Present' | 'Absent'> = {};
       activeMembers.forEach(m => {
         initialMap[m.official_member_id || m.id] = 'Absent';
@@ -166,7 +166,7 @@ export default function LiturgistDashboard() {
     if (!activeMeetingId) return;
     setSavingAttendance(true);
     try {
-      const activeMembers = members.filter(m => m.status !== 'Deceased' && m.name);
+      const activeMembers = members.filter(m => m.status !== 'Deceased' && m.status !== 'Rejected' && m.status !== 'Pending' && m.name);
       
       const attendanceInserts = activeMembers.map(m => {
         const memberId = m.official_member_id || m.id;
@@ -1005,7 +1005,7 @@ Notes: ${fellowshipNotes.trim() || 'No special instructions'}`;
                           </tr>
                         </thead>
                         <tbody>
-                          {members.filter(m => m.status !== 'Deceased' && m.name).filter(m => {
+                          {members.filter(m => m.status !== 'Deceased' && m.status !== 'Rejected' && m.status !== 'Pending' && m.name).filter(m => {
                             if (!attendanceSearch) return true;
                             const s = attendanceSearch.toLowerCase();
                             const nameVal = (m.name || m.full_name || '').toLowerCase();

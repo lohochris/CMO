@@ -59,6 +59,42 @@ export async function sendWelfareDisbursalNotification(payload: {
   });
 }
 
+export async function sendRejectionSmsNotification(payload: {
+  phone_number?: string;
+  full_name?: string;
+  reason?: string;
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const phone = payload?.phone_number;
+  if (!phone || String(phone).trim() === '' || phone === 'undefined') {
+    console.warn('⚠️ SMS Dispatch Skipped: Target member does not have a valid phone number stored.');
+    return { success: false, error: 'Member phone number is missing or invalid.' };
+  }
+
+  const memberName = payload.full_name || 'Member';
+  const reason = payload.reason || 'Criteria not met';
+  const messageText = `Hello ${memberName}, your membership registration for CMO Badawa was not approved. Reason: ${reason}. Please contact the executive office.`;
+
+  try {
+    const { data, error } = await supabase.functions.invoke('send-sms-receipt', {
+      body: {
+        phone_number: phone,
+        first_name: memberName.split(' ')[0] || 'Member',
+        custom_message: messageText,
+        message: messageText
+      },
+    });
+
+    if (error) {
+      console.error('Rejection SMS Edge Function error:', error);
+      return { success: false, error: error.message };
+    }
+    return { success: true, messageId: data?.messageId };
+  } catch (err: any) {
+    console.error('Rejection SMS Exception:', err);
+    return { success: false, error: err.message };
+  }
+}
+
 
 export async function getTermiiBalance() {
   try {

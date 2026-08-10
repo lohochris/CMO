@@ -293,7 +293,8 @@ export const processAIQuery = async (
       const unvalidated = humanMembers.filter(m => m.status === 'Inactive' && (m.official_member_id || m.id || '').startsWith('HCC-CMO-26-'));
       
       const pendingCount = unvalidated.length;
-      const totalMembersCount = humanMembers.filter(m => m.status !== 'Deceased').length;
+      const validMembers = humanMembers.filter(m => m.status !== 'Rejected' && m.status !== 'Pending' && m.status !== 'Deceased');
+      const totalMembersCount = validMembers.length;
 
       return {
         answer: `**Holy Cross CMO Real-time Executive Report Summary (Direct Injection)**:\n- **Total Revenue (Inflows)**: ₦${totalInflows.toLocaleString()}\n- **Total Outflows (Expenses)**: ₦${totalExpenses.toLocaleString()}\n- **Operational Net Balance**: ₦${currentNetBalance.toLocaleString()}\n- **Pending Validation Queue**: ${pendingCount} member(s) awaiting verification\n- **Total Registered Members**: ${totalMembersCount} members\n\n*Verified under credential session: ${user.username}. Data injected directly from Supabase DB.*`,

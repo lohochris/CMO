@@ -245,7 +245,7 @@ export function ProvostAttendanceWorkspace({ members }: ProvostAttendanceWorkspa
   };
 
   // Filter active members for attendance grid
-  const activeMembers = members.filter(m => m.status !== 'Deceased');
+  const activeMembers = members.filter(m => m.status !== 'Deceased' && m.status !== 'Rejected' && m.status !== 'Pending');
   const filteredMembers = activeMembers.filter(m => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return true;
