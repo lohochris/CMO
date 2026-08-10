@@ -334,7 +334,12 @@ export const FinSecDashboard = () => {
     return new Date().toISOString().split('T')[0];
   });
 
-  const humanRoster = members.filter(m => {
+  // Ensure rejected records are completely excluded from the displayed registry
+  const activeRegistryMembers = members.filter(
+    (member) => member.status !== 'Rejected' && member.status?.toLowerCase() !== 'rejected'
+  );
+
+  const humanRoster = activeRegistryMembers.filter(m => {
     const memberId = m.official_member_id || m.id || '';
     if (memberId.startsWith('HCC-')) return true;
     return !isAdministrativeId(memberId);
@@ -445,16 +450,37 @@ export const FinSecDashboard = () => {
     setManualSearchIndex(-1);
   };
 
+  const generateNextOfficialId = (existingMembers: any[]): string => {
+    const PREFIX = 'HCC-CMO-26-';
+    let maxNumber = 0;
+
+    existingMembers.forEach((m) => {
+      const idStr = m.official_member_id || m.member_code || m.id || '';
+      // Extract numbers from patterns like HCC-CMO-26-187
+      const match = idStr.match(/HCC-CMO-26-(\d+)/i) || idStr.match(/HCC-.*?-(\d+)/i);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxNumber) {
+          maxNumber = num;
+        }
+      }
+    });
+
+    const nextNum = maxNumber > 0 ? maxNumber + 1 : 188;
+    return `${PREFIX}${nextNum}`;
+  };
+
   const handleValidateMember = async (member: Member) => {
     if (!member) return;
 
     const memberUUID = member.id;
     const existingId = member.official_member_id || member.id || '';
-    const hasValidId = existingId && existingId.startsWith('HCC-');
+    const hasValidId = existingId && existingId.startsWith('HCC-CMO-26-') && !existingId.includes('CMOW') && !existingId.includes('000');
 
     let generatedNewId = existingId;
     if (!hasValidId) {
-      generatedNewId = generateMemberId(members, member.family);
+      const allKnownMembers = [...members, ...dbMembersList, ...rosterList];
+      generatedNewId = generateNextOfficialId(allKnownMembers);
     }
 
     try {
@@ -474,15 +500,17 @@ export const FinSecDashboard = () => {
       }
 
       // Also update master_roster table if present
-      await supabase
-        .from('master_roster')
-        .update({
-          official_member_id: generatedNewId,
-          status: 'Active'
-        })
-        .eq('id', memberUUID)
-        .then(() => {})
-        .catch(() => {});
+      try {
+        await supabase
+          .from('master_roster')
+          .update({
+            official_member_id: generatedNewId,
+            status: 'Active'
+          })
+          .eq('id', memberUUID);
+      } catch {
+        // Silently ignore master_roster update errors if record is missing
+      }
 
       const updatedMembers = members.map(m =>
         (m.id === member.id || (m.official_member_id && m.official_member_id === member.official_member_id))
