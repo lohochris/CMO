@@ -87,6 +87,7 @@ export interface Member {
 export interface Transaction {
   id?: string | number;
   memberId: string;
+  official_member_id?: string;
   memberName?: string;
   amount: number;
   purpose: string;

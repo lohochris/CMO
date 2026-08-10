@@ -223,6 +223,7 @@ export const ChairmanDashboard = () => {
           .from('members')
           .select('*')
           .eq('status', 'Active')
+          .neq('status', 'Rejected')
           .ilike('cmo_family', assignmentFamily)
           .order('full_name', { ascending: true })
           .limit(1000);
@@ -254,6 +255,7 @@ export const ChairmanDashboard = () => {
                 updatedAt: m.updated_at
               }))
               .filter((m: any) => !isAdministrativeId(m.id || m.official_member_id || ''))
+              .filter((m: any) => m.status !== 'Rejected' && m.status?.toLowerCase() !== 'rejected')
           );
         } else {
           setSearchResults([]);
@@ -928,6 +930,7 @@ export const ChairmanDashboard = () => {
 
   // Combined predicate — a row is a human church member only if BOTH layers clear it
   const isHumanChurchMember = (m: Member): boolean => {
+    if (m.status === 'Rejected' || m.status?.toLowerCase() === 'rejected') return false;
     const roleLower = (m.role || '').toLowerCase().trim();
     if (EXEC_ADMIN_ROLES.has(roleLower)) return false;
     const memberId = m.official_member_id || m.id || '';
@@ -936,6 +939,7 @@ export const ChairmanDashboard = () => {
   };
 
   const isHumanRegistryMember = (m: Member): boolean => {
+    if (m.status === 'Rejected' || m.status?.toLowerCase() === 'rejected') return false;
     const roleLower = (m.role || '').toLowerCase().trim();
     if (REGISTRY_ADMIN_ROLES.has(roleLower)) return false;
     const memberId = m.official_member_id || m.id || '';
@@ -947,11 +951,11 @@ export const ChairmanDashboard = () => {
   const churchMembers  = members.filter(isHumanChurchMember);
   const activeMembers  = churchMembers.filter(m => m.status === 'Active');
   const pendingMembers = churchMembers.filter(m => m.status === 'Inactive');
-  const validMembers   = churchMembers.filter(m => m.status !== 'Rejected' && m.status !== 'Pending' && m.status !== 'Deceased');
+  const validMembers   = churchMembers.filter(m => m.status !== 'Rejected' && m.status?.toLowerCase() !== 'rejected' && m.status !== 'Pending' && m.status !== 'Deceased');
   const totalMembersCount = validMembers.length;
   const activeMembersCount = churchMembers.filter(m => m.status === 'Active').length;
 
-  // Registry table source — displays the complete, unfiltered database roster
+  // Registry table source — displays the complete, unfiltered database roster (excluding rejected members)
   const humanMembers = members.filter(isHumanRegistryMember);
 
   const filteredMembers = humanMembers.filter(m => {

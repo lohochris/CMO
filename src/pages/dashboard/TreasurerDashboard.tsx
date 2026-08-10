@@ -186,7 +186,23 @@ export const TreasurerDashboard = () => {
     }
   };
 
-  const awaitingDisbursement = welfareTickets.filter(t => t.status === 'Approved');
+  // Filter out rejected members strictly from all treasury rosters, metrics, and drop-downs
+  const validMembers = members.filter(
+    (m) => m.status !== 'Rejected' && m.status?.toLowerCase() !== 'rejected'
+  );
+
+  const rejectedMemberIds = new Set(
+    members
+      .filter(m => m.status === 'Rejected' || m.status?.toLowerCase() === 'rejected')
+      .map(m => m.id || m.official_member_id)
+      .filter(Boolean)
+  );
+
+  const awaitingDisbursement = welfareTickets.filter(t => {
+    if (t.status !== 'Approved') return false;
+    if (t.memberId && rejectedMemberIds.has(t.memberId)) return false;
+    return true;
+  });
 
   const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
     if (!currentUser) return;
@@ -289,9 +305,12 @@ export const TreasurerDashboard = () => {
     return false;
   };
 
-  const visibleTransactions = transactions.filter(t => 
-    !t.status || ['Approved', 'Completed', 'Cleared'].includes(t.status)
-  );
+  const visibleTransactions = transactions.filter(t => {
+    if (t.status && !['Approved', 'Completed', 'Cleared'].includes(t.status)) return false;
+    const memberId = t.official_member_id || t.memberId;
+    if (memberId && rejectedMemberIds.has(memberId)) return false;
+    return true;
+  });
 
   const combinedTransactions = getCombinedTransactions(visibleTransactions, expenses);
 
@@ -404,7 +423,7 @@ export const TreasurerDashboard = () => {
 
       // 2c. Dispatch automatic beneficiary SMS notification
       try {
-        const targetMember = members.find(
+        const targetMember = validMembers.find(
           m => m.id === ticket.memberId || m.official_member_id === ticket.memberId
         );
         let memberPhone = targetMember?.phone_number || targetMember?.phone;
