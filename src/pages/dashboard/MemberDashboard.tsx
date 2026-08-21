@@ -13,6 +13,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { toast } from 'sonner';
 import { MemberAttendanceAndNotificationWidget } from '../../app/components/attendance/MemberAttendanceAndNotificationWidget';
 import { DigitalReceiptModal } from '../../app/components/ui/DigitalReceiptModal';
+import { DigitalIdCardModal } from '../../app/components/ui/DigitalIdCardModal';
 import { sendPaymentReceiptNotification } from '../../utils/messagingService';
 
 const formatRefCode = (ref?: string, type?: string) => {
@@ -23,6 +24,13 @@ const formatRefCode = (ref?: string, type?: string) => {
     return type === 'Welfare Payout' ? `Ref: WLF-${shortHash}` : `Ref: RCP-${shortHash}`;
   }
   return ref.startsWith('Ref:') ? ref : `Ref: ${ref}`;
+};
+
+const getPhotoUrl = (photoPath?: string | null) => {
+  if (!photoPath) return null;
+  if (photoPath.startsWith('http') || photoPath.startsWith('data:')) return photoPath;
+  const { data } = supabase.storage.from('profile-pictures').getPublicUrl(photoPath);
+  return data?.publicUrl || null;
 };
 
 export const MemberDashboard = () => {
@@ -61,6 +69,7 @@ export const MemberDashboard = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'sports' | 'financials' | 'spiritual' | 'constitution'>('overview');
   const [selectedReceiptTx, setSelectedReceiptTx] = useState<Transaction | null>(null);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
   const [smsCooldownMap, setSmsCooldownMap] = useState<Record<string, number>>({});
 
   const getCooldownRemaining = (txId: string | number) => {
@@ -412,27 +421,29 @@ export const MemberDashboard = () => {
   const fetchRefereeDuties = async () => {
     if (!currentUser?.id) return;
     try {
-      const currentMember = currentUser as any;
-      const memberUuid = currentMember.id;
-      const memberCode = currentMember.member_code || currentMember.official_member_id || 'HCC-CMO-26-047';
+      const memberId = currentUser.id || currentUser.official_member_id;
 
       const { data: fixtures, error: fixtureError } = await supabase
         .from('sports_fixtures')
         .select(`
-          id, match_date, venue, status,
-          home_team:home_team_id ( team_name ),
-          away_team:away_team_id ( team_name )
+          id,
+          match_date,
+          venue,
+          status,
+          home_team:home_team_id(team_name),
+          away_team:away_team_id(team_name)
         `)
         .in('status', ['Scheduled', 'Live', 'Ongoing'])
-        .or(`referee_id.eq.${memberUuid},official_referee_id.eq.${memberCode}`)
+        .eq('referee_id', memberId)
         .order('match_date', { ascending: true });
 
       if (fixtureError) {
-        console.warn('Warning fetching referee duties:', fixtureError);
+        setRefereeDuties([]);
+      } else {
+        setRefereeDuties(fixtures || []);
       }
-      setRefereeDuties(fixtures || []);
     } catch (err) {
-      console.error('Error fetching referee duties:', err);
+      setRefereeDuties([]);
     }
   };
 
@@ -454,23 +465,31 @@ export const MemberDashboard = () => {
     if (!currentUser?.id) return;
     setSquadLoading(true);
     try {
-      const currentMember = currentUser as any;
-      const memberUuid = currentMember.id;
-      const memberCode = currentMember.member_code || currentMember.official_member_id || 'HCC-CMO-26-047';
+      const memberId = currentUser.id || currentUser.official_member_id;
 
       const { data: roster, error: rosterError } = await supabase
         .from('sports_team_rosters')
-        .select('id, jersey_number, position, sports_teams!inner(id, team_name, cmo_family, sports_tournaments(title))')
-        .or(`athlete_id.eq.${memberUuid},member_code.eq.${memberCode},official_member_id.eq.${memberCode}`)
+        .select(`
+          id,
+          jersey_number,
+          position,
+          sports_teams (
+            id,
+            team_name,
+            cmo_family,
+            sports_tournaments ( title )
+          )
+        `)
+        .eq('member_id', memberId)
         .maybeSingle();
 
       if (rosterError) {
-        console.warn('Warning fetching squad roster:', rosterError);
+        setSquadData(null);
+      } else {
+        setSquadData(roster || null);
       }
-
-      setSquadData(roster || null);
     } catch (err) {
-      console.error('Error fetching active squad roster:', err);
+      setSquadData(null);
     } finally {
       setSquadLoading(false);
     }
@@ -696,15 +715,23 @@ export const MemberDashboard = () => {
               </p>
             )}
           </div>
-          <button
-            onClick={handleSettingsOpen}
-            title="Edit profile settings"
-            aria-label="Edit profile settings"
-            className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] p-2.5 rounded-xl font-bold transition-all shadow-md flex items-center gap-2"
-          >
-            <Settings className="w-5 h-5" />
-            <span className="text-xs font-bold uppercase tracking-wider hidden sm:inline">Edit Profile</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => setIsCardModalOpen(true)}
+              className="bg-amber-400 hover:bg-amber-300 text-[#001a16] px-4 py-2.5 rounded-xl font-bold transition-all shadow-md flex items-center gap-2 text-xs uppercase tracking-wider cursor-pointer"
+            >
+              🪪 Download Digital ID
+            </button>
+            <button
+              onClick={handleSettingsOpen}
+              title="Edit profile settings"
+              aria-label="Edit profile settings"
+              className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] p-2.5 rounded-xl font-bold transition-all shadow-md flex items-center gap-2"
+            >
+              <Settings className="w-5 h-5" />
+              <span className="text-xs font-bold uppercase tracking-wider hidden sm:inline">Edit Profile</span>
+            </button>
+          </div>
         </div>
 
         {/* User Profile Card (NAME, MEMBER ID, STATUS, PHONE) */}
@@ -1868,6 +1895,19 @@ export const MemberDashboard = () => {
           </Card>
         </div>
       )}
+
+      <DigitalIdCardModal
+        member={{
+          full_name: currentUser?.full_name || currentUser?.name || '',
+          official_member_id: currentUser?.official_member_id || currentUser?.id || '',
+          phone_number: currentUser?.phone_number || currentUser?.phone || '',
+          family_unit: currentUser?.familyUnit || currentUser?.cmo_family || currentUser?.family || '',
+          role: currentUser?.role || 'Member',
+          photo_url: getPhotoUrl(currentUser?.photo_url || currentUser?.profilePic || '') || currentUser?.photo_url || currentUser?.profilePic || '',
+        }}
+        isOpen={isCardModalOpen}
+        onClose={() => setIsCardModalOpen(false)}
+      />
     </div>
   );
 };

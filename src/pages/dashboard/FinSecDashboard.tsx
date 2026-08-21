@@ -17,6 +17,7 @@ import { Member, Family, MemberStatus, Transaction } from '../../types';
 import { FinesEscrowVerificationLedger } from '../../app/components/common/FinesEscrowVerificationLedger';
 import { CMO_CONSTITUTION_2023 } from '../../config/cmoConstitution';
 import { DigitalReceiptModal } from '../../app/components/ui/DigitalReceiptModal';
+import { DigitalIdCardModal } from '../../app/components/ui/DigitalIdCardModal';
 import { sendPaymentReceiptNotification, sendRejectionSmsNotification, getSmsBalance } from '../../utils/messagingService';
 import { toast } from 'sonner';
 
@@ -88,6 +89,10 @@ export const FinSecDashboard = () => {
   const [selectedReceiptTx, setSelectedReceiptTx] = useState<Transaction | null>(null);
   const [selectedReceiptMember, setSelectedReceiptMember] = useState<Member | null>(null);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+
+  // Digital ID Card Modal States
+  const [selectedCardMember, setSelectedCardMember] = useState<any | null>(null);
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
 
   const handleViewReceipt = (tx: Transaction) => {
     const memberObj = members.find(m => m.id === tx.memberId || m.official_member_id === tx.memberId);
@@ -2731,7 +2736,17 @@ export const FinSecDashboard = () => {
                         {formatCurrency(member.balance)}
                       </TableCell>
                       <TableCell className="text-center">
-                        <div className="flex justify-center gap-2">
+                        <div className="flex justify-center items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCardMember(member);
+                              setIsCardModalOpen(true);
+                            }}
+                            className="text-amber-400 hover:text-amber-300 text-xs font-semibold underline px-1 cursor-pointer"
+                          >
+                            ID Card
+                          </button>
                           <button
                             type="button"
                             onClick={() => {
@@ -3150,6 +3165,17 @@ export const FinSecDashboard = () => {
             </div>
           </Card>
         </div>
+      )}
+
+      {selectedCardMember && (
+        <DigitalIdCardModal
+          member={selectedCardMember}
+          isOpen={isCardModalOpen}
+          onClose={() => {
+            setIsCardModalOpen(false);
+            setSelectedCardMember(null);
+          }}
+        />
       )}
     </div>
   );
