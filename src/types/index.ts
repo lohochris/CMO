@@ -59,8 +59,10 @@ export interface Member {
   family?: Family;
   cmo_family?: string;
   familyUnit?: string;
+  family_unit?: string;
   phone?: string;
   profilePic?: string | null;
+  photo_url?: string | null;
   email?: string;
   homeTownAddress?: string;
   residentialAddress?: string;

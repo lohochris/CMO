@@ -13,6 +13,7 @@ import { PublicGallery } from '../pages/public/PublicGallery';
 import { MemberDashboard } from '../pages/dashboard/MemberDashboard';
 import { TermsAndConditions } from '../pages/TermsAndConditions';
 import { PrivacyPolicy } from '../pages/PrivacyPolicy';
+import { VerifyMember } from '../pages/VerifyMember';
 import { FinSecDashboard as FinanceDashboard } from '../pages/dashboard/FinSecDashboard';
 import { WelfareDashboard } from '../pages/dashboard/WelfareDashboard';
 import { TreasurerDashboard } from '../pages/dashboard/TreasurerDashboard';
@@ -81,7 +82,7 @@ function AppContent() {
     const initialPath = window.location.pathname;
     if (initialPath !== '/') {
       const cleanPath = initialPath.startsWith('/') ? initialPath.substring(1) : initialPath;
-      if (['about', 'services', 'register', 'login', 'dashboard', 'familyHub', 'dashboard/sports', 'terms', 'privacy', 'legal'].includes(cleanPath) || cleanPath.startsWith('family/')) {
+      if (['about', 'services', 'register', 'login', 'dashboard', 'familyHub', 'dashboard/sports', 'terms', 'privacy', 'legal', 'verify'].includes(cleanPath) || cleanPath.startsWith('family/')) {
         setCurrentPage(cleanPath as any);
       }
     }
@@ -133,6 +134,7 @@ function AppContent() {
     if (currentPage === 'services') return <Services />;
     if (currentPage === 'login') return <Login />;
     if (currentPage === 'register') return <Register />;
+    if ((currentPage as string) === 'verify') return <VerifyMember />;
     if ((currentPage as string) === 'terms') return <TermsAndConditions />;
     if ((currentPage as string) === 'privacy' || (currentPage as string) === 'legal') return <PrivacyPolicy />;
 
