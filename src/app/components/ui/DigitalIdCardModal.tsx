@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { supabase } from '../../../lib/supabaseClient';
 
 interface MemberIdCardProps {
   member: {
@@ -24,55 +25,69 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
   const [isDownloading, setIsDownloading] = useState<'png' | 'pdf' | null>(null);
 
   const cleanId = member?.official_member_id || 'HCC-CMO-MEMBER';
-  const rawPhoto = member?.photo_url || member?.avatar_url || member?.passport_url;
-  const verificationUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/verify?id=${encodeURIComponent(cleanId)}`
-    : `https://cmo-eta.vercel.app/verify?id=${encodeURIComponent(cleanId)}`;
+  
+  // Build direct public verification URL
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://cmo-eta.vercel.app';
+  const verificationUrl = `${baseUrl}/verify?id=${encodeURIComponent(cleanId)}`;
 
   useEffect(() => {
     let isMounted = true;
 
-    if (!rawPhoto) {
-      setImageSrc(null);
-      return;
-    }
+    const loadPhoto = async () => {
+      let finalUrl: string | null = null;
+      const rawPath = member?.photo_url || member?.avatar_url || member?.passport_url;
 
-    // If already Base64 or Blob URL, use directly
-    if (rawPhoto.startsWith('data:') || rawPhoto.startsWith('blob:')) {
-      setImageSrc(rawPhoto);
-      return;
-    }
-
-    // Pre-load via an Image element to draw onto an off-screen canvas (bypasses fetch CORS blocks)
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth || img.width;
-        canvas.height = img.naturalHeight || img.height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0);
-          const dataUri = canvas.toDataURL('image/jpeg', 0.95);
-          if (isMounted) setImageSrc(dataUri);
-          return;
-        }
-      } catch (err) {
-        console.warn('Canvas conversion blocked by CORS, using direct URL:', err);
+      if (rawPath && (rawPath.startsWith('http://') || rawPath.startsWith('https://') || rawPath.startsWith('data:'))) {
+        finalUrl = rawPath;
+      } else if (rawPath) {
+        // Resolve from Supabase storage
+        const { data } = supabase.storage.from('profile-pictures').getPublicUrl(rawPath);
+        finalUrl = data?.publicUrl || null;
+      } else if (member?.official_member_id) {
+        // Fallback: Check if bucket stores images by official_member_id
+        const { data } = supabase.storage.from('profile-pictures').getPublicUrl(`${member.official_member_id}.jpg`);
+        finalUrl = data?.publicUrl || null;
       }
-      if (isMounted) setImageSrc(rawPhoto);
+
+      if (!finalUrl) {
+        if (isMounted) setImageSrc(null);
+        return;
+      }
+
+      // Preload and convert to Base64 via Canvas to prevent export issues
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || img.width;
+          canvas.height = img.naturalHeight || img.height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            const base64 = canvas.toDataURL('image/jpeg', 0.95);
+            if (isMounted) setImageSrc(base64);
+            return;
+          }
+        } catch (e) {
+          console.warn('Canvas conversion fallback to URL:', e);
+        }
+        if (isMounted) setImageSrc(finalUrl);
+      };
+      img.onerror = () => {
+        if (isMounted) setImageSrc(finalUrl);
+      };
+      img.src = finalUrl;
     };
-    img.onerror = () => {
-      // If crossOrigin image fails, fallback to direct URL without crossOrigin
-      if (isMounted) setImageSrc(rawPhoto);
-    };
-    img.src = rawPhoto;
+
+    if (isOpen) {
+      loadPhoto();
+    }
 
     return () => {
       isMounted = false;
     };
-  }, [rawPhoto, isOpen]);
+  }, [member, isOpen]);
 
   if (!isOpen) return null;
 
@@ -177,12 +192,12 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
 
             {/* Main Card Content */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', margin: 'auto 0' }}>
-              {/* Left: Member Photo with safe fallback */}
+              {/* Left: Member Photo */}
               <div style={{ height: '130px', width: '105px', borderRadius: '10px', border: '2px solid #d97706', backgroundColor: '#0f172a', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {imageSrc ? (
                   <img
                     src={imageSrc}
-                    alt=""
+                    alt="Member"
                     style={{ height: '100%', width: '100%', objectFit: 'cover' }}
                     onError={() => setImageSrc(null)}
                   />
