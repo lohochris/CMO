@@ -45,6 +45,8 @@ export type Page =
   | 'dashboard/sports'
   | 'terms'
   | 'privacy'
+  | 'legal'
+  | 'verify'
   | 'publicGallery';
 
 export interface Member {

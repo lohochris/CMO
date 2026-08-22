@@ -1896,18 +1896,29 @@ export const MemberDashboard = () => {
         </div>
       )}
 
-      <DigitalIdCardModal
-        member={{
-          full_name: currentUser?.full_name || currentUser?.name || '',
-          official_member_id: currentUser?.official_member_id || currentUser?.id || '',
-          phone_number: currentUser?.phone_number || currentUser?.phone || '',
-          family_unit: currentUser?.familyUnit || currentUser?.cmo_family || currentUser?.family || '',
-          role: currentUser?.role || 'Member',
-          photo_url: getPhotoUrl(currentUser?.photo_url || currentUser?.profilePic || '') || currentUser?.photo_url || currentUser?.profilePic || '',
-        }}
-        isOpen={isCardModalOpen}
-        onClose={() => setIsCardModalOpen(false)}
-      />
+      {(() => {
+        const activePhotoUrl = 
+          getPhotoUrl((currentUser as any)?.photo_url || (currentUser as any)?.avatar_url || currentUser?.profilePic) ||
+          (currentUser as any)?.photo_url || 
+          (currentUser as any)?.avatar_url || 
+          currentUser?.profilePic || 
+          '';
+
+        return (
+          <DigitalIdCardModal
+            member={{
+              full_name: currentUser?.full_name || currentUser?.name || 'LOHO CHRISTOPHER DONDO',
+              official_member_id: currentUser?.official_member_id || currentUser?.id || 'HCC-CMO-26-003',
+              phone_number: currentUser?.phone_number || currentUser?.phone || '+2348126000659',
+              family_unit: currentUser?.familyUnit || currentUser?.cmo_family || currentUser?.family || 'Wisdom',
+              role: currentUser?.role || 'Member',
+              photo_url: activePhotoUrl,
+            }}
+            isOpen={isCardModalOpen}
+            onClose={() => setIsCardModalOpen(false)}
+          />
+        );
+      })()}
     </div>
   );
 };
