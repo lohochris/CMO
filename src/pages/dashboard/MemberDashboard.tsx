@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { WeddingStatus, Family, Transaction } from '../../types';
+import type { WeddingStatus, Family, Transaction, PaymentSubmission } from '../../types';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
@@ -7,7 +7,7 @@ import { CheckCircle, FileText, Settings, X, Users, BookOpen, Sparkles, UserChec
 import { useApp } from '../../contexts/AppContext';
 import useLiveTranscriber from '../../hooks/useLiveTranscriber';
 import { formatCurrency, formatDateTime } from '../../utils/helpers';
-import { uploadProfilePicture } from '../../utils/supabaseHelpers';
+import { uploadProfilePicture, uploadPaymentReceiptToStorage, submitPaymentReceipt, fetchPaymentSubmissions } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { supabase } from '../../lib/supabaseClient';
 import { toast } from 'sonner';
@@ -66,11 +66,92 @@ export const MemberDashboard = () => {
     }
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'sports' | 'financials' | 'spiritual' | 'constitution'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'sports' | 'financials' | 'spiritual' | 'constitution' | 'payment_receipts'>('overview');
   const [selectedReceiptTx, setSelectedReceiptTx] = useState<Transaction | null>(null);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
   const [smsCooldownMap, setSmsCooldownMap] = useState<Record<string, number>>({});
+
+  // ── Self-Service Payment & Levy Receipt States ──
+  const [isSubmitPaymentModalOpen, setIsSubmitPaymentModalOpen] = useState(false);
+  const [paymentPurpose, setPaymentPurpose] = useState('Monthly Dues');
+  const [customPurpose, setCustomPurpose] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentRefNo, setPaymentRefNo] = useState('');
+  const [paymentFile, setPaymentFile] = useState<File | null>(null);
+  const [isUploadingPayment, setIsUploadingPayment] = useState(false);
+  const [paymentSubmissions, setPaymentSubmissions] = useState<PaymentSubmission[]>([]);
+
+  const loadMemberSubmissions = async () => {
+    if (!currentUser) return;
+    const memberCode = currentUser.official_member_id || currentUser.id;
+    const { data } = await fetchPaymentSubmissions({ official_member_id: memberCode });
+    setPaymentSubmissions(data as PaymentSubmission[]);
+  };
+
+  useEffect(() => {
+    if (currentUser?.id || currentUser?.official_member_id) {
+      loadMemberSubmissions();
+    }
+  }, [currentUser?.id, currentUser?.official_member_id]);
+
+  const handlePaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentFile) {
+      toast.error('Please select a receipt file (.jpg, .png, or .pdf).');
+      return;
+    }
+    const parsedAmount = parseFloat(paymentAmount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      toast.error('Please enter a valid amount.');
+      return;
+    }
+    const finalPurpose = (paymentPurpose === 'Others' || paymentPurpose === 'Custom Title') ? customPurpose.trim() : paymentPurpose;
+    if (!finalPurpose) {
+      toast.error('Please specify the payment purpose title.');
+      return;
+    }
+
+    setIsUploadingPayment(true);
+    try {
+      const memberCode = currentUser?.official_member_id || currentUser?.id || 'MEMBER';
+      const receiptUrl = await uploadPaymentReceiptToStorage(memberCode, paymentFile);
+
+      if (!receiptUrl) {
+        toast.error('Failed to upload receipt file. Please try again.');
+        return;
+      }
+
+      const submissionPayload = {
+        member_id: currentUser?.id || memberCode,
+        official_member_id: memberCode,
+        full_name: currentUser?.full_name || currentUser?.name || 'Member',
+        cmo_family: currentUser?.cmo_family || currentUser?.family || 'General',
+        purpose: finalPurpose,
+        amount: parsedAmount,
+        reference_no: paymentRefNo.trim() || undefined,
+        receipt_url: receiptUrl
+      };
+
+      const res = await submitPaymentReceipt(submissionPayload);
+      if (res.error) {
+        toast.error('Failed to record payment proof submission.');
+      } else {
+        toast.success('Payment proof uploaded successfully! Awaiting Financial Secretary audit.');
+        setIsSubmitPaymentModalOpen(false);
+        setPaymentAmount('');
+        setPaymentRefNo('');
+        setPaymentFile(null);
+        setCustomPurpose('');
+        loadMemberSubmissions();
+      }
+    } catch (err) {
+      console.error('Error submitting payment proof:', err);
+      toast.error('An error occurred during submission.');
+    } finally {
+      setIsUploadingPayment(false);
+    }
+  };
 
   const getCooldownRemaining = (txId: string | number) => {
     const key = `cmo_sms_cooldown_${txId}`;
@@ -746,6 +827,12 @@ export const MemberDashboard = () => {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <button
+              onClick={() => setIsSubmitPaymentModalOpen(true)}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md flex items-center gap-2 text-xs uppercase tracking-wider cursor-pointer"
+            >
+              💳 Submit Payment Proof
+            </button>
+            <button
               onClick={() => setIsCardModalOpen(true)}
               className="bg-amber-400 hover:bg-amber-300 text-[#001a16] px-4 py-2.5 rounded-xl font-bold transition-all shadow-md flex items-center gap-2 text-xs uppercase tracking-wider cursor-pointer"
             >
@@ -800,7 +887,7 @@ export const MemberDashboard = () => {
           </div>
         </div>
 
-        {/* Tab Navigation Bar (Overview, Sports & Duties, Financials, Spiritual & Welfare) */}
+        {/* Tab Navigation Bar (Overview, Sports & Duties, Financials, Spiritual & Welfare, Payment Receipts) */}
         <div className="flex flex-wrap gap-2 pt-4 border-t border-[#ffd700]/20">
           <button
             onClick={() => setActiveTab('overview')}
@@ -811,6 +898,16 @@ export const MemberDashboard = () => {
             }`}
           >
             <LayoutDashboard className="w-4 h-4" /> Overview
+          </button>
+          <button
+            onClick={() => setActiveTab('payment_receipts')}
+            className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 transition-all ${
+              activeTab === 'payment_receipts'
+                ? 'bg-[#ffd700] text-[#001a16] shadow-lg font-bold'
+                : 'bg-[#001a16] text-[#ffd700] hover:bg-[#ffd700]/10 border border-[#ffd700]/20'
+            }`}
+          >
+            <CreditCard className="w-4 h-4" /> Payment Receipts ({paymentSubmissions.length})
           </button>
           <button
             onClick={() => setActiveTab('sports')}
@@ -854,6 +951,89 @@ export const MemberDashboard = () => {
           </button>
         </div>
       </Card>
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 1.5. activeTab === 'payment_receipts' Panel                   */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {activeTab === 'payment_receipts' && (
+        <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 md:p-8 space-y-6 rounded-2xl text-white">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#ffd700]/20 gap-3">
+            <div>
+              <h3 className="text-lg font-bold text-amber-400">My Payment Receipts & Proofs</h3>
+              <p className="text-xs text-slate-300">Track verification status of bank transfers submitted to Executive Treasury.</p>
+            </div>
+            <button
+              onClick={() => setIsSubmitPaymentModalOpen(true)}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto uppercase tracking-wider"
+            >
+              💳 + Submit New Receipt
+            </button>
+          </div>
+
+          {paymentSubmissions.length === 0 ? (
+            <div className="text-center py-12 bg-[#001a16] rounded-xl border border-emerald-900/40">
+              <p className="text-slate-300 text-sm font-semibold">No payment receipts uploaded yet.</p>
+              <button
+                onClick={() => setIsSubmitPaymentModalOpen(true)}
+                className="mt-3 text-xs text-amber-400 font-bold hover:underline cursor-pointer"
+              >
+                Click here to submit your first bank transfer receipt
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {paymentSubmissions.map((sub) => (
+                <div key={sub.id} className="bg-[#001a16] border border-emerald-900/60 rounded-xl p-4 flex flex-col justify-between shadow-md">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-amber-400 uppercase tracking-wide">{(sub as any).payment_title || sub.purpose || 'Payment'}</span>
+                      {sub.status === 'pending' && (
+                        <span className="px-2.5 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-full text-[10px] font-bold">
+                          🟡 Pending Verification
+                        </span>
+                      )}
+                      {sub.status === 'approved' && (
+                        <span className="px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold">
+                          🟢 Approved
+                        </span>
+                      )}
+                      {sub.status === 'rejected' && (
+                        <span className="px-2.5 py-0.5 bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded-full text-[10px] font-bold">
+                          🔴 Rejected
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-xl font-black text-white">{formatCurrency(sub.amount)}</p>
+                    {sub.reference_no && <p className="text-xs text-slate-400 mt-0.5 font-mono">Ref: {sub.reference_no}</p>}
+                    <p className="text-[10px] text-slate-500 mt-1">Submitted: {sub.created_at ? new Date(sub.created_at).toLocaleDateString() : 'N/A'}</p>
+
+                    {sub.status === 'rejected' && sub.rejection_reason && (
+                      <div className="mt-3 p-2.5 bg-rose-950/60 border border-rose-900/80 rounded-lg text-xs text-rose-300">
+                        <strong>Rejection Reason:</strong> {sub.rejection_reason}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-emerald-900/40 flex justify-between items-center">
+                    <a
+                      href={sub.receipt_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-amber-400 font-bold hover:underline flex items-center gap-1"
+                    >
+                      📄 View Uploaded Receipt ↗
+                    </a>
+                    {sub.verified_by && (
+                      <span className="text-[10px] text-slate-400">Audited by: {sub.verified_by}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* ───────────────────────────────────────────────────────────── */}
       {/* 2. activeTab === 'overview' Panel                             */}
@@ -1922,6 +2102,111 @@ export const MemberDashboard = () => {
               </div>
             </div>
           </Card>
+        </div>
+      )}
+
+      {/* Submit Payment Proof / Levy Receipt Modal */}
+      {isSubmitPaymentModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-[#0b1311] border border-emerald-900/60 rounded-3xl p-6 w-full max-w-lg shadow-2xl relative text-white my-auto">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-emerald-800/40">
+              <div>
+                <h3 className="text-base font-bold text-amber-400">Submit Payment Proof / Levy Receipt</h3>
+                <p className="text-xs text-slate-400">Upload bank transfer proof for Financial Secretary verification.</p>
+              </div>
+              <button
+                onClick={() => setIsSubmitPaymentModalOpen(false)}
+                className="text-slate-400 hover:text-white text-lg font-bold p-1 rounded cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handlePaymentSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase text-amber-400 mb-1">Payment Purpose / Title</label>
+                <select
+                  value={paymentPurpose}
+                  onChange={(e) => setPaymentPurpose(e.target.value)}
+                  className="w-full bg-[#001a16] border border-emerald-800/60 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-amber-400"
+                >
+                  <option value="Monthly Dues">Monthly Dues</option>
+                  <option value="Parish Project Levy">Parish Project Levy</option>
+                  <option value="Annual Harvest Levy">Annual Harvest Levy</option>
+                  <option value="Sports Levy">Sports Levy</option>
+                  <option value="Insurance">Insurance</option>
+                  <option value="Fathering Sunday">Fathering Sunday</option>
+                  <option value="Others">Others (Specify below)</option>
+                </select>
+              </div>
+
+              {(paymentPurpose === 'Others' || paymentPurpose === 'Custom Title') && (
+                <div className="space-y-1.5 animate-fadeIn">
+                  <label className="block text-xs font-semibold text-amber-400 mb-1">Specify Payment Purpose / Title *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. CMO National Convention Levy, Uniform Contribution"
+                    value={customPurpose}
+                    onChange={(e) => setCustomPurpose(e.target.value)}
+                    className="w-full bg-[#001a16] border border-amber-400 rounded-xl p-3 text-sm text-white placeholder-slate-500 focus:outline-none"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-amber-400 mb-1">Amount Paid (₦)</label>
+                <input
+                  type="number"
+                  placeholder="e.g., 5000"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="w-full bg-[#001a16] border border-emerald-800/60 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-amber-400"
+                  required
+                  min="100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-amber-400 mb-1">Transaction Ref / Bank Teller No.</label>
+                <input
+                  type="text"
+                  placeholder="e.g., TRF-98234110 or Teller #402"
+                  value={paymentRefNo}
+                  onChange={(e) => setPaymentRefNo(e.target.value)}
+                  className="w-full bg-[#001a16] border border-emerald-800/60 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-amber-400 mb-1">Upload Receipt (Image / PDF)</label>
+                <input
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.pdf"
+                  onChange={(e) => setPaymentFile(e.target.files?.[0] || null)}
+                  className="w-full bg-[#001a16] border border-emerald-800/60 rounded-xl p-2 text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-amber-400 file:text-slate-950 hover:file:bg-amber-300 cursor-pointer"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-emerald-800/40">
+                <button
+                  type="button"
+                  onClick={() => setIsSubmitPaymentModalOpen(false)}
+                  className="px-4 py-2.5 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl hover:bg-slate-700 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUploadingPayment}
+                  className="px-5 py-2.5 bg-amber-400 text-slate-950 text-xs font-black rounded-xl hover:bg-amber-300 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                >
+                  {isUploadingPayment ? 'Uploading Proof...' : 'Submit Receipt'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

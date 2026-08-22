@@ -227,4 +227,265 @@ export const fetchUnifiedFinancialSummary = async (): Promise<UnifiedFinancialSu
   }
 };
 
+/**
+ * Uploads a payment receipt file (image/pdf) to Supabase Storage bucket `payment_receipts`.
+ */
+export const uploadPaymentReceiptToStorage = async (officialMemberId: string, file: File | Blob): Promise<string | null> => {
+  try {
+    const cleanId = (officialMemberId || 'member').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const timestamp = Date.now();
+    const ext = file.type.includes('pdf') ? 'pdf' : file.type.includes('png') ? 'png' : 'jpg';
+    const filePath = `receipt_${cleanId}_${timestamp}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('payment_receipts')
+      .upload(filePath, file, {
+        contentType: file.type || 'image/jpeg',
+        upsert: true
+      });
+
+    if (uploadError) {
+      console.warn('Error uploading payment receipt to storage:', uploadError);
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('payment_receipts')
+      .getPublicUrl(filePath);
+
+    return publicUrlUrlString(publicUrlData?.publicUrl) || null;
+  } catch (err) {
+    console.error('Exception during payment receipt upload:', err);
+    return null;
+  }
+};
+
+function publicUrlUrlString(url?: string): string | null {
+  if (!url) return null;
+  return `${url}?t=${Date.now()}`;
+}
+
+/**
+ * Submits proof of payment to public.payment_submissions table with schema resilience.
+ */
+export const submitPaymentReceipt = async (submissionInput: {
+  member_id?: string;
+  memberId?: string;
+  official_member_id?: string;
+  officialMemberId?: string;
+  full_name?: string;
+  fullName?: string;
+  cmo_family?: string;
+  cmoFamily?: string;
+  purpose?: string;
+  payment_title?: string;
+  paymentTitle?: string;
+  amount: number;
+  reference_no?: string;
+  referenceNo?: string;
+  receipt_url?: string;
+  receiptUrl?: string;
+}) => {
+  const memberId = submissionInput.member_id || submissionInput.memberId || '';
+  const officialMemberId = submissionInput.official_member_id || submissionInput.officialMemberId || memberId;
+  const fullName = submissionInput.full_name || submissionInput.fullName || 'Member';
+  const cmoFamily = submissionInput.cmo_family || submissionInput.cmoFamily || null;
+  const title = submissionInput.purpose || submissionInput.payment_title || submissionInput.paymentTitle || 'Payment Dues';
+  const refNo = submissionInput.reference_no || submissionInput.referenceNo || null;
+  const url = submissionInput.receipt_url || submissionInput.receiptUrl || '';
+
+  // 1. Try standard insert payload containing standard columns
+  const standardPayload: any = {
+    member_id: memberId,
+    official_member_id: officialMemberId,
+    full_name: fullName,
+    member_name: fullName,
+    cmo_family: cmoFamily,
+    purpose: title,
+    payment_title: title,
+    amount: Number(submissionInput.amount),
+    reference_no: refNo,
+    transaction_ref: refNo,
+    receipt_url: url,
+    status: 'pending',
+    created_at: new Date().toISOString()
+  };
+
+  let { data, error } = await supabase
+    .from('payment_submissions')
+    .insert([standardPayload])
+    .select()
+    .single();
+
+  // 2. If PostgreSQL schema cache errors occur (PGRST204 or missing column), dynamically strip missing columns and retry
+  if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('column'))) {
+    console.warn('Primary insert encountered column missing error:', error.message);
+
+    const prunedPayload: any = { ...standardPayload };
+
+    // Inspect error message for specific missing column names
+    const missingColMatch = error.message.match(/Could not find the '([^']+)' column/i);
+    if (missingColMatch && missingColMatch[1]) {
+      const missingCol = missingColMatch[1];
+      delete prunedPayload[missingCol];
+    }
+
+    // Always strip unneeded alias pairs if they caused errors
+    if (error.message.includes('official_member_id')) delete prunedPayload.official_member_id;
+    if (error.message.includes('full_name')) delete prunedPayload.full_name;
+    if (error.message.includes('member_name')) delete prunedPayload.member_name;
+    if (error.message.includes('payment_title')) delete prunedPayload.payment_title;
+    if (error.message.includes('purpose')) delete prunedPayload.purpose;
+    if (error.message.includes('transaction_ref')) delete prunedPayload.transaction_ref;
+    if (error.message.includes('reference_no')) delete prunedPayload.reference_no;
+
+    const retryRes = await supabase
+      .from('payment_submissions')
+      .insert([prunedPayload])
+      .select()
+      .maybeSingle();
+
+    data = retryRes.data;
+    error = retryRes.error;
+  }
+
+  // 3. Fallback: if still error, try minimal standard payload with only mandatory base fields
+  if (error && (error.code === 'PGRST204' || error.message?.includes('column'))) {
+    const basePayload: any = {
+      member_id: memberId,
+      amount: Number(submissionInput.amount),
+      receipt_url: url,
+      status: 'pending'
+    };
+    if (error.message.includes('purpose')) {
+      basePayload.payment_title = title;
+    } else {
+      basePayload.purpose = title;
+    }
+    if (!error.message.includes('full_name')) {
+      basePayload.full_name = fullName;
+    } else {
+      basePayload.member_name = fullName;
+    }
+
+    const baseRes = await supabase
+      .from('payment_submissions')
+      .insert([basePayload])
+      .select()
+      .maybeSingle();
+
+    data = baseRes.data;
+    error = baseRes.error;
+  }
+
+  if (error) {
+    console.error('Error inserting payment submission:', error);
+  }
+
+  return { data, error };
+};
+
+/**
+ * Fetches payment submissions filtered by member or status.
+ */
+export const fetchPaymentSubmissions = async (filters?: {
+  official_member_id?: string;
+  status?: 'pending' | 'approved' | 'rejected';
+}) => {
+  let query = supabase.from('payment_submissions').select('*').order('created_at', { ascending: false });
+
+  if (filters?.official_member_id) {
+    query = query.or(`official_member_id.eq.${filters.official_member_id},member_id.eq.${filters.official_member_id}`);
+  }
+  if (filters?.status) {
+    query = query.eq('status', filters.status);
+  }
+
+  let { data, error } = await query;
+
+  if (error) {
+    // Retry without OR filter if official_member_id column is missing
+    let retryQuery = supabase.from('payment_submissions').select('*').order('created_at', { ascending: false });
+    if (filters?.official_member_id) {
+      retryQuery = retryQuery.eq('member_id', filters.official_member_id);
+    }
+    if (filters?.status) {
+      retryQuery = retryQuery.eq('status', filters.status);
+    }
+    const res = await retryQuery;
+    data = res.data;
+    error = res.error;
+  }
+
+  const normalizedData = (data || []).map((row: any) => ({
+    ...row,
+    official_member_id: row.official_member_id || row.member_id || '',
+    full_name: row.full_name || row.member_name || 'Member',
+    purpose: row.purpose || row.payment_title || 'Payment Dues',
+    reference_no: row.reference_no || row.transaction_ref || ''
+  }));
+  return { data: normalizedData, error };
+};
+
+/**
+ * Audits a payment submission (Approve or Reject).
+ * If approved, automatically posts an entry to public.transactions.
+ */
+export const auditPaymentSubmission = async (
+  submissionId: string,
+  action: 'approved' | 'rejected',
+  officerName: string,
+  rejectionReason?: string
+) => {
+  const { data: submission, error: fetchErr } = await supabase
+    .from('payment_submissions')
+    .select('*')
+    .eq('id', submissionId)
+    .single();
+
+  if (fetchErr || !submission) {
+    return { error: fetchErr || new Error('Submission record not found') };
+  }
+
+  const updatePayload: any = {
+    status: action,
+    verified_at: new Date().toISOString(),
+    verified_by: officerName
+  };
+
+  if (action === 'rejected' && rejectionReason) {
+    updatePayload.rejection_reason = rejectionReason;
+  }
+
+  const { error: updateErr } = await supabase
+    .from('payment_submissions')
+    .update(updatePayload)
+    .eq('id', submissionId);
+
+  if (updateErr) {
+    return { error: updateErr };
+  }
+
+  if (action === 'approved') {
+    const memberName = submission.full_name || submission.member_name || 'Member';
+    const purposeTitle = submission.purpose || submission.payment_title || 'Payment Dues';
+    const refNo = submission.reference_no || submission.transaction_ref || 'Ref N/A';
+
+    await supabase.from('transactions').insert([
+      {
+        member_id: submission.official_member_id || submission.member_id,
+        official_member_id: submission.official_member_id || submission.member_id,
+        member_name: memberName,
+        amount: submission.amount,
+        purpose: purposeTitle,
+        notes: `Verified Receipt Payment (${refNo}). Verified by ${officerName}.`,
+        transaction_type: 'Income',
+        status: 'Completed',
+        created_at: new Date().toISOString()
+      }
+    ]);
+  }
+
+  return { success: true };
+};
+
 
