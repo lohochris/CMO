@@ -251,7 +251,7 @@ function AppContent() {
       }
     }
 
-    // Dashboard pages & Admin Routing Overhaul
+    // Dashboard pages & Executive Routing Guards
     if (
       currentPage === 'dashboard' ||
       currentPage === 'pro' ||
@@ -265,119 +265,163 @@ function AppContent() {
       currentPage === 'familyChairman' ||
       currentPage === 'familySecretary'
     ) {
-      const officialId = currentUser?.official_member_id || currentUser?.id;
-      const userRole = currentUser?.role?.toLowerCase();
+      if (!currentUser) {
+        setTimeout(() => setCurrentPage('login'), 10);
+        return <Login />;
+      }
 
-      if (currentPage === 'familyChairman' || userRole === 'family_chairman' || userRole === 'family_head') return <FamilyHeadDashboard />;
-      if (currentPage === 'familySecretary' || userRole === 'family_secretary' || userRole === 'family_sec') return <FamilySecDashboard />;
-      if (currentPage === 'liturgist' || userRole === 'liturgist') return <LiturgistDashboard />;
-      if (currentPage === 'provost' || userRole === 'provost') return <ProvostDashboard />;
-      if (currentPage === 'pro' || userRole === 'pro') return <PRODashboard />;
-      if (currentPage === 'welfare' || userRole === 'welfare') return <WelfareDashboard />;
-      if (currentPage === 'treasurer' || (userRole === 'treasurer' && officialId !== 'HCC-CMO-SPRT-TR')) return <TreasurerDashboard />;
+      const officialId = currentUser.official_member_id || currentUser.id;
+      const userRole = (currentUser.role || 'member').toLowerCase().trim();
+
+      // Explicit route access control when a specific executive route is requested
+      if (currentPage === 'chairman') {
+        if (!['chairman', 'cmo_chairman', 'super_admin', 'executive'].includes(userRole)) {
+          setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold executive clearance for Chairman Office.`);
+          setTimeout(() => setCurrentPage('dashboard'), 10);
+          return <MemberDashboard />;
+        }
+        return <ChairmanDashboard />;
+      }
+
+      if (currentPage === 'fin_sec') {
+        if (!['fin_sec', 'financial_secretary', 'super_admin', 'executive'].includes(userRole)) {
+          setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold executive clearance for Financial Secretary Office.`);
+          setTimeout(() => setCurrentPage('dashboard'), 10);
+          return <MemberDashboard />;
+        }
+        return <FinanceDashboard />;
+      }
+
+      if (currentPage === 'secretary') {
+        if (!['gen_sec', 'secretary', 'general_secretary', 'super_admin', 'executive'].includes(userRole)) {
+          setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold executive clearance for General Secretary Office.`);
+          setTimeout(() => setCurrentPage('dashboard'), 10);
+          return <MemberDashboard />;
+        }
+        return <SecretaryDashboard />;
+      }
+
+      if (currentPage === 'treasurer') {
+        if (!['treasurer', 'super_admin', 'executive'].includes(userRole)) {
+          setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold executive clearance for Treasury Office.`);
+          setTimeout(() => setCurrentPage('dashboard'), 10);
+          return <MemberDashboard />;
+        }
+        if (officialId === 'HCC-CMO-SPRT-TR') return <SportsFinancialHub />;
+        return <TreasurerDashboard />;
+      }
+
+      if (currentPage === 'welfare') {
+        if (!['welfare', 'welfare_officer', 'super_admin', 'executive'].includes(userRole)) {
+          setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold executive clearance for Welfare Office.`);
+          setTimeout(() => setCurrentPage('dashboard'), 10);
+          return <MemberDashboard />;
+        }
+        return <WelfareDashboard />;
+      }
+
+      if (currentPage === 'pro') {
+        if (!['pro', 'public_relations_officer', 'super_admin', 'executive'].includes(userRole)) {
+          setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold executive clearance for PRO Office.`);
+          setTimeout(() => setCurrentPage('dashboard'), 10);
+          return <MemberDashboard />;
+        }
+        return <PRODashboard />;
+      }
+
+      if (currentPage === 'provost') {
+        if (!['provost', 'provost_marshall', 'super_admin', 'executive'].includes(userRole)) {
+          setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold executive clearance for Provost Office.`);
+          setTimeout(() => setCurrentPage('dashboard'), 10);
+          return <MemberDashboard />;
+        }
+        return <ProvostDashboard />;
+      }
+
+      if (currentPage === 'liturgist') {
+        if (!['liturgist', 'super_admin', 'executive'].includes(userRole)) {
+          setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold executive clearance for Liturgical Team.`);
+          setTimeout(() => setCurrentPage('dashboard'), 10);
+          return <MemberDashboard />;
+        }
+        return <LiturgistDashboard />;
+      }
+
+      if (currentPage === 'familyChairman') {
+        if (!['family_chairman', 'family_head', 'chairman', 'cmo_chairman', 'super_admin', 'executive'].includes(userRole)) {
+          setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold clearance for Family Head Portal.`);
+          setTimeout(() => setCurrentPage('dashboard'), 10);
+          return <MemberDashboard />;
+        }
+        return <FamilyHeadDashboard />;
+      }
+
+      if (currentPage === 'familySecretary') {
+        if (!['family_secretary', 'family_sec', 'gen_sec', 'secretary', 'super_admin', 'executive'].includes(userRole)) {
+          setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold clearance for Family Secretary Portal.`);
+          setTimeout(() => setCurrentPage('dashboard'), 10);
+          return <MemberDashboard />;
+        }
+        return <FamilySecDashboard />;
+      }
+
+      // Default 'dashboard' route: Render workspace matching user's logged-in role
+      if (userRole === 'family_chairman' || userRole === 'family_head') return <FamilyHeadDashboard />;
+      if (userRole === 'family_secretary' || userRole === 'family_sec') return <FamilySecDashboard />;
+      if (userRole === 'liturgist') return <LiturgistDashboard />;
+      if (userRole === 'provost') return <ProvostDashboard />;
+      if (userRole === 'pro') return <PRODashboard />;
+      if (userRole === 'welfare') return <WelfareDashboard />;
+      if (userRole === 'treasurer' && officialId !== 'HCC-CMO-SPRT-TR') return <TreasurerDashboard />;
       if (userRole === 'treasurer' && officialId === 'HCC-CMO-SPRT-TR') return <SportsFinancialHub />;
-      if (currentPage === 'secretary' || userRole === 'gen_sec' || userRole === 'secretary') return <SecretaryDashboard />;
-      if (currentPage === 'fin_sec' || userRole === 'fin_sec' || userRole === 'financial_secretary') return <FinanceDashboard />;
-      if (currentPage === 'chairman' || userRole === 'chairman' || userRole === 'cmo_chairman') return <ChairmanDashboard />;
+      if (userRole === 'gen_sec' || userRole === 'secretary') return <SecretaryDashboard />;
+      if (userRole === 'fin_sec' || userRole === 'financial_secretary') return <FinanceDashboard />;
+      if (userRole === 'chairman' || userRole === 'cmo_chairman') return <ChairmanDashboard />;
       if (userRole === 'sports_director') return <SportsAdminPanel />;
       if (userRole === 'coach') return <CoachRosterWorkspace />;
       if (userRole === 'referee') return <RefereeMatchCenter />;
       if (userRole === 'athlete') return <AthleteProfileHub />;
       if (userRole === 'medical_officer') return <SportsMedicalPortal />;
-      if (userRole === 'family_chairman' || userRole === 'family_head') return <FamilyHeadDashboard />;
-      if (userRole === 'family_secretary') return <FamilySecDashboard />;
-
-      // Explicitly disable any fallback to <MemberDashboard /> for administrative roles
-      const isAdministrativeRole = [
-        'fin_sec', 'financial_secretary', 'treasurer', 'welfare', 'pro', 
-        'provost', 'liturgist', 'gen_sec', 'secretary', 'family_chairman', 'family_head', 
-        'family_secretary', 'chairman', 'cmo_chairman', 'sports_director', 'coach',
-        'referee', 'medical_officer'
-      ].includes(userRole || '');
-
-      if (isAdministrativeRole) {
-        return (
-          <div className="flex h-64 items-center justify-center">
-            <div className="text-[#ffd700] text-lg font-semibold animate-pulse">
-              Loading Administrative Workspace ({userRole})...
-            </div>
-          </div>
-        );
-      }
 
       // Fallback for standard organization members
       return <MemberDashboard />;
     }
 
-
-    if (currentPage === 'dashboard/sports') {
+    // Sports department routing with route guards
+    if (
+      currentPage === 'dashboard/sports' ||
+      currentPage === 'sports_admin' ||
+      currentPage === 'coach_workspace' ||
+      currentPage === 'athlete_hub' ||
+      currentPage === 'referee_center' ||
+      currentPage === 'standings_board' ||
+      currentPage === 'medical_portal' ||
+      currentPage === 'equipment_ledger' ||
+      currentPage === 'sports_finance'
+    ) {
       if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
-      return <SportsHub />;
-    }
 
-    // Sports department routing with redirection wrapper to master SportsHub tabs
-    if (currentPage === 'sports_admin') {
-      if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
-      if (typeof window !== 'undefined') {
+      const userRole = (currentUser.role || 'member').toLowerCase().trim();
+      if (userRole === 'member' || userRole === 'member_active') {
+        setError(`Access Denied: General Member account (${currentUser.full_name || 'Member'}) does not hold clearance for Sports Department Workspaces.`);
+        setTimeout(() => setCurrentPage('dashboard'), 10);
+        return <MemberDashboard />;
+      }
+
+      if (currentPage === 'sports_admin' && typeof window !== 'undefined') {
         sessionStorage.setItem('sports_hub_active_tab', 'admin');
-      }
-      setTimeout(() => setCurrentPage('dashboard/sports'), 10);
-      return <SportsHub />;
-    }
-    if (currentPage === 'coach_workspace') {
-      if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
-      if (typeof window !== 'undefined') {
+      } else if ((currentPage === 'coach_workspace' || currentPage === 'referee_center') && typeof window !== 'undefined') {
         sessionStorage.setItem('sports_hub_active_tab', 'rosters');
-      }
-      setTimeout(() => setCurrentPage('dashboard/sports'), 10);
-      return <SportsHub />;
-    }
-    if (currentPage === 'athlete_hub') {
-      if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
-      if (typeof window !== 'undefined') {
+      } else if ((currentPage === 'athlete_hub' || currentPage === 'standings_board') && typeof window !== 'undefined') {
         sessionStorage.setItem('sports_hub_active_tab', 'overview');
-      }
-      setTimeout(() => setCurrentPage('dashboard/sports'), 10);
-      return <SportsHub />;
-    }
-    if (currentPage === 'referee_center') {
-      if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('sports_hub_active_tab', 'rosters');
-      }
-      setTimeout(() => setCurrentPage('dashboard/sports'), 10);
-      return <SportsHub />;
-    }
-    if (currentPage === 'standings_board') {
-      if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('sports_hub_active_tab', 'overview');
-      }
-      setTimeout(() => setCurrentPage('dashboard/sports'), 10);
-      return <SportsHub />;
-    }
-    if (currentPage === 'medical_portal') {
-      if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
-      if (typeof window !== 'undefined') {
+      } else if (currentPage === 'medical_portal' && typeof window !== 'undefined') {
         sessionStorage.setItem('sports_hub_active_tab', 'medical');
-      }
-      setTimeout(() => setCurrentPage('dashboard/sports'), 10);
-      return <SportsHub />;
-    }
-    if (currentPage === 'equipment_ledger') {
-      if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
-      if (typeof window !== 'undefined') {
+      } else if (currentPage === 'equipment_ledger' && typeof window !== 'undefined') {
         sessionStorage.setItem('sports_hub_active_tab', 'equipment');
-      }
-      setTimeout(() => setCurrentPage('dashboard/sports'), 10);
-      return <SportsHub />;
-    }
-    if (currentPage === 'sports_finance') {
-      if (!currentUser) { setTimeout(() => setCurrentPage('login'), 10); return <Login />; }
-      if (typeof window !== 'undefined') {
+      } else if (currentPage === 'sports_finance' && typeof window !== 'undefined') {
         sessionStorage.setItem('sports_hub_active_tab', 'financial');
       }
-      setTimeout(() => setCurrentPage('dashboard/sports'), 10);
+
       return <SportsHub />;
     }
     if (currentPage === 'familyHub') return <FamilyHub />;

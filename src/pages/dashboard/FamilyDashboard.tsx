@@ -10,6 +10,8 @@ import { Family, FamilyWelfareTicket, FamilyTransaction, FamilyExpense, FamilyAn
 import { calculateTotal, formatCurrency, formatDate, getCombinedTransactions, formatDateTime } from '../../utils/helpers';
 import { generateTicketId, generateExpenseId, generateAnnouncementId } from '../../utils/idGenerators';
 import { Heading } from '../../app/components/common/Heading';
+import { supabase } from '../../lib/supabase';
+import { isRoleAuthorizedForOffice } from '../../config/roles';
 
 const familyList: Family[] = ['Wisdom', 'Honour', 'Integrity', 'Talent'];
 const familyColors: Record<Family, string> = {
@@ -90,15 +92,82 @@ export const FamilyHub = () => {
     try {
       if (!selectedFamilyForAuth) return;
       const { family, mode } = selectedFamilyForAuth;
-      const idToAuthenticate = inputCredential.toUpperCase().trim();
+      const cleanId = inputCredential.toUpperCase().trim();
+
+      const ADMIN_ALIAS_REGISTRY: Record<string, { role: string; name: string }> = {
+        'FAMILY-HEAD-2026': { role: 'family_head', name: `${family} Family Head` },
+        'FAMILY-HEAD':      { role: 'family_head', name: `${family} Family Head` },
+        'FAMILY-SEC-2026':  { role: 'family_secretary', name: `${family} Family Secretary` },
+        'FAMILY-SEC':       { role: 'family_secretary', name: `${family} Family Secretary` },
+        'CMO-CHAIRMAN-2026': { role: 'cmo_chairman', name: 'STANLEY UKAH' },
+        'SECRETARY-2026':    { role: 'gen_sec', name: 'PETER ALLEH' }
+      };
+
+      let fetchedMember: { id: string; official_member_id?: string; full_name?: string; role?: string; family?: string } | null = null;
+
+      if (cleanId in ADMIN_ALIAS_REGISTRY) {
+        fetchedMember = {
+          id: cleanId,
+          official_member_id: cleanId,
+          full_name: ADMIN_ALIAS_REGISTRY[cleanId].name,
+          role: ADMIN_ALIAS_REGISTRY[cleanId].role
+        };
+      } else {
+        const { data: memberData } = await supabase
+          .from('members')
+          .select('id, official_member_id, full_name, role, cmo_family')
+          .eq('official_member_id', cleanId)
+          .maybeSingle();
+
+        if (memberData) {
+          fetchedMember = {
+            id: memberData.id,
+            official_member_id: memberData.official_member_id || cleanId,
+            full_name: memberData.full_name || 'Organization Member',
+            role: memberData.role || 'member',
+            family: memberData.cmo_family || undefined
+          };
+        } else {
+          const { data: execData } = await supabase
+            .from('cmo_executives')
+            .select('id, executive_id, full_name, role, role_key, cmo_family')
+            .eq('executive_id', cleanId)
+            .maybeSingle();
+
+          if (execData) {
+            fetchedMember = {
+              id: execData.executive_id || execData.id,
+              official_member_id: execData.executive_id || execData.id,
+              full_name: execData.full_name || 'Executive Officer',
+              role: execData.role_key || execData.role,
+              family: execData.cmo_family || undefined
+            };
+          }
+        }
+      }
+
+      if (!fetchedMember) {
+        setAuthError(`Invalid Member or Executive ID: "${cleanId}". Record not found.`);
+        return;
+      }
+
+      const memberRole = (fetchedMember.role || 'member').toLowerCase().trim();
+      const targetOfficeKey = mode === 'chairman' ? 'family-head' : 'family-sec';
+      const hasClearance = isRoleAuthorizedForOffice(memberRole, targetOfficeKey);
+
+      if (!hasClearance) {
+        setAuthError(`Access Denied: ID ${cleanId} (${fetchedMember.full_name}) is a General Member account and does not hold executive clearance for ${family} Family ${mode === 'chairman' ? 'Head' : 'Secretary'} Office.`);
+        return;
+      }
+
       const targetRole = mode === 'chairman' ? 'family_chairman' : 'family_secretary';
       const targetPage = familyDashboardPages[family][mode];
 
       setCurrentUser({
-        id: idToAuthenticate,
-        official_member_id: idToAuthenticate,
-        name: `${family} Family ${mode === 'chairman' ? 'Chairman' : 'Secretary'}`,
-        full_name: `${family} Family ${mode === 'chairman' ? 'Chairman' : 'Secretary'}`,
+        id: fetchedMember.id,
+        official_member_id: fetchedMember.official_member_id || cleanId,
+        name: fetchedMember.full_name || `${family} Family ${mode === 'chairman' ? 'Chairman' : 'Secretary'}`,
+        full_name: fetchedMember.full_name || `${family} Family ${mode === 'chairman' ? 'Chairman' : 'Secretary'}`,
         status: 'Active (Cleared)',
         balance: 0,
         role: targetRole as any,

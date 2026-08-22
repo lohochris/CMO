@@ -29,6 +29,8 @@ import {
 import { useApp } from '../../contexts/AppContext';
 import { Page } from '../../types';
 import { Heading } from '../../app/components/common/Heading';
+import { supabase } from '../../lib/supabase';
+import { isRoleAuthorizedForOffice } from '../../config/roles';
 
 // ── 1. EXECUTIVE OFFICES DATA MATRIX (10 CARDS) ─────────────────────────────────
 interface ExecOffice {
@@ -242,6 +244,21 @@ export const Home = () => {
     setAuthError('');
   };
 
+  // Helper to map office title to canonical office key
+  const getOfficeKeyFromTitle = (title: string): string => {
+    const t = title.toLowerCase();
+    if (t.includes('chairman')) return 'chairman';
+    if (t.includes('financial') || t.includes('fin sec')) return 'fin-sec';
+    if (t.includes('general secretary') || t.includes('secretary')) return 'general-secretary';
+    if (t.includes('treasury') || t.includes('treasurer')) return 'treasury';
+    if (t.includes('pro') || t.includes('public relations')) return 'pro';
+    if (t.includes('provost')) return 'provost';
+    if (t.includes('welfare')) return 'welfare';
+    if (t.includes('auditor')) return 'auditor';
+    if (t.includes('liturgist')) return 'liturgist';
+    return t.replace(/\s+/g, '-');
+  };
+
   // Submit Auth Modal Form
   const handlePerformModalAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -253,118 +270,132 @@ export const Home = () => {
 
     setAuthLoading(true);
     try {
-      const idToAuthenticate = inputCredential.toUpperCase().trim();
-      
-      // Auto-authenticate with requested administrative role
-      if (selectedOfficeForAuth?.type === 'exec') {
-        const titleLower = selectedOfficeForAuth.title.toLowerCase();
-        let resolvedRole = 'cmo_chairman';
+      if (!selectedOfficeForAuth) return;
+      const cleanId = inputCredential.toUpperCase().trim();
 
-        const roleMap: Record<string, string> = {
-          'CMO-CHAIRMAN-2026': 'cmo_chairman',
-          'CHAIRMAN': 'cmo_chairman',
-          'SECRETARY-2026': 'gen_sec',
-          'SECRETARY': 'gen_sec',
-          'FIN-SEC-2026': 'fin_sec',
-          'FIN-SEC': 'fin_sec',
-          'FINSEC': 'fin_sec',
-          'PRO-2026': 'pro',
-          'PRO': 'pro',
-          'PROVOST-2026': 'provost',
-          'PROVOST': 'provost',
-          'TREASURER-2026': 'treasurer',
-          'TREASURER': 'treasurer',
-          'WELFARE-2026': 'welfare',
-          'WELFARE': 'welfare',
-          'LITURGIST-2026': 'liturgist',
-          'LITURGIST': 'liturgist',
-          'FAMILY-HEAD-2026': 'family_head',
-          'FAMILY-HEAD': 'family_head',
-          'FAMILY-SEC-2026': 'family_secretary',
-          'FAMILY-SEC': 'family_secretary',
+      // Static administrative alias whitelist
+      const ADMIN_ALIAS_REGISTRY: Record<string, { role: string; name: string }> = {
+        'CMO-CHAIRMAN-2026': { role: 'cmo_chairman', name: 'STANLEY UKAH' },
+        'CHAIRMAN':          { role: 'cmo_chairman', name: 'STANLEY UKAH' },
+        'FIN-SEC-2026':      { role: 'fin_sec', name: 'LOHO DONDO, CHRISTOPHER' },
+        'FIN-SEC':           { role: 'fin_sec', name: 'LOHO DONDO, CHRISTOPHER' },
+        'FINSEC':            { role: 'fin_sec', name: 'LOHO DONDO, CHRISTOPHER' },
+        'WELFARE-2026':      { role: 'welfare', name: 'SAMSON BALOGUN' },
+        'WELFARE':           { role: 'welfare', name: 'SAMSON BALOGUN' },
+        'TREASURER-2026':    { role: 'treasurer', name: 'FRANCIS IDIKU' },
+        'TREASURER':         { role: 'treasurer', name: 'FRANCIS IDIKU' },
+        'SECRETARY-2026':    { role: 'gen_sec', name: 'PETER ALLEH' },
+        'SECRETARY':         { role: 'gen_sec', name: 'PETER ALLEH' },
+        'PRO-2026':          { role: 'pro', name: 'RAPHAEL GODWIN' },
+        'PRO':               { role: 'pro', name: 'RAPHAEL GODWIN' },
+        'PROVOST-2026':      { role: 'provost', name: 'PROVOST OFFICERS' },
+        'PROVOST':           { role: 'provost', name: 'PROVOST OFFICERS' },
+        'LITURGIST-2026':    { role: 'liturgist', name: 'LITURGICAL TEAM' },
+        'LITURGIST':         { role: 'liturgist', name: 'LITURGICAL TEAM' },
+        'SPORTS-ADMIN-2026': { role: 'sports_director', name: 'SPORTS DIRECTOR' }
+      };
+
+      let fetchedMember: { id: string; official_member_id?: string; full_name?: string; role?: string; family?: string } | null = null;
+
+      if (cleanId in ADMIN_ALIAS_REGISTRY) {
+        fetchedMember = {
+          id: cleanId,
+          official_member_id: cleanId,
+          full_name: ADMIN_ALIAS_REGISTRY[cleanId].name,
+          role: ADMIN_ALIAS_REGISTRY[cleanId].role
         };
+      } else {
+        // Query Supabase public.members
+        const { data: memberData } = await supabase
+          .from('members')
+          .select('id, official_member_id, full_name, role, cmo_family')
+          .eq('official_member_id', cleanId)
+          .maybeSingle();
 
-        if (idToAuthenticate in roleMap) {
-          resolvedRole = roleMap[idToAuthenticate];
-        } else if (titleLower.includes('liturgist')) {
-          resolvedRole = 'liturgist';
-        } else if (titleLower.includes('provost')) {
-          resolvedRole = 'provost';
-        } else if (titleLower.includes('pro')) {
-          resolvedRole = 'pro';
-        } else if (titleLower.includes('welfare')) {
-          resolvedRole = 'welfare';
-        } else if (titleLower.includes('treasury') || titleLower.includes('treasurer')) {
-          resolvedRole = 'treasurer';
-        } else if (titleLower.includes('financial')) {
-          resolvedRole = 'fin_sec';
-        } else if (titleLower.includes('secretary')) {
-          resolvedRole = 'gen_sec';
-        } else if (titleLower.includes('family head')) {
-          resolvedRole = 'family_head';
-        } else if (titleLower.includes('family sec')) {
-          resolvedRole = 'family_secretary';
-        } else if (titleLower.includes('chairman')) {
-          resolvedRole = 'cmo_chairman';
-        }
+        if (memberData) {
+          fetchedMember = {
+            id: memberData.id,
+            official_member_id: memberData.official_member_id || cleanId,
+            full_name: memberData.full_name || 'Organization Member',
+            role: memberData.role || 'member',
+            family: memberData.cmo_family || undefined
+          };
+        } else {
+          // Fallback query cmo_executives
+          const { data: execData } = await supabase
+            .from('cmo_executives')
+            .select('id, executive_id, full_name, role, role_key, cmo_family')
+            .eq('executive_id', cleanId)
+            .maybeSingle();
 
-        const targetPage: Page = selectedOfficeForAuth.targetPage || (
-          resolvedRole === 'liturgist' ? 'liturgist' :
-          resolvedRole === 'provost' ? 'provost' :
-          resolvedRole === 'pro' ? 'pro' :
-          resolvedRole === 'welfare' ? 'welfare' :
-          resolvedRole === 'treasurer' ? 'treasurer' :
-          resolvedRole === 'gen_sec' ? 'secretary' :
-          resolvedRole === 'fin_sec' ? 'fin_sec' :
-          resolvedRole === 'family_head' ? 'familyChairman' :
-          resolvedRole === 'family_secretary' ? 'familySecretary' :
-          resolvedRole === 'cmo_chairman' ? 'chairman' : 'dashboard'
-        );
-
-        let parsedFamilyUnit: any = 'Wisdom';
-        const idUpper = idToAuthenticate.toUpperCase();
-        if (idUpper.includes('HONOUR')) parsedFamilyUnit = 'Honour';
-        else if (idUpper.includes('INTEGRITY')) parsedFamilyUnit = 'Integrity';
-        else if (idUpper.includes('TALENT')) parsedFamilyUnit = 'Talent';
-        else if (idUpper.includes('WISDOM')) parsedFamilyUnit = 'Wisdom';
-
-        setCurrentUser({
-          id: idToAuthenticate,
-          official_member_id: idToAuthenticate,
-          name: selectedOfficeForAuth.title,
-          full_name: selectedOfficeForAuth.title,
-          status: 'Active (Cleared)',
-          balance: 0,
-          role: resolvedRole as any,
-          family: parsedFamilyUnit,
-          cmo_family: parsedFamilyUnit,
-          familyUnit: parsedFamilyUnit,
-          profilePic: null
-        });
-
-        setSuccess(`✓ Access granted to ${selectedOfficeForAuth.title}`);
-        setShowExecModal(false);
-        setSelectedOfficeForAuth(null);
-        setCurrentPage(targetPage);
-      } else if (selectedOfficeForAuth?.type === 'sports') {
-        setCurrentUser({
-          id: idToAuthenticate,
-          official_member_id: idToAuthenticate,
-          name: `Sports Officer (${selectedOfficeForAuth.title})`,
-          full_name: `Sports Officer (${selectedOfficeForAuth.title})`,
-          status: 'Active (Cleared)',
-          balance: 0,
-          role: 'sports_director' as any,
-          profilePic: null
-        });
-
-        setSuccess(`✓ Access granted to ${selectedOfficeForAuth.title}`);
-        setShowSportsModal(false);
-        setSelectedOfficeForAuth(null);
-        if (selectedOfficeForAuth.targetPage) {
-          setCurrentPage(selectedOfficeForAuth.targetPage);
+          if (execData) {
+            fetchedMember = {
+              id: execData.executive_id || execData.id,
+              official_member_id: execData.executive_id || execData.id,
+              full_name: execData.full_name || 'Executive Officer',
+              role: execData.role_key || execData.role,
+              family: execData.cmo_family || undefined
+            };
+          }
         }
       }
+
+      if (!fetchedMember) {
+        setAuthError(`Invalid Member or Executive ID: "${cleanId}". Record not found.`);
+        return;
+      }
+
+      const memberRole = (fetchedMember.role || 'member').toLowerCase().trim();
+      const targetOfficeKey = selectedOfficeForAuth.type === 'sports'
+        ? 'sports'
+        : getOfficeKeyFromTitle(selectedOfficeForAuth.title);
+
+      const hasClearance = isRoleAuthorizedForOffice(memberRole, targetOfficeKey);
+
+      if (!hasClearance) {
+        setAuthError(`Access Denied: ID ${cleanId} (${fetchedMember.full_name}) is a General Member account and does not hold executive clearance for ${selectedOfficeForAuth.title}.`);
+        return;
+      }
+
+      // Proceed to grant access only if role is verified
+      const targetPage: Page = selectedOfficeForAuth.targetPage || (
+        memberRole === 'liturgist' ? 'liturgist' :
+        memberRole === 'provost' ? 'provost' :
+        memberRole === 'pro' ? 'pro' :
+        memberRole === 'welfare' ? 'welfare' :
+        memberRole === 'treasurer' ? 'treasurer' :
+        memberRole === 'gen_sec' || memberRole === 'secretary' ? 'secretary' :
+        memberRole === 'fin_sec' || memberRole === 'financial_secretary' ? 'fin_sec' :
+        memberRole === 'family_chairman' || memberRole === 'family_head' ? 'familyChairman' :
+        memberRole === 'family_secretary' || memberRole === 'family_sec' ? 'familySecretary' :
+        memberRole === 'cmo_chairman' || memberRole === 'chairman' ? 'chairman' : 'dashboard'
+      );
+
+      let parsedFamilyUnit: any = fetchedMember.family || 'Wisdom';
+      if (cleanId.includes('HONOUR')) parsedFamilyUnit = 'Honour';
+      else if (cleanId.includes('INTEGRITY')) parsedFamilyUnit = 'Integrity';
+      else if (cleanId.includes('TALENT')) parsedFamilyUnit = 'Talent';
+      else if (cleanId.includes('WISDOM')) parsedFamilyUnit = 'Wisdom';
+
+      setCurrentUser({
+        id: fetchedMember.id,
+        official_member_id: fetchedMember.official_member_id || cleanId,
+        name: fetchedMember.full_name || selectedOfficeForAuth.title,
+        full_name: fetchedMember.full_name || selectedOfficeForAuth.title,
+        status: 'Active (Cleared)',
+        balance: 0,
+        role: memberRole as any,
+        family: parsedFamilyUnit,
+        cmo_family: parsedFamilyUnit,
+        familyUnit: parsedFamilyUnit,
+        profilePic: null
+      });
+
+      setSuccess(`✓ Access granted to ${selectedOfficeForAuth.title}`);
+      setShowExecModal(false);
+      setShowSportsModal(false);
+      setSelectedOfficeForAuth(null);
+      setCurrentPage(targetPage);
     } catch (err: any) {
       setAuthError(err.message || 'Authentication failed. Please verify credentials.');
     } finally {
