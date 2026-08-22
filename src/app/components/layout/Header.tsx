@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LogIn, UserPlus, LogOut, Heart, Wallet, FileEdit, Menu, X } from 'lucide-react';
 import { Button } from '../ui/button';
+import { InstallPwaButton } from '../ui/InstallPwaButton';
 import logoImage from '@/imports/CMO.png';
 import { useApp } from '../../../contexts/AppContext';
 import { Page } from '../../../types';
@@ -121,6 +122,7 @@ export const Header = () => {
           </div>
 
           <div className="hidden md:flex items-center gap-3">
+            <InstallPwaButton />
             {currentUser ? (
               <>
                 <div
@@ -183,6 +185,7 @@ export const Header = () => {
         <div className={`overflow-hidden transition-all duration-300 md:hidden ${menuOpen ? 'max-h-[480px] mt-4' : 'max-h-0'}`}>
           <div className="space-y-4 pb-4">
             <div className="flex flex-col gap-2">
+              <InstallPwaButton className="w-full justify-center" />
               {mainNavLinks.map((link) => (
                 <button
                   key={link.page}

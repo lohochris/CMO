@@ -92,7 +92,8 @@ function AppContent() {
 
   useEffect(() => {
     const currentUrlPath = window.location.pathname;
-    const expectedPath = currentPage === 'home' ? '/' : `/${currentPage}`;
+    const searchString = window.location.search;
+    const expectedPath = currentPage === 'home' ? '/' : `/${currentPage}${currentPage === 'verify' ? searchString : ''}`;
     if (currentUrlPath !== expectedPath) {
       window.history.pushState(null, '', expectedPath);
     }
@@ -134,9 +135,9 @@ function AppContent() {
     if (currentPage === 'services') return <Services />;
     if (currentPage === 'login') return <Login />;
     if (currentPage === 'register') return <Register />;
-    if ((currentPage as string) === 'verify') return <VerifyMember />;
-    if ((currentPage as string) === 'terms') return <TermsAndConditions />;
-    if ((currentPage as string) === 'privacy' || (currentPage as string) === 'legal') return <PrivacyPolicy />;
+    if (currentPage === 'verify') return <VerifyMember />;
+    if (currentPage === 'terms') return <TermsAndConditions />;
+    if (currentPage === 'privacy' || currentPage === 'legal') return <PrivacyPolicy />;
 
     // 1. Strict route guard and handler for /family/:familyName
     if (currentPage.startsWith('family/')) {

@@ -1,33 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams, useParams, Link } from 'react-router';
-import { supabase } from '../lib/supabaseClient';
+import { useSearchParams, Link } from 'react-router';
+import { supabase } from '../lib/supabase';
 
 export const VerifyMember: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const { id: pathId } = useParams<{ id?: string }>();
   const [member, setMember] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Parse ID from searchParams, path params, or direct window.location
-  const getMemberId = (): string | null => {
-    const queryId = searchParams.get('id');
-    if (queryId) return decodeURIComponent(queryId).trim();
-    if (pathId) return decodeURIComponent(pathId).trim();
-    
-    // Fallback to raw window search
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const rawId = urlParams.get('id');
-      if (rawId) return decodeURIComponent(rawId).trim();
-    }
-    return null;
-  };
-
-  const memberId = getMemberId();
+  const memberId = searchParams.get('id') || 
+    (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id') : null);
 
   useEffect(() => {
-    const verifyCredential = async () => {
+    const verifyMember = async () => {
       if (!memberId) {
         setLoading(false);
         return;
@@ -35,14 +20,16 @@ export const VerifyMember: React.FC = () => {
 
       try {
         setLoading(true);
+        const cleanId = decodeURIComponent(memberId).trim();
+        
         const { data, error } = await supabase
           .from('members')
           .select('*')
-          .or(`official_member_id.eq.${memberId},id.eq.${memberId}`)
+          .or(`official_member_id.eq.${cleanId},id.eq.${cleanId}`)
           .maybeSingle();
 
         if (error || !data) {
-          setErrorMsg(`No active record found matching ID "${memberId}".`);
+          setErrorMsg(`No verified member record found for ID "${cleanId}".`);
           setMember(null);
         } else {
           setMember(data);
@@ -56,7 +43,7 @@ export const VerifyMember: React.FC = () => {
       }
     };
 
-    verifyCredential();
+    verifyMember();
   }, [memberId]);
 
   return (
@@ -76,12 +63,12 @@ export const VerifyMember: React.FC = () => {
           <div className="py-8">
             <div className="h-14 w-14 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl font-bold">!</div>
             <h3 className="text-base font-bold text-amber-400">No Member ID Specified</h3>
-            <p className="text-xs text-slate-400 mt-2">Please scan a valid ID card QR code or provide <code>?id=HCC-CMO-26-XXX</code> in the link.</p>
+            <p className="text-xs text-slate-400 mt-2">Please scan an official ID card QR code.</p>
           </div>
         ) : errorMsg || !member ? (
           <div className="py-8">
             <div className="h-14 w-14 bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl font-bold">✕</div>
-            <h3 className="text-base font-bold text-rose-400">Invalid or Expired Credential</h3>
+            <h3 className="text-base font-bold text-rose-400">Invalid Credential</h3>
             <p className="text-xs text-slate-400 mt-2">{errorMsg}</p>
           </div>
         ) : (
@@ -101,7 +88,7 @@ export const VerifyMember: React.FC = () => {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Family Unit:</span>
-                <span className="font-semibold text-white">{member.family_unit || 'General Registry'}</span>
+                <span className="font-semibold text-white">{member.family_unit || 'General'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Role:</span>

@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import { supabase } from '../../../lib/supabaseClient';
+import { supabase } from '../../../lib/supabase';
 
 interface MemberIdCardProps {
   member: {
@@ -25,36 +25,32 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
   const [isDownloading, setIsDownloading] = useState<'png' | 'pdf' | null>(null);
 
   const cleanId = member?.official_member_id || 'HCC-CMO-MEMBER';
-  
-  // Build direct public verification URL
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://cmo-eta.vercel.app';
   const verificationUrl = `${baseUrl}/verify?id=${encodeURIComponent(cleanId)}`;
 
   useEffect(() => {
     let isMounted = true;
 
-    const loadPhoto = async () => {
-      let finalUrl: string | null = null;
+    const resolveImageUrl = async () => {
       const rawPath = member?.photo_url || member?.avatar_url || member?.passport_url;
+      let urlToLoad: string | null = null;
 
       if (rawPath && (rawPath.startsWith('http://') || rawPath.startsWith('https://') || rawPath.startsWith('data:'))) {
-        finalUrl = rawPath;
+        urlToLoad = rawPath;
       } else if (rawPath) {
-        // Resolve from Supabase storage
         const { data } = supabase.storage.from('profile-pictures').getPublicUrl(rawPath);
-        finalUrl = data?.publicUrl || null;
+        urlToLoad = data?.publicUrl || null;
       } else if (member?.official_member_id) {
-        // Fallback: Check if bucket stores images by official_member_id
         const { data } = supabase.storage.from('profile-pictures').getPublicUrl(`${member.official_member_id}.jpg`);
-        finalUrl = data?.publicUrl || null;
+        urlToLoad = data?.publicUrl || null;
       }
 
-      if (!finalUrl) {
+      if (!urlToLoad) {
         if (isMounted) setImageSrc(null);
         return;
       }
 
-      // Preload and convert to Base64 via Canvas to prevent export issues
+      // Preload image onto an off-screen canvas to convert to Base64 (prevents export issues)
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
@@ -70,18 +66,18 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
             return;
           }
         } catch (e) {
-          console.warn('Canvas conversion fallback to URL:', e);
+          console.warn('Canvas conversion fallback to direct URL:', e);
         }
-        if (isMounted) setImageSrc(finalUrl);
+        if (isMounted) setImageSrc(urlToLoad);
       };
       img.onerror = () => {
-        if (isMounted) setImageSrc(finalUrl);
+        if (isMounted) setImageSrc(urlToLoad);
       };
-      img.src = finalUrl;
+      img.src = urlToLoad;
     };
 
     if (isOpen) {
-      loadPhoto();
+      resolveImageUrl();
     }
 
     return () => {
@@ -104,7 +100,7 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
         scrollY: 0,
       });
     } catch (err) {
-      console.error('html2canvas capture error:', err);
+      console.error('html2canvas error:', err);
       return null;
     }
   };
@@ -175,7 +171,6 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
               fontFamily: 'Arial, Helvetica, sans-serif',
             }}
           >
-            {/* Top Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #d97706', paddingBottom: '10px' }}>
               <div>
                 <h2 style={{ fontSize: '13px', fontWeight: 900, letterSpacing: '1px', color: '#fbbf24', textTransform: 'uppercase', margin: 0, lineHeight: '1.2' }}>
@@ -190,14 +185,12 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
               </div>
             </div>
 
-            {/* Main Card Content */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', margin: 'auto 0' }}>
-              {/* Left: Member Photo */}
               <div style={{ height: '130px', width: '105px', borderRadius: '10px', border: '2px solid #d97706', backgroundColor: '#0f172a', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {imageSrc ? (
                   <img
                     src={imageSrc}
-                    alt="Member"
+                    alt=""
                     style={{ height: '100%', width: '100%', objectFit: 'cover' }}
                     onError={() => setImageSrc(null)}
                   />
@@ -208,7 +201,6 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
                 )}
               </div>
 
-              {/* Center: Member Info */}
               <div style={{ flex: 1, minWidth: 0, padding: '0 4px' }}>
                 <p style={{ fontSize: '8px', textTransform: 'uppercase', letterSpacing: '1px', color: '#94a3b8', fontWeight: 700, margin: 0 }}>
                   MEMBER NAME
@@ -259,7 +251,6 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
                 </div>
               </div>
 
-              {/* Right: QR Code */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
                 <div style={{ padding: '6px', backgroundColor: '#ffffff', borderRadius: '10px', border: '1.5px solid #d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <QRCodeSVG value={verificationUrl} size={76} level="M" />
@@ -270,7 +261,6 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
               </div>
             </div>
 
-            {/* Bottom Footer */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(217, 119, 6, 0.4)', paddingTop: '6px', fontSize: '8px', color: '#94a3b8' }}>
               <span>Constitution &amp; Bye-Laws 2023</span>
               <span style={{ color: '#fbbf24', fontWeight: 600 }}>Scan QR to Verify Credential</span>
