@@ -355,16 +355,15 @@ export const Home = () => {
 
       // 2. Strict check: If user is a general member, block immediately
       if (memberRole === 'member' || memberRole === 'regular' || memberRole === '') {
-        setAuthError(`Access Denied: ${cleanId} (${fetchedMember.full_name || 'Member'}) is registered as a General Member. This portal is restricted exclusively to elected Executive Officers.`);
+        setAuthError('Access Denied: You do not hold an active executive appointment for this office.');
         return;
       }
 
-      // 3. Strict check against target office
-      const allowedRoles = STRICT_OFFICE_ROLES[targetOfficeKey.toLowerCase()] || ['super_admin'];
-      const isAuthorized = allowedRoles.some(allowed => memberRole === allowed || memberRole.includes(allowed));
+      // 3. Strict check against target office using OFFICE_ROLE_MAP / isRoleAuthorizedForOffice
+      const isAuthorized = isRoleAuthorizedForOffice(memberRole, targetOfficeKey);
 
       if (!isAuthorized) {
-        setAuthError(`Access Denied: ${fetchedMember.full_name} (${fetchedMember.role}) does not hold authorization for the ${targetOfficeKey.replace('-', ' ').toUpperCase()} workspace.`);
+        setAuthError('Access Denied: You do not hold an active executive appointment for this office.');
         return;
       }
 

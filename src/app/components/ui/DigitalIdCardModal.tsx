@@ -1,38 +1,41 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
+import { toPng } from 'html-to-image';
+import { jsPDF } from 'jspdf';
 import { supabase } from '../../../lib/supabase';
 
-interface MemberIdCardProps {
+export interface DigitalIdCardModalProps {
+  isOpen: boolean;
+  onClose: () => void;
   member: {
     full_name: string;
     official_member_id: string;
     phone_number?: string;
     family_unit?: string;
+    cmo_family?: string;
     role?: string;
     photo_url?: string;
     avatar_url?: string;
     passport_url?: string;
-  };
-  isOpen: boolean;
-  onClose: () => void;
+  } | null;
 }
 
-export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen, onClose }) => {
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [isDownloading, setIsDownloading] = useState<'png' | 'pdf' | null>(null);
+export type MemberIdCardProps = DigitalIdCardModalProps;
 
-  // Resolve the official ID cleanly
-  const memberCode = member?.official_member_id?.trim() || (member as any)?.member_id || 'HCC-CMO-26-003';
-  const cleanId = (memberCode || 'MEMBER').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const canonicalVerifyUrl = `https://cmo-eta.vercel.app/verify?id=${encodeURIComponent(memberCode)}`;
+export const DigitalIdCardModal: React.FC<DigitalIdCardModalProps> = ({
+  isOpen,
+  onClose,
+  member,
+}) => {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [imageSrc, setImageSrc] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
 
     const resolveImageUrl = async () => {
+      if (!member) return;
       const rawPath = member?.photo_url || member?.avatar_url || member?.passport_url;
       let urlToLoad: string | null = null;
 
@@ -51,7 +54,7 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
         return;
       }
 
-      // Preload image onto an off-screen canvas to convert to Base64 (prevents export issues)
+      // Preload image onto an off-screen canvas to convert to Base64 (prevents CORS export issues)
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
@@ -77,7 +80,7 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
       img.src = urlToLoad;
     };
 
-    if (isOpen) {
+    if (isOpen && member) {
       resolveImageUrl();
     }
 
@@ -86,203 +89,165 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
     };
   }, [member, isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !member) return null;
 
-  const generateCanvas = async (): Promise<HTMLCanvasElement | null> => {
-    if (!cardRef.current) return null;
+  const memberCode = member.official_member_id?.trim() || (member as any)?.member_id || 'HCC-CMO-26-003';
+  const cleanId = (memberCode || 'MEMBER').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const canonicalVerifyUrl = `${window.location.origin}/verify?id=${encodeURIComponent(memberCode)}`;
+
+  const handleDownloadPNG = async () => {
+    if (!cardRef.current) return;
     try {
-      return await html2canvas(cardRef.current, {
-        scale: 3,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#02231c',
-        logging: false,
-        scrollX: 0,
-        scrollY: 0,
+      setDownloading(true);
+      const dataUrl = await toPng(cardRef.current, {
+        cacheBust: true,
+        pixelRatio: 3, // Crisp 300+ DPI
       });
-    } catch (err) {
-      console.error('html2canvas error:', err);
-      return null;
-    }
-  };
 
-  const handleDownloadPng = async () => {
-    try {
-      setIsDownloading('png');
-      const canvas = await generateCanvas();
-      if (!canvas) return;
-      const dataUrl = canvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.download = `${cleanId}_ID_CARD.png`;
       link.href = dataUrl;
-      document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+    } catch (err) {
+      console.error('Error generating PNG:', err);
     } finally {
-      setIsDownloading(null);
+      setDownloading(false);
     }
   };
 
-  const handleDownloadPdf = async () => {
+  const handleDownloadPDF = async () => {
+    if (!cardRef.current) return;
     try {
-      setIsDownloading('pdf');
-      const canvas = await generateCanvas();
-      if (!canvas) return;
-      const dataUrl = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: [85.6, 53.98],
+      setDownloading(true);
+      const dataUrl = await toPng(cardRef.current, {
+        cacheBust: true,
+        pixelRatio: 3,
       });
-      pdf.addImage(dataUrl, 'PNG', 0, 0, 85.6, 53.98);
+
+      // Standard Portrait Card: 85.6mm width, 130mm height
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [85.6, 130],
+      });
+
+      pdf.addImage(dataUrl, 'PNG', 0, 0, 85.6, 130);
       pdf.save(`${cleanId}_ID_CARD.pdf`);
+    } catch (err) {
+      console.error('Error generating PDF:', err);
     } finally {
-      setIsDownloading(null);
+      setDownloading(false);
     }
   };
+
+  const photoSrc = imageSrc || member.avatar_url || member.photo_url || member.passport_url;
+  const familyName = member.cmo_family || member.family_unit || 'Parish';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
-      <div className="w-full max-w-2xl rounded-2xl border border-amber-500/30 bg-slate-950 p-6 shadow-2xl">
-        <div className="flex items-center justify-between pb-3 border-b border-amber-500/20">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="bg-[#0b1311] border border-emerald-900/60 rounded-3xl p-4 sm:p-6 w-full max-w-sm shadow-2xl relative my-auto">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between pb-3 mb-3 border-b border-emerald-800/40">
           <div>
-            <h3 className="text-base font-bold text-amber-400">Digital Membership ID Card</h3>
-            <p className="text-xs text-slate-400">Catholic Men Organisation • Kano Diocese</p>
+            <h3 className="text-sm font-bold text-amber-400">Digital Membership ID Card</h3>
+            <p className="text-[11px] text-slate-400">Catholic Men Organisation • Kano Diocese</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white text-xl px-2">✕</button>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-white text-lg font-bold p-1 rounded-lg cursor-pointer"
+          >
+            ✕
+          </button>
         </div>
 
-        <div className="my-5 flex justify-center overflow-x-auto p-2">
+        {/* Captured ID Card (Rendered at fluid 100% width on screen, fixed aspect ratio) */}
+        <div className="flex justify-center w-full my-2">
           <div
             ref={cardRef}
-            style={{
-              width: '600px',
-              height: '360px',
-              backgroundColor: '#02231c',
-              borderRadius: '16px',
-              padding: '24px 26px',
-              color: '#ffffff',
-              border: '2px solid #d97706',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              boxSizing: 'border-box',
-              position: 'relative',
-              overflow: 'hidden',
-              fontFamily: 'Arial, Helvetica, sans-serif',
-            }}
+            id="digital-id-card"
+            style={{ backgroundColor: '#04160f', borderColor: '#d97706' }}
+            className="w-full max-w-[340px] rounded-2xl border-2 border-amber-500 p-4 text-white shadow-xl flex flex-col justify-between select-none"
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #d97706', paddingBottom: '10px' }}>
-              <div>
-                <h2 style={{ fontSize: '13px', fontWeight: 900, letterSpacing: '1px', color: '#fbbf24', textTransform: 'uppercase', margin: 0, lineHeight: '1.2' }}>
-                  HOLY CROSS CATHOLIC CHURCH BADAWA
+            {/* Parish Banner */}
+            <div className="flex items-center justify-between border-b border-amber-400/30 pb-2.5">
+              <div className="flex-1 pr-2">
+                <h2 className="text-[11px] sm:text-xs font-black text-amber-400 uppercase tracking-tight leading-tight">
+                  Holy Cross Catholic Church Badawa
                 </h2>
-                <p style={{ fontSize: '10px', letterSpacing: '0.3px', color: '#cbd5e1', margin: '3px 0 0 0', fontWeight: 600 }}>
+                <p className="text-[9px] text-emerald-300 font-medium">
                   Catholic Men Organisation (CMO) • Kano Diocese
                 </p>
               </div>
-              <div style={{ height: '36px', width: '36px', borderRadius: '50%', backgroundColor: '#d97706', border: '1.5px solid #fef08a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: '12px', fontWeight: 900, color: '#ffffff' }}>HC</span>
+              <div className="w-8 h-8 rounded-full border border-amber-400 bg-amber-500/20 flex items-center justify-center text-amber-400 font-extrabold text-[10px] shrink-0">
+                HC
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', margin: 'auto 0' }}>
-              <div style={{ height: '130px', width: '105px', borderRadius: '10px', border: '2px solid #d97706', backgroundColor: '#0f172a', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {imageSrc ? (
+            {/* Member Name & Official Badge */}
+            <div className="text-center my-3">
+              <p className="text-[8px] font-bold tracking-widest text-emerald-400 uppercase mb-0.5">
+                OFFICIAL MEMBER
+              </p>
+              <h1 className="text-sm sm:text-base font-black text-white uppercase tracking-wide leading-snug px-1 line-clamp-2">
+                {member.full_name}
+              </h1>
+              <div className="inline-block bg-amber-400 text-slate-950 text-[11px] font-black px-3 py-0.5 rounded-full mt-1 tracking-wider shadow">
+                {memberCode}
+              </div>
+            </div>
+
+            {/* Photo & QR Code */}
+            <div className="flex items-center justify-between gap-3 px-1 my-2">
+              {/* Photo */}
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden border-2 border-amber-400/80 bg-slate-900 shrink-0 flex items-center justify-center shadow-md">
+                {photoSrc ? (
                   <img
-                    src={imageSrc}
-                    alt=""
-                    style={{ height: '100%', width: '100%', objectFit: 'cover' }}
-                    onError={() => setImageSrc(null)}
+                    src={photoSrc}
+                    alt={member.full_name}
+                    className="w-full h-full object-cover"
+                    crossOrigin="anonymous"
                   />
                 ) : (
-                  <span style={{ fontSize: '40px', fontWeight: 800, color: '#fbbf24' }}>
-                    {member?.full_name?.charAt(0) || 'M'}
+                  <span className="text-3xl font-black text-amber-400">
+                    {member.full_name?.charAt(0) || 'M'}
                   </span>
                 )}
               </div>
 
-              <div style={{ flex: 1, minWidth: 0, padding: '0 4px' }}>
-                <p style={{ fontSize: '8px', textTransform: 'uppercase', letterSpacing: '1px', color: '#94a3b8', fontWeight: 700, margin: 0 }}>
-                  MEMBER NAME
-                </p>
-                <h3 style={{ fontSize: '14px', fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', margin: '2px 0 6px 0', lineHeight: '1.2', letterSpacing: '0.2px', wordBreak: 'break-word' }}>
-                  {member?.full_name}
-                </h3>
-
-                <div
-                  style={{
-                    backgroundColor: '#d97706',
-                    border: '1.5px solid #fef08a',
-                    borderRadius: '6px',
-                    padding: '4px 10px',
-                    marginBottom: '8px',
-                    width: 'fit-content',
-                    color: '#ffffff',
-                    fontSize: '11px',
-                    fontWeight: 900,
-                    letterSpacing: '1px',
-                    lineHeight: '1.2',
-                  }}
-                >
-                  {memberCode}
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
-                  <div>
-                    <p style={{ fontSize: '7.5px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#94a3b8', margin: 0, fontWeight: 700 }}>ROLE</p>
-                    <p style={{ fontSize: '10px', fontWeight: 700, color: '#ffffff', margin: '2px 0 0 0', textTransform: 'capitalize' }}>
-                      {member?.role || 'Member'}
-                    </p>
-                  </div>
-                  <div>
-                    <p style={{ fontSize: '7.5px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#94a3b8', margin: 0, fontWeight: 700 }}>FAMILY UNIT</p>
-                    <p style={{ fontSize: '10px', fontWeight: 700, color: '#ffffff', margin: '2px 0 0 0' }}>
-                      {member?.family_unit || 'Wisdom'}
-                    </p>
-                  </div>
-                  {member?.phone_number && (
-                    <div style={{ gridColumn: 'span 2' }}>
-                      <p style={{ fontSize: '7.5px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#94a3b8', margin: 0, fontWeight: 700 }}>CONTACT</p>
-                      <p style={{ fontSize: '9.5px', fontWeight: 600, color: '#e2e8f0', margin: '2px 0 0 0' }}>
-                        {member.phone_number}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-                <div style={{ padding: '6px', backgroundColor: '#ffffff', borderRadius: '10px', border: '1.5px solid #d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <QRCodeSVG value={canonicalVerifyUrl} size={76} level="M" />
-                </div>
-                <span style={{ fontSize: '8px', fontWeight: 800, color: '#34d399', letterSpacing: '0.5px' }}>
-                  ● VERIFIED
-                </span>
+              {/* QR Code */}
+              <div className="w-24 h-24 sm:w-28 sm:h-28 bg-white p-1.5 rounded-xl border border-slate-700 shrink-0 flex items-center justify-center shadow-md">
+                <QRCodeSVG
+                  value={canonicalVerifyUrl}
+                  size={96}
+                  level="M"
+                  className="w-full h-full"
+                />
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(217, 119, 6, 0.4)', paddingTop: '6px', fontSize: '8px', color: '#94a3b8' }}>
-              <span>Constitution &amp; Bye-Laws 2023</span>
-              <span style={{ color: '#fbbf24', fontWeight: 600 }}>Scan QR to Verify Credential</span>
+            {/* Footer metadata */}
+            <div className="mt-2 pt-2 border-t border-amber-400/20 flex justify-between items-center text-[10px] text-slate-300">
+              <span>Family: <strong className="text-amber-400">{familyName}</strong></span>
+              <span>Role: <strong className="text-amber-400 capitalize">{member.role?.replace('_', ' ') || 'Member'}</strong></span>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+        {/* Action Buttons */}
+        <div className="grid grid-cols-2 gap-3 mt-4 pt-2 border-t border-emerald-900/40">
           <button
-            onClick={handleDownloadPng}
-            disabled={isDownloading !== null}
-            className="px-5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-xs font-semibold border border-slate-700 transition-all flex items-center gap-2"
+            onClick={handleDownloadPNG}
+            disabled={downloading}
+            className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
           >
-            {isDownloading === 'png' ? 'Generating PNG...' : '🖼️ Download PNG'}
+            🖼️ {downloading ? 'Processing...' : 'Download PNG'}
           </button>
           <button
-            onClick={handleDownloadPdf}
-            disabled={isDownloading !== null}
-            className="px-5 py-2.5 rounded-lg bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-black text-xs font-bold shadow-lg transition-all flex items-center gap-2"
+            onClick={handleDownloadPDF}
+            disabled={downloading}
+            className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black shadow-lg transition-all disabled:opacity-50 cursor-pointer"
           >
-            {isDownloading === 'pdf' ? 'Generating PDF...' : '📄 Download PDF'}
+            📄 {downloading ? 'Processing...' : 'Download PDF'}
           </button>
         </div>
       </div>

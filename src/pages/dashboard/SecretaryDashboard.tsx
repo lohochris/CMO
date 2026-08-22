@@ -57,12 +57,22 @@ export const SecretaryDashboard = () => {
   const [isSubmittingPinChange, setIsSubmittingPinChange] = useState(false);
 
   // Live Dynamic Stats States
+  const [memberCount, setMemberCount] = useState<number | null>(null);
   const [announcementsCount, setAnnouncementsCount] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchDashboardStats = async () => {
       try {
-        // Fetch total published announcements
+        // 1. Fetch total registered members from public.members
+        const { count: totalMembers, error: memberErr } = await supabase
+          .from('members')
+          .select('*', { count: 'exact', head: true });
+
+        if (!memberErr && totalMembers !== null) {
+          setMemberCount(totalMembers);
+        }
+
+        // 2. Fetch total published announcements
         const { count: totalAnnouncements, error: annErr } = await supabase
           .from('announcements')
           .select('*', { count: 'exact', head: true });
