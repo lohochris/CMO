@@ -1,30 +1,52 @@
 export const STRICT_OFFICE_ROLES: Record<string, string[]> = {
-  // 8 Central Executive Offices
-  'chairman': ['chairman', 'cmo_chairman', 'vice chairman', 'super_admin'],
-  'cmo_chairman': ['chairman', 'cmo_chairman', 'vice chairman', 'super_admin'],
-  'general-secretary': ['general secretary', 'assistant general secretary', 'gen_sec', 'secretary', 'super_admin'],
-  'secretary': ['general secretary', 'assistant general secretary', 'gen_sec', 'secretary', 'super_admin'],
-  'financial-secretary': ['financial secretary', 'assistant financial secretary', 'fin_sec', 'financial_secretary', 'fin sec', 'super_admin'],
-  'fin-sec': ['financial secretary', 'assistant financial secretary', 'fin_sec', 'financial_secretary', 'fin sec', 'super_admin'],
-  'treasury': ['treasurer', 'assistant treasurer', 'super_admin'],
-  'treasurer': ['treasurer', 'assistant treasurer', 'super_admin'],
-  'pro': ['public relations officer', 'pro', 'assistant pro', 'super_admin'],
-  'provost': ['provost', 'provost marshall', 'chief provost', 'super_admin'],
-  'welfare': ['welfare officer', 'welfare secretary', 'welfare', 'super_admin'],
-  'auditor': ['auditor', 'internal auditor', 'super_admin'],
-  'liturgist': ['liturgist', 'super_admin'],
+  // 1. Central Executive Offices (Keys match modal workspace identifiers)
+  'chairman': ['chairman', 'cmo_chairman', 'super_admin'],
+  'general-secretary': ['secretary', 'general secretary', 'gen_sec', 'super_admin'],
+  'financial-secretary': ['fin_sec', 'financial secretary', 'financial_secretary', 'super_admin'],
+  'treasury': ['treasurer', 'super_admin'],
+  'pro': ['pro', 'public relations officer', 'super_admin'],
+  'provost': ['provost', 'provost marshall', 'super_admin'],
+  'welfare': ['welfare', 'welfare officer', 'super_admin'],
+  'liturgy': ['liturgist', 'liturgical coordinator', 'super_admin'],
 
-  // Sports Hubs
-  'sports-admin': ['sports director', 'sports coordinator', 'team manager', 'sports_director', 'super_admin'],
-  'sports': ['sports director', 'sports coordinator', 'team manager', 'sports_director', 'coach', 'referee', 'medical_officer', 'athlete', 'super_admin'],
-  'sports_director': ['sports director', 'sports coordinator', 'team manager', 'sports_director', 'super_admin'],
+  // 2. Family Units
+  'wisdom': ['family_head', 'family_secretary', 'super_admin'],
+  'talent': ['family_head', 'family_secretary', 'super_admin'],
+  'honour': ['family_head', 'family_secretary', 'super_admin'],
+  'integrity': ['family_head', 'family_secretary', 'super_admin'],
 
-  // Family Units
-  'family-head': ['family_chairman', 'family_head', 'family chairman', 'family head', 'chairman', 'cmo_chairman', 'super_admin'],
-  'family-sec': ['family_secretary', 'family_sec', 'family secretary', 'gen_sec', 'secretary', 'super_admin'],
-  'familychairman': ['family_chairman', 'family_head', 'family chairman', 'family head', 'chairman', 'cmo_chairman', 'super_admin'],
-  'familysecretary': ['family_secretary', 'family_sec', 'family secretary', 'gen_sec', 'secretary', 'super_admin'],
+  // 3. Sports Department Portals
+  'sports-admin': ['sports_director', 'sports director', 'super_admin'],
+  'sports-treasury': ['sports_treasurer', 'treasurer', 'super_admin'],
+  'sports-medical': ['medical_officer', 'super_admin'],
+  'sports-coach': ['coach', 'head coach', 'super_admin'],
+  'sports-referee': ['referee', 'match referee', 'super_admin'],
+  'sports': ['sports_director', 'sports_treasurer', 'medical_officer', 'coach', 'referee', 'super_admin']
 };
+
+export const CANONICAL_EXECUTIVE_IDS = [
+  'HCC-CMO-EXEC-CH',
+  'HCC-CMO-EXEC-FS',
+  'HCC-CMO-EXEC-TR',
+  'HCC-CMO-EXEC-WE',
+  'HCC-CMO-EXEC-PR',
+  'HCC-CMO-EXEC-PV',
+  'HCC-CMO-EXEC-SE',
+  'HCC-CMO-EXEC-LT',
+  'HCC-CMO-WIS-FH',
+  'HCC-CMO-WIS-FS',
+  'HCC-CMO-TAL-FH',
+  'HCC-CMO-TAL-FS',
+  'HCC-CMO-HON-FH',
+  'HCC-CMO-HON-FS',
+  'HCC-CMO-INT-FH',
+  'HCC-CMO-INT-FS',
+  'HCC-CMO-SPRT-DIR',
+  'HCC-CMO-SPRT-TR',
+  'HCC-CMO-SPRT-MED',
+  'HCC-CMO-SPRT-COACH',
+  'HCC-CMO-SPRT-REF'
+];
 
 export const OFFICE_ROLE_REQUIREMENTS = STRICT_OFFICE_ROLES;
 
@@ -44,7 +66,14 @@ export function isRoleAuthorizedForOffice(
     return false;
   }
 
-  const officeKey = targetOfficeKey.toLowerCase().trim().replace(/\s+/g, '-');
+  let officeKey = targetOfficeKey.toLowerCase().trim().replace(/\s+/g, '-');
+  if (officeKey === 'fin-sec') officeKey = 'financial-secretary';
+  if (officeKey === 'liturgist') officeKey = 'liturgy';
+  if (officeKey === 'secretary') officeKey = 'general-secretary';
+  if (officeKey === 'treasurer') officeKey = 'treasury';
+  if (officeKey === 'family-head' || officeKey === 'familychairman') officeKey = 'wisdom';
+  if (officeKey === 'family-sec' || officeKey === 'familysecretary') officeKey = 'wisdom';
+
   const allowedRoles = STRICT_OFFICE_ROLES[officeKey] || 
     STRICT_OFFICE_ROLES[targetOfficeKey.toLowerCase().trim()] || 
     ['super_admin'];
@@ -54,3 +83,4 @@ export function isRoleAuthorizedForOffice(
     return normalizedUserRole === normAllowed || normalizedUserRole.includes(normAllowed);
   });
 }
+

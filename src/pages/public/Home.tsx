@@ -248,14 +248,14 @@ export const Home = () => {
   const getOfficeKeyFromTitle = (title: string): string => {
     const t = title.toLowerCase();
     if (t.includes('chairman')) return 'chairman';
-    if (t.includes('financial') || t.includes('fin sec')) return 'fin-sec';
+    if (t.includes('financial') || t.includes('fin sec')) return 'financial-secretary';
     if (t.includes('general secretary') || t.includes('secretary')) return 'general-secretary';
     if (t.includes('treasury') || t.includes('treasurer')) return 'treasury';
     if (t.includes('pro') || t.includes('public relations')) return 'pro';
     if (t.includes('provost')) return 'provost';
     if (t.includes('welfare')) return 'welfare';
     if (t.includes('auditor')) return 'auditor';
-    if (t.includes('liturgist')) return 'liturgist';
+    if (t.includes('liturgist') || t.includes('liturgy')) return 'liturgy';
     return t.replace(/\s+/g, '-');
   };
 
@@ -273,8 +273,29 @@ export const Home = () => {
       if (!selectedOfficeForAuth) return;
       const cleanId = inputCredential.toUpperCase().trim();
 
-      // Static administrative alias whitelist
-      const ADMIN_ALIAS_REGISTRY: Record<string, { role: string; name: string }> = {
+      // Static administrative alias whitelist & canonical executive IDs
+      const ADMIN_ALIAS_REGISTRY: Record<string, { role: string; name: string; family?: string }> = {
+        'HCC-CMO-EXEC-CH': { role: 'chairman', name: 'EXECUTIVE CHAIRMAN' },
+        'HCC-CMO-EXEC-FS': { role: 'fin_sec', name: 'FINANCIAL SECRETARY' },
+        'HCC-CMO-EXEC-TR': { role: 'treasurer', name: 'TREASURER' },
+        'HCC-CMO-EXEC-WE': { role: 'welfare', name: 'WELFARE OFFICER' },
+        'HCC-CMO-EXEC-PR': { role: 'pro', name: 'PUBLIC RELATIONS OFFICER' },
+        'HCC-CMO-EXEC-PV': { role: 'provost', name: 'PROVOST MARSHALL' },
+        'HCC-CMO-EXEC-SE': { role: 'secretary', name: 'GENERAL SECRETARY' },
+        'HCC-CMO-EXEC-LT': { role: 'liturgist', name: 'LITURGICAL COORDINATOR' },
+        'HCC-CMO-WIS-FH':  { role: 'family_head', name: 'WISDOM FAMILY HEAD', family: 'Wisdom' },
+        'HCC-CMO-WIS-FS':  { role: 'family_secretary', name: 'WISDOM FAMILY SECRETARY', family: 'Wisdom' },
+        'HCC-CMO-TAL-FH':  { role: 'family_head', name: 'TALENT FAMILY HEAD', family: 'Talent' },
+        'HCC-CMO-TAL-FS':  { role: 'family_secretary', name: 'TALENT FAMILY SECRETARY', family: 'Talent' },
+        'HCC-CMO-HON-FH':  { role: 'family_head', name: 'HONOUR FAMILY HEAD', family: 'Honour' },
+        'HCC-CMO-HON-FS':  { role: 'family_secretary', name: 'HONOUR FAMILY SECRETARY', family: 'Honour' },
+        'HCC-CMO-INT-FH':  { role: 'family_head', name: 'INTEGRITY FAMILY HEAD', family: 'Integrity' },
+        'HCC-CMO-INT-FS':  { role: 'family_secretary', name: 'INTEGRITY FAMILY SECRETARY', family: 'Integrity' },
+        'HCC-CMO-SPRT-DIR':   { role: 'sports_director', name: 'SPORTS DIRECTOR' },
+        'HCC-CMO-SPRT-TR':    { role: 'sports_treasurer', name: 'SPORTS TREASURER' },
+        'HCC-CMO-SPRT-MED':   { role: 'medical_officer', name: 'SPORTS MEDICAL OFFICER' },
+        'HCC-CMO-SPRT-COACH': { role: 'coach', name: 'SPORTS HEAD COACH' },
+        'HCC-CMO-SPRT-REF':   { role: 'referee', name: 'SPORTS MATCH REFEREE' },
         'CMO-CHAIRMAN-2026': { role: 'cmo_chairman', name: 'STANLEY UKAH' },
         'CHAIRMAN':          { role: 'cmo_chairman', name: 'STANLEY UKAH' },
         'FIN-SEC-2026':      { role: 'fin_sec', name: 'LOHO DONDO, CHRISTOPHER' },
@@ -317,7 +338,8 @@ export const Home = () => {
           id: cleanId,
           official_member_id: cleanId,
           full_name: ADMIN_ALIAS_REGISTRY[cleanId].name,
-          role: ADMIN_ALIAS_REGISTRY[cleanId].role
+          role: ADMIN_ALIAS_REGISTRY[cleanId].role,
+          family: ADMIN_ALIAS_REGISTRY[cleanId].family
         };
       }
 
