@@ -1,22 +1,25 @@
-export const STRICT_OFFICE_ROLES: Record<string, string[]> = {
-  // 1. Central Executive Offices (Keys match modal workspace identifiers)
-  'chairman': ['chairman', 'cmo_chairman', 'super_admin'],
-  'general-secretary': ['secretary', 'general secretary', 'gen_sec', 'super_admin'],
-  'financial-secretary': ['fin_sec', 'financial secretary', 'financial_secretary', 'super_admin'],
-  'treasury': ['treasurer', 'super_admin'],
+export const OFFICE_ROLE_MAP: Record<string, string[]> = {
+  'chairman': ['chairman', 'vice chairman', 'super_admin'],
+  'general-secretary': ['secretary', 'general secretary', 'super_admin'],
+  'financial-secretary': ['fin_sec', 'financial secretary', 'super_admin'],
+  'treasury': ['treasurer', 'assistant treasurer', 'super_admin'],
   'pro': ['pro', 'public relations officer', 'super_admin'],
   'provost': ['provost', 'provost marshall', 'super_admin'],
   'welfare': ['welfare', 'welfare officer', 'super_admin'],
   'liturgy': ['liturgist', 'liturgical coordinator', 'super_admin'],
+  'sports-admin': ['sports_director', 'sports coordinator', 'coach', 'referee', 'super_admin'],
+};
 
-  // 2. Family Units
+export const STRICT_OFFICE_ROLES: Record<string, string[]> = {
+  ...OFFICE_ROLE_MAP,
+
+  // Family Units
   'wisdom': ['family_head', 'family_secretary', 'super_admin'],
   'talent': ['family_head', 'family_secretary', 'super_admin'],
   'honour': ['family_head', 'family_secretary', 'super_admin'],
   'integrity': ['family_head', 'family_secretary', 'super_admin'],
 
-  // 3. Sports Department Portals
-  'sports-admin': ['sports_director', 'sports director', 'super_admin'],
+  // Sports Department Sub-portals
   'sports-treasury': ['sports_treasurer', 'treasurer', 'super_admin'],
   'sports-medical': ['medical_officer', 'super_admin'],
   'sports-coach': ['coach', 'head coach', 'super_admin'],
@@ -74,7 +77,8 @@ export function isRoleAuthorizedForOffice(
   if (officeKey === 'family-head' || officeKey === 'familychairman') officeKey = 'wisdom';
   if (officeKey === 'family-sec' || officeKey === 'familysecretary') officeKey = 'wisdom';
 
-  const allowedRoles = STRICT_OFFICE_ROLES[officeKey] || 
+  const allowedRoles = OFFICE_ROLE_MAP[officeKey] ||
+    STRICT_OFFICE_ROLES[officeKey] || 
     STRICT_OFFICE_ROLES[targetOfficeKey.toLowerCase().trim()] || 
     ['super_admin'];
 
@@ -83,4 +87,3 @@ export function isRoleAuthorizedForOffice(
     return normalizedUserRole === normAllowed || normalizedUserRole.includes(normAllowed);
   });
 }
-

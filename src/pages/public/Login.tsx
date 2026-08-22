@@ -155,7 +155,7 @@ export const Login = () => {
       const userRole = (member.role || 'member').toLowerCase().trim();
 
       if (userRole === 'member' || userRole === 'regular' || userRole === '') {
-        setError(`Access Denied: ${cleanId} is a General Member ID. Please use the "Member ID" login tab.`);
+        setError('Access Denied: You do not hold an active executive appointment for this office.');
         return;
       }
 
