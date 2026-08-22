@@ -1,10 +1,12 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { toPng } from 'html-to-image';
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import { supabase } from '../../../lib/supabase';
 
-interface MemberIdCardProps {
+export interface DigitalIdCardModalProps {
+  isOpen: boolean;
+  onClose: () => void;
   member: {
     full_name: string;
     official_member_id: string;
@@ -15,25 +17,25 @@ interface MemberIdCardProps {
     photo_url?: string;
     avatar_url?: string;
     passport_url?: string;
-  };
-  isOpen: boolean;
-  onClose: () => void;
+  } | null;
 }
 
-export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen, onClose }) => {
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [isDownloading, setIsDownloading] = useState<'png' | 'pdf' | null>(null);
+export type MemberIdCardProps = DigitalIdCardModalProps;
 
-  // Resolve official ID & verification URL
-  const memberCode = member?.official_member_id?.trim() || (member as any)?.member_id || 'HCC-CMO-26-003';
-  const cleanId = (memberCode || 'MEMBER').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const canonicalVerifyUrl = `${window.location.origin}/verify?id=${encodeURIComponent(memberCode)}`;
+export const DigitalIdCardModal: React.FC<DigitalIdCardModalProps> = ({
+  isOpen,
+  onClose,
+  member,
+}) => {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [imageSrc, setImageSrc] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
 
     const resolveImageUrl = async () => {
+      if (!member) return;
       const rawPath = member?.photo_url || member?.avatar_url || member?.passport_url;
       let urlToLoad: string | null = null;
 
@@ -78,7 +80,7 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
       img.src = urlToLoad;
     };
 
-    if (isOpen) {
+    if (isOpen && member) {
       resolveImageUrl();
     }
 
@@ -87,147 +89,133 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
     };
   }, [member, isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !member) return null;
 
-  const handleDownloadPng = async () => {
-    const cardElement = cardRef.current || document.getElementById('digital-id-card');
-    if (!cardElement) return;
+  const memberCode = member.official_member_id?.trim() || (member as any)?.member_id || 'HCC-CMO-26-003';
+  const cleanId = (memberCode || 'MEMBER').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const canonicalVerifyUrl = `${window.location.origin}/verify?id=${encodeURIComponent(memberCode)}`;
 
+  const handleDownloadPNG = async () => {
+    if (!cardRef.current) return;
     try {
-      setIsDownloading('png');
-
-      const dataUrl = await toPng(cardElement, {
-        width: 380,
-        pixelRatio: 3, // Ultra-sharp print resolution
+      setDownloading(true);
+      const dataUrl = await toPng(cardRef.current, {
         cacheBust: true,
-        style: {
-          margin: '0',
-          transform: 'none',
-        },
+        pixelRatio: 3, // Crisp 300+ DPI
       });
 
       const link = document.createElement('a');
       link.download = `${cleanId}_ID_CARD.png`;
       link.href = dataUrl;
-      document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
     } catch (err) {
-      console.error('Error generating card image:', err);
+      console.error('Error generating PNG:', err);
     } finally {
-      setIsDownloading(null);
+      setDownloading(false);
     }
   };
 
-  const handleDownloadPdf = async () => {
-    const cardElement = cardRef.current || document.getElementById('digital-id-card');
-    if (!cardElement) return;
-
+  const handleDownloadPDF = async () => {
+    if (!cardRef.current) return;
     try {
-      setIsDownloading('pdf');
-
-      const dataUrl = await toPng(cardElement, {
-        width: 380,
-        pixelRatio: 3,
+      setDownloading(true);
+      const dataUrl = await toPng(cardRef.current, {
         cacheBust: true,
-        style: {
-          margin: '0',
-          transform: 'none',
-        },
+        pixelRatio: 3,
       });
 
+      // Standard Portrait Card: 85.6mm width, 130mm height
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: [85.6, 125],
+        format: [85.6, 130],
       });
 
-      pdf.addImage(dataUrl, 'PNG', 0, 0, 85.6, 125);
+      pdf.addImage(dataUrl, 'PNG', 0, 0, 85.6, 130);
       pdf.save(`${cleanId}_ID_CARD.pdf`);
     } catch (err) {
-      console.error('Error generating PDF card:', err);
+      console.error('Error generating PDF:', err);
     } finally {
-      setIsDownloading(null);
+      setDownloading(false);
     }
   };
 
-  const photoSrc = imageSrc || member?.avatar_url || member?.photo_url || member?.passport_url;
-  const familyName = member?.cmo_family || member?.family_unit || 'Parish';
+  const photoSrc = imageSrc || member.avatar_url || member.photo_url || member.passport_url;
+  const familyName = member.cmo_family || member.family_unit || 'Parish';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md overflow-y-auto">
-      <div className="w-full max-w-lg rounded-2xl border border-amber-500/30 bg-slate-950 p-5 sm:p-6 shadow-2xl my-auto">
-        <div className="flex items-center justify-between pb-3 border-b border-amber-500/20">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="bg-[#0b1311] border border-emerald-900/60 rounded-3xl p-4 sm:p-6 w-full max-w-sm shadow-2xl relative my-auto">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between pb-3 mb-3 border-b border-emerald-800/40">
           <div>
-            <h3 className="text-base font-bold text-amber-400">Digital Membership ID Card</h3>
-            <p className="text-xs text-slate-400">Catholic Men Organisation • Kano Diocese</p>
+            <h3 className="text-sm font-bold text-amber-400">Digital Membership ID Card</h3>
+            <p className="text-[11px] text-slate-400">Catholic Men Organisation • Kano Diocese</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white text-xl px-2 cursor-pointer">✕</button>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-white text-lg font-bold p-1 rounded-lg cursor-pointer"
+          >
+            ✕
+          </button>
         </div>
 
-        <div className="flex justify-center items-center w-full py-4 overflow-x-auto">
-          {/* The element captured by html-to-image */}
+        {/* Captured ID Card (Rendered at fluid 100% width on screen, fixed aspect ratio) */}
+        <div className="flex justify-center w-full my-2">
           <div
-            id="digital-id-card"
             ref={cardRef}
-            style={{
-              width: '380px',
-              minWidth: '380px',
-              maxWidth: '380px',
-              backgroundColor: '#04160f',
-              borderColor: '#f59e0b',
-              boxSizing: 'border-box',
-            }}
-            className="rounded-2xl border-2 border-amber-400 p-5 text-white overflow-hidden relative shadow-2xl select-none"
+            id="digital-id-card"
+            style={{ backgroundColor: '#04160f', borderColor: '#d97706' }}
+            className="w-full max-w-[340px] rounded-2xl border-2 border-amber-500 p-4 text-white shadow-xl flex flex-col justify-between select-none"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-amber-400/30 pb-3">
+            {/* Parish Banner */}
+            <div className="flex items-center justify-between border-b border-amber-400/30 pb-2.5">
               <div className="flex-1 pr-2">
-                <h3 className="text-xs font-black text-amber-400 uppercase tracking-tight leading-tight">
+                <h2 className="text-[11px] sm:text-xs font-black text-amber-400 uppercase tracking-tight leading-tight">
                   Holy Cross Catholic Church Badawa
-                </h3>
-                <p className="text-[10px] text-emerald-300 font-medium mt-0.5">
+                </h2>
+                <p className="text-[9px] text-emerald-300 font-medium">
                   Catholic Men Organisation (CMO) • Kano Diocese
                 </p>
               </div>
-              <div className="w-10 h-10 rounded-full border border-amber-400 bg-amber-500/10 flex items-center justify-center text-amber-400 font-bold text-xs shrink-0">
+              <div className="w-8 h-8 rounded-full border border-amber-400 bg-amber-500/20 flex items-center justify-center text-amber-400 font-extrabold text-[10px] shrink-0">
                 HC
               </div>
             </div>
 
-            {/* Title & Member Name */}
-            <div className="text-center my-4">
-              <p className="text-[9px] font-bold tracking-widest text-emerald-400 uppercase mb-1">
+            {/* Member Name & Official Badge */}
+            <div className="text-center my-3">
+              <p className="text-[8px] font-bold tracking-widest text-emerald-400 uppercase mb-0.5">
                 OFFICIAL MEMBER
               </p>
-              <h2 className="text-base font-black text-white uppercase tracking-wide px-2 leading-snug truncate">
-                {member?.full_name || 'Member Name'}
-              </h2>
-              <div className="inline-block bg-amber-400 text-slate-950 text-xs font-black px-3 py-0.5 rounded-full mt-1.5 tracking-wider">
+              <h1 className="text-sm sm:text-base font-black text-white uppercase tracking-wide leading-snug px-1 line-clamp-2">
+                {member.full_name}
+              </h1>
+              <div className="inline-block bg-amber-400 text-slate-950 text-[11px] font-black px-3 py-0.5 rounded-full mt-1 tracking-wider shadow">
                 {memberCode}
               </div>
             </div>
 
-            {/* Photo + QR Row */}
-            <div className="flex items-center justify-between gap-4 my-4 px-2">
-              {/* Portrait Photo */}
-              <div className="w-28 h-28 rounded-xl overflow-hidden border-2 border-amber-400 bg-slate-800 shrink-0 flex items-center justify-center">
+            {/* Photo & QR Code */}
+            <div className="flex items-center justify-between gap-3 px-1 my-2">
+              {/* Photo */}
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden border-2 border-amber-400/80 bg-slate-900 shrink-0 flex items-center justify-center shadow-md">
                 {photoSrc ? (
                   <img
                     src={photoSrc}
-                    alt={member?.full_name || 'Member'}
+                    alt={member.full_name}
                     className="w-full h-full object-cover"
                     crossOrigin="anonymous"
                   />
                 ) : (
                   <span className="text-3xl font-black text-amber-400">
-                    {member?.full_name?.charAt(0) || 'M'}
+                    {member.full_name?.charAt(0) || 'M'}
                   </span>
                 )}
               </div>
 
-              {/* Dynamic QR Code */}
-              <div className="w-28 h-28 bg-white p-2 rounded-xl border border-slate-700 shrink-0 flex items-center justify-center">
+              {/* QR Code */}
+              <div className="w-24 h-24 sm:w-28 sm:h-28 bg-white p-1.5 rounded-xl border border-slate-700 shrink-0 flex items-center justify-center shadow-md">
                 <QRCodeSVG
                   value={canonicalVerifyUrl}
                   size={96}
@@ -237,28 +225,29 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
               </div>
             </div>
 
-            {/* Footer Info */}
-            <div className="mt-4 pt-3 border-t border-amber-400/20 flex justify-between items-center text-[11px] text-slate-300">
+            {/* Footer metadata */}
+            <div className="mt-2 pt-2 border-t border-amber-400/20 flex justify-between items-center text-[10px] text-slate-300">
               <span>Family: <strong className="text-amber-400">{familyName}</strong></span>
-              <span>Role: <strong className="text-amber-400 capitalize">{member?.role || 'Member'}</strong></span>
+              <span>Role: <strong className="text-amber-400 capitalize">{member.role?.replace('_', ' ') || 'Member'}</strong></span>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+        {/* Action Buttons */}
+        <div className="grid grid-cols-2 gap-3 mt-4 pt-2 border-t border-emerald-900/40">
           <button
-            onClick={handleDownloadPng}
-            disabled={isDownloading !== null}
-            className="px-5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-xs font-semibold border border-slate-700 transition-all flex items-center gap-2 cursor-pointer"
+            onClick={handleDownloadPNG}
+            disabled={downloading}
+            className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
           >
-            {isDownloading === 'png' ? 'Generating PNG...' : '🖼️ Download PNG'}
+            🖼️ {downloading ? 'Processing...' : 'Download PNG'}
           </button>
           <button
-            onClick={handleDownloadPdf}
-            disabled={isDownloading !== null}
-            className="px-5 py-2.5 rounded-lg bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-black text-xs font-bold shadow-lg transition-all flex items-center gap-2 cursor-pointer"
+            onClick={handleDownloadPDF}
+            disabled={downloading}
+            className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black shadow-lg transition-all disabled:opacity-50 cursor-pointer"
           >
-            {isDownloading === 'pdf' ? 'Generating PDF...' : '📄 Download PDF'}
+            📄 {downloading ? 'Processing...' : 'Download PDF'}
           </button>
         </div>
       </div>
