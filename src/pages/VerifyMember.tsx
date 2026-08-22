@@ -6,18 +6,25 @@ export const VerifyMember: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Safe ID extraction without requiring Router context hooks that throw uncaught exceptions
-  const getMemberId = (): string | null => {
+  // Parse ID across all possible URL representations (query string, path param, hash routes, window.location)
+  const getCleanId = (): string | null => {
     try {
       if (typeof window !== 'undefined') {
+        // 1. Check window.location search params: ?id=...
+        const rawParams = new URLSearchParams(window.location.search);
+        const rawId = rawParams.get('id');
+        if (rawId) return decodeURIComponent(rawId).trim();
+
+        // 2. Check path params: /verify/:id or /verify/HCC-CMO-26-003
         const path = window.location.pathname;
         const match = path.match(/\/verify\/(.+)/);
-        if (match && match[1]) {
-          return decodeURIComponent(match[1]).trim();
+        if (match && match[1]) return decodeURIComponent(match[1]).trim();
+
+        // 3. Check hash routing if used: /#/verify?id=...
+        if (window.location.hash && window.location.hash.includes('?id=')) {
+          const hashQuery = window.location.hash.split('?id=')[1];
+          if (hashQuery) return decodeURIComponent(hashQuery.split('&')[0]).trim();
         }
-        const urlParams = new URLSearchParams(window.location.search);
-        const winId = urlParams.get('id');
-        if (winId) return decodeURIComponent(winId).trim();
       }
     } catch (e) {
       console.error('Error parsing ID:', e);
@@ -25,31 +32,31 @@ export const VerifyMember: React.FC = () => {
     return null;
   };
 
-  const memberId = getMemberId();
+  const targetId = getCleanId();
 
   useEffect(() => {
     let isMounted = true;
 
-    const verifyMember = async () => {
-      if (!memberId) {
+    const fetchVerification = async () => {
+      if (!targetId) {
         if (isMounted) setLoading(false);
         return;
       }
 
       try {
         if (isMounted) setLoading(true);
-        const cleanId = memberId.trim();
+        const cleanCode = targetId.trim();
 
         const { data, error } = await supabase
           .from('members')
           .select('id, full_name, official_member_id, avatar_url, phone_number, cmo_family, role')
-          .or(`official_member_id.eq.${cleanId},id.eq.${cleanId}`)
+          .or(`official_member_id.eq.${cleanCode},id.eq.${cleanCode}`)
           .maybeSingle();
 
         if (!isMounted) return;
 
         if (error || !data) {
-          setErrorMsg(`No verified member record found for ID: "${cleanId}"`);
+          setErrorMsg(`No active record found for Member ID "${cleanCode}".`);
           setMember(null);
         } else {
           setMember(data);
@@ -63,12 +70,12 @@ export const VerifyMember: React.FC = () => {
       }
     };
 
-    verifyMember();
+    fetchVerification();
 
     return () => {
       isMounted = false;
     };
-  }, [memberId]);
+  }, [targetId]);
 
   // Resolve image URL
   const avatarSrc = React.useMemo(() => {
@@ -90,15 +97,15 @@ export const VerifyMember: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md bg-slate-900 border border-emerald-900/50 rounded-2xl p-6 shadow-2xl text-center">
-        {/* Church Header */}
-        <div className="mb-6 flex flex-col items-center border-b border-slate-800 pb-5">
-          <div className="h-12 w-12 rounded-full bg-amber-500/20 border border-amber-400/40 flex items-center justify-center mb-2 font-black text-amber-400 text-lg">
+        {/* Header */}
+        <div className="mb-6 pb-4 border-b border-slate-800">
+          <div className="h-12 w-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto mb-2 text-amber-400 font-bold text-lg">
             HC
           </div>
           <h2 className="text-sm font-black text-amber-400 tracking-wider uppercase">
             Holy Cross Catholic Church Badawa
           </h2>
-          <p className="text-[11px] text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-400 mt-0.5">
             Catholic Men Organisation (CMO) • Kano Diocese
           </p>
         </div>
@@ -108,7 +115,7 @@ export const VerifyMember: React.FC = () => {
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-amber-400 border-r-transparent"></div>
             <p className="text-xs text-slate-400 mt-4 font-medium">Verifying member credential...</p>
           </div>
-        ) : !memberId ? (
+        ) : !targetId ? (
           <div className="py-8">
             <div className="h-14 w-14 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl font-bold">
               !
@@ -128,12 +135,12 @@ export const VerifyMember: React.FC = () => {
           </div>
         ) : (
           <div className="py-2 flex flex-col items-center">
-            {/* Status Badge */}
+            {/* Verified Badge */}
             <span className="inline-block px-3.5 py-1 bg-emerald-950/80 text-emerald-400 border border-emerald-500/60 text-[11px] font-bold tracking-wider rounded-full mb-5">
               ● VERIFIED OFFICIAL MEMBER
             </span>
 
-            {/* Member Avatar */}
+            {/* Avatar */}
             <div className="h-28 w-24 rounded-xl border-2 border-amber-500/80 overflow-hidden bg-slate-800 shadow-md mb-4 flex items-center justify-center">
               {avatarSrc ? (
                 <img
@@ -151,7 +158,7 @@ export const VerifyMember: React.FC = () => {
               )}
             </div>
 
-            {/* Member Names & Code */}
+            {/* Name & ID */}
             <h3 className="text-lg font-black text-white uppercase tracking-wide">
               {member.full_name}
             </h3>
@@ -159,7 +166,7 @@ export const VerifyMember: React.FC = () => {
               {member.official_member_id}
             </div>
 
-            {/* Details Grid */}
+            {/* Details */}
             <div className="w-full mt-6 pt-4 border-t border-slate-800 text-left text-xs space-y-2.5 text-slate-300">
               <div className="flex justify-between items-center">
                 <span className="text-slate-500 font-medium">CMO Family:</span>

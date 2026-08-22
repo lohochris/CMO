@@ -24,9 +24,20 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState<'png' | 'pdf' | null>(null);
 
-  const cleanId = member?.official_member_id || 'HCC-CMO-MEMBER';
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://cmo-eta.vercel.app';
-  const verificationUrl = `${baseUrl}/verify?id=${encodeURIComponent(cleanId)}`;
+  // Resolve the official ID cleanly
+  const memberCode = 
+    member?.official_member_id || 
+    (member as any)?.member_id || 
+    'HCC-CMO-26-003';
+
+  const cleanId = (memberCode || 'MEMBER').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+  // Hardcode canonical production base fallback if window.location is unavailable
+  const origin = typeof window !== 'undefined' && window.location.origin
+    ? window.location.origin
+    : 'https://cmo-eta.vercel.app';
+
+  const verificationUrl = `${origin}/verify?id=${encodeURIComponent(memberCode)}`;
 
   useEffect(() => {
     let isMounted = true;
@@ -224,7 +235,7 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
                     lineHeight: '1.2',
                   }}
                 >
-                  {cleanId}
+                  {memberCode}
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
