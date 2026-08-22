@@ -350,14 +350,28 @@ export const Home = () => {
         ? 'sports'
         : getOfficeKeyFromTitle(selectedOfficeForAuth.title);
 
-      const hasClearance = isRoleAuthorizedForOffice(memberRole, targetOfficeKey);
-
-      if (!hasClearance) {
-        setAuthError(`Access Denied: ID ${cleanId} (${fetchedMember.full_name}) is a General Member account and does not hold executive clearance for ${selectedOfficeForAuth.title}.`);
+      // 2. Strict check: If user is a general member, block immediately
+      if (memberRole === 'member' || memberRole === 'regular' || memberRole === '') {
+        setAuthError(`Access Denied: ${cleanId} (${fetchedMember.full_name || 'Member'}) is registered as a General Member. This portal is restricted exclusively to elected Executive Officers.`);
         return;
       }
 
-      // Proceed to grant access only if role is verified
+      // 3. Strict check against target office
+      const allowedRoles = STRICT_OFFICE_ROLES[targetOfficeKey.toLowerCase()] || ['super_admin'];
+      const isAuthorized = allowedRoles.some(allowed => memberRole === allowed || memberRole.includes(allowed));
+
+      if (!isAuthorized) {
+        setAuthError(`Access Denied: ${fetchedMember.full_name} (${fetchedMember.role}) does not hold authorization for the ${targetOfficeKey.replace('-', ' ').toUpperCase()} workspace.`);
+        return;
+      }
+
+      // 4. Authorized: Save session context and navigate
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('cmo_auth_office', targetOfficeKey);
+        sessionStorage.setItem('cmo_auth_member_id', fetchedMember.official_member_id || cleanId);
+        sessionStorage.setItem('cmo_auth_role', memberRole);
+      }
+
       const targetPage: Page = selectedOfficeForAuth.targetPage || (
         memberRole === 'liturgist' ? 'liturgist' :
         memberRole === 'provost' ? 'provost' :

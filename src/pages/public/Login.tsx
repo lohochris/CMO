@@ -112,8 +112,8 @@ export const Login = () => {
         }
 
         const roleLower = (member.role || 'member').toLowerCase().trim();
-        if (roleLower === 'member' || roleLower === 'member_active') {
-          setError(`Access Denied: ID ${inputMemberId} (${member.full_name || 'Member'}) is a General Member account and does not hold executive clearance.`);
+        if (roleLower === 'member' || roleLower === 'regular' || roleLower === '' || roleLower === 'member_active') {
+          setError('Access Denied: General Member IDs must use the "Member ID" login tab.');
           setLoading(false);
           return;
         }
