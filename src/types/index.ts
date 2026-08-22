@@ -65,6 +65,7 @@ export interface Member {
   phone?: string;
   profilePic?: string | null;
   photo_url?: string | null;
+  avatar_url?: string | null;
   email?: string;
   homeTownAddress?: string;
   residentialAddress?: string;

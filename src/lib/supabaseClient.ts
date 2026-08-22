@@ -32,6 +32,7 @@ function dataURLtoBlob(dataurl: string) {
 
 export const uploadProfilePhotoToStorage = async (memberId: string, file: Blob | string) => {
   if (!supabaseUrl || !supabaseAnonKey) {
+    console.warn('Supabase URL or anon key is missing. Cannot upload profile photo.');
     return null;
   }
 
@@ -51,7 +52,9 @@ export const uploadProfilePhotoToStorage = async (memberId: string, file: Blob |
     blob = file;
   }
 
-  const fileName = `${memberId}.jpg`;
+  // Clean member ID to form a valid storage file path
+  const cleanMemberId = (memberId || 'member').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const fileName = `${cleanMemberId}.jpg`;
   const filePath = fileName;
 
   try {
@@ -63,6 +66,7 @@ export const uploadProfilePhotoToStorage = async (memberId: string, file: Blob |
       });
 
     if (uploadError) {
+      console.error('Supabase storage upload error:', uploadError);
       return null;
     }
 
@@ -70,8 +74,14 @@ export const uploadProfilePhotoToStorage = async (memberId: string, file: Blob |
       .from('profile-pictures')
       .getPublicUrl(filePath);
 
+    if (!publicUrlData || !publicUrlData.publicUrl) {
+      console.error('Failed to retrieve public URL from Supabase storage');
+      return null;
+    }
+
     return `${publicUrlData.publicUrl}?t=${Date.now()}`;
   } catch (catchErr) {
+    console.error('Exception during Supabase storage upload:', catchErr);
     return null;
   }
 };
