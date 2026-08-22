@@ -25,19 +25,9 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
   const [isDownloading, setIsDownloading] = useState<'png' | 'pdf' | null>(null);
 
   // Resolve the official ID cleanly
-  const memberCode = 
-    member?.official_member_id || 
-    (member as any)?.member_id || 
-    'HCC-CMO-26-003';
-
+  const memberCode = member?.official_member_id?.trim() || (member as any)?.member_id || 'HCC-CMO-26-003';
   const cleanId = (memberCode || 'MEMBER').replace(/[^a-zA-Z0-9_-]/g, '_');
-
-  // Hardcode canonical production base fallback if window.location is unavailable
-  const origin = typeof window !== 'undefined' && window.location.origin
-    ? window.location.origin
-    : 'https://cmo-eta.vercel.app';
-
-  const verificationUrl = `${origin}/verify?id=${encodeURIComponent(memberCode)}`;
+  const canonicalVerifyUrl = `https://cmo-eta.vercel.app/verify?id=${encodeURIComponent(memberCode)}`;
 
   useEffect(() => {
     let isMounted = true;
@@ -264,7 +254,7 @@ export const DigitalIdCardModal: React.FC<MemberIdCardProps> = ({ member, isOpen
 
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
                 <div style={{ padding: '6px', backgroundColor: '#ffffff', borderRadius: '10px', border: '1.5px solid #d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <QRCodeSVG value={verificationUrl} size={76} level="M" />
+                  <QRCodeSVG value={canonicalVerifyUrl} size={76} level="M" />
                 </div>
                 <span style={{ fontSize: '8px', fontWeight: 800, color: '#34d399', letterSpacing: '0.5px' }}>
                   ● VERIFIED
