@@ -56,6 +56,28 @@ export const SecretaryDashboard = () => {
   const [pinChangeSuccess, setPinChangeSuccess] = useState(false);
   const [isSubmittingPinChange, setIsSubmittingPinChange] = useState(false);
 
+  // Live Dynamic Stats States
+  const [announcementsCount, setAnnouncementsCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetchDashboardStats = async () => {
+      try {
+        // Fetch total published announcements
+        const { count: totalAnnouncements, error: annErr } = await supabase
+          .from('announcements')
+          .select('*', { count: 'exact', head: true });
+
+        if (!annErr && totalAnnouncements !== null) {
+          setAnnouncementsCount(totalAnnouncements);
+        }
+      } catch (err) {
+        console.error('Error fetching secretary dashboard metrics:', err);
+      }
+    };
+
+    fetchDashboardStats();
+  }, []);
+
   const [isRecording, setIsRecording] = useState(false);
   const [minutesText, setMinutesText] = useState('');
   const [announcementTitle, setAnnouncementTitle] = useState('');
@@ -867,7 +889,7 @@ Recorded by: ${currentUser?.name}`;
               />
             </div>
             <div className="flex-grow w-full">
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-center">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
                 <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">Name</p>
                   <p className="text-white font-bold text-sm truncate">{currentUser.name}</p>
@@ -880,12 +902,10 @@ Recorded by: ${currentUser?.name}`;
                   <p className="text-[#ffd700] font-bold text-sm">GENERAL SECRETARY</p>
                 </div>
                 <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
-                  <p className="text-gray-400 text-xs uppercase tracking-wider">General Roster</p>
-                  <p className="text-white font-bold text-sm">{members.length} Members</p>
-                </div>
-                <div className="bg-[#001a16] border border-[#ffd700]/10 rounded-lg p-3">
-                  <p className="text-gray-400 text-xs uppercase tracking-wider">Announcements</p>
-                  <p className="text-white font-bold text-sm">{announcements.length} Published</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">ANNOUNCEMENTS</p>
+                  <p className="text-sm font-black text-white">
+                    {announcementsCount !== null ? `${announcementsCount} Published` : '0 Published'}
+                  </p>
                 </div>
               </div>
             </div>
