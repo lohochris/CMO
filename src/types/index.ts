@@ -241,4 +241,23 @@ export interface BankWithdrawal {
   member_name?: string;
   created_at: string;
   authorized_at?: string;
+}
+
+export type PaymentSubmissionStatus = 'pending' | 'approved' | 'rejected';
+
+export interface PaymentSubmission {
+  id?: string;
+  member_id: string;
+  official_member_id: string;
+  full_name: string;
+  cmo_family?: string;
+  purpose: string;
+  amount: number;
+  reference_no?: string;
+  receipt_url: string;
+  status: PaymentSubmissionStatus;
+  rejection_reason?: string;
+  created_at?: string;
+  verified_at?: string;
+  verified_by?: string;
 }
