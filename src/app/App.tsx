@@ -82,8 +82,12 @@ function AppContent() {
     const initialPath = window.location.pathname;
     if (initialPath !== '/') {
       const cleanPath = initialPath.startsWith('/') ? initialPath.substring(1) : initialPath;
-      if (['about', 'services', 'register', 'login', 'dashboard', 'familyHub', 'dashboard/sports', 'terms', 'privacy', 'legal', 'verify'].includes(cleanPath) || cleanPath.startsWith('family/')) {
-        setCurrentPage(cleanPath as any);
+      if (['about', 'services', 'register', 'login', 'dashboard', 'familyHub', 'dashboard/sports', 'terms', 'privacy', 'legal', 'verify'].includes(cleanPath) || cleanPath.startsWith('verify') || cleanPath.startsWith('family/')) {
+        if (cleanPath.startsWith('verify')) {
+          setCurrentPage('verify' as any);
+        } else {
+          setCurrentPage(cleanPath as any);
+        }
       }
     }
 
@@ -93,7 +97,10 @@ function AppContent() {
   useEffect(() => {
     const currentUrlPath = window.location.pathname;
     const searchString = window.location.search;
-    const expectedPath = currentPage === 'home' ? '/' : `/${currentPage}${currentPage === 'verify' ? searchString : ''}`;
+    if (currentPage === 'verify' && currentUrlPath.startsWith('/verify')) {
+      return;
+    }
+    const expectedPath = currentPage === 'home' ? '/' : `/${currentPage}`;
     if (currentUrlPath !== expectedPath) {
       window.history.pushState(null, '', expectedPath);
     }
@@ -135,7 +142,7 @@ function AppContent() {
     if (currentPage === 'services') return <Services />;
     if (currentPage === 'login') return <Login />;
     if (currentPage === 'register') return <Register />;
-    if (currentPage === 'verify') return <VerifyMember />;
+    if (currentPage === 'verify' || (typeof currentPage === 'string' && currentPage.startsWith('verify'))) return <VerifyMember />;
     if (currentPage === 'terms') return <TermsAndConditions />;
     if (currentPage === 'privacy' || currentPage === 'legal') return <PrivacyPolicy />;
 
