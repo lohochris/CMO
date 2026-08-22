@@ -10,36 +10,60 @@ export const VerifyMember: React.FC = () => {
   const [searchedId, setSearchedId] = useState<string | null>(null);
 
   useEffect(() => {
-    const extractIdAndVerify = async () => {
+    const fetchMemberVerification = async () => {
       try {
         setLoading(true);
 
-        // 1. Parse ID from raw browser URL
+        // Robust ID extraction supporting query params (?id=, ?memberId=, ?member_id=) and path params (/verify/ID)
         let targetId: string | null = null;
         if (typeof window !== 'undefined') {
-          const fullUrl = new URL(window.location.href);
-          targetId = fullUrl.searchParams.get('id');
+          const urlObj = new URL(window.location.href);
 
-          // Check if passed as /verify/HCC-CMO-26-003
+          // 1. Query parameters
+          targetId =
+            urlObj.searchParams.get('id') ||
+            urlObj.searchParams.get('memberId') ||
+            urlObj.searchParams.get('member_id');
+
+          // 2. Hash search params fallback (e.g., /#/verify?id=)
+          if (!targetId && window.location.hash) {
+            const hashIndex = window.location.hash.indexOf('?');
+            if (hashIndex !== -1) {
+              const hashSearchParams = new URLSearchParams(window.location.hash.substring(hashIndex));
+              targetId =
+                hashSearchParams.get('id') ||
+                hashSearchParams.get('memberId') ||
+                hashSearchParams.get('member_id');
+            }
+          }
+
+          // 3. Path parameter fallback (e.g. /verify/HCC-CMO-26-003)
           if (!targetId) {
-            const parts = fullUrl.pathname.split('/');
-            const lastPart = parts[parts.length - 1];
-            if (lastPart && lastPart !== 'verify' && lastPart.startsWith('HCC-')) {
-              targetId = lastPart;
+            const pathSegments = urlObj.pathname.split('/').filter(Boolean);
+            const verifyIdx = pathSegments.indexOf('verify');
+            if (verifyIdx !== -1 && verifyIdx < pathSegments.length - 1) {
+              targetId = pathSegments[verifyIdx + 1];
+            } else {
+              const lastPart = pathSegments[pathSegments.length - 1];
+              if (lastPart && lastPart !== 'verify') {
+                targetId = lastPart;
+              }
             }
           }
         }
 
-        if (!targetId) {
+        const cleanId = targetId ? decodeURIComponent(targetId).trim() : '';
+
+        if (!cleanId) {
           setLoading(false);
           setSearchedId(null);
           return;
         }
 
-        const cleanId = decodeURIComponent(targetId).trim();
         setSearchedId(cleanId);
+        setErrorMsg(null);
 
-        // 2. Query Supabase
+        // Query Supabase public.members for exact official_member_id match
         const { data, error } = await supabase
           .from('members')
           .select('id, full_name, official_member_id, avatar_url, phone_number, cmo_family, role')
@@ -55,13 +79,13 @@ export const VerifyMember: React.FC = () => {
         }
       } catch (err) {
         console.error('Verification error:', err);
-        setErrorMsg('Unable to verify credential at this time.');
+        setErrorMsg('Network error verifying member identity.');
       } finally {
         setLoading(false);
       }
     };
 
-    extractIdAndVerify();
+    fetchMemberVerification();
   }, []);
 
   const avatarSrc = React.useMemo(() => {
