@@ -61,48 +61,40 @@ export const SportsHub = () => {
     return getDefaultTab();
   });
 
-  // Access check helpers
-  const hasFinanceAccess = (() => {
-    if (!currentUser) return false;
-    const role = currentUser.role?.toUpperCase();
-    const officialId = (currentUser.official_member_id || currentUser.id || '').toUpperCase();
-    const allowed = [
-      'HCC-CMO-EXEC-TR',
-      'HCC-CMO-EXEC-FS',
-      'HCC-CMO-SPRT-TR',
-      'HCC-CMO-SPRT-FS',
-      'HCC-CMO-SPRT-DIR',
-      'TREASURER',
-      'SPORTS_TREASURER',
-      'FINANCIAL_SECRETARY'
-    ];
-    return (
-      allowed.includes(officialId) ||
-      allowed.includes(role || '') ||
-      role === 'SPORTS_DIRECTOR' ||
-      role === 'FIN_SEC' ||
-      role === 'CHAIRMAN' ||
-      role === 'CMO_CHAIRMAN'
-    );
-  })();
+  // Extract session credentials
+  const authMemberId = (
+    (typeof window !== 'undefined' ? sessionStorage.getItem('cmo_auth_member_id') : '') ||
+    currentUser?.official_member_id ||
+    currentUser?.id ||
+    ''
+  ).trim().toUpperCase();
 
-  const hasAdminAccess = (() => {
-    if (!currentUser) return false;
-    const role = currentUser.role?.toUpperCase();
-    const officialId = (currentUser.official_member_id || currentUser.id || '').toUpperCase();
-    const allowed = [
-      'HCC-CMO-SPRT-DIR',
-      'CMO-CHAIRMAN-2026',
-      'HCC-CMO-EXEC-CH'
-    ];
-    return (
-      allowed.includes(officialId) ||
-      allowed.includes(role || '') ||
-      role === 'SPORTS_DIRECTOR' ||
-      role === 'CHAIRMAN' ||
-      role === 'CMO_CHAIRMAN'
-    );
-  })();
+  const authRole = (
+    (typeof window !== 'undefined' ? sessionStorage.getItem('cmo_auth_role') : '') ||
+    currentUser?.role ||
+    ''
+  ).toLowerCase().trim();
+
+  // Full clearance predicate for Sports Hub
+  const hasSportsAdminClearance =
+    authMemberId === 'HCC-CMO-SPRT-DIR' ||
+    authRole === 'sports director' ||
+    authRole === 'sports_director' ||
+    authRole === 'sports coordinator' ||
+    authRole.includes('sports') ||
+    authRole === 'chairman' ||
+    authRole === 'cmo_chairman' ||
+    authRole === 'super_admin' ||
+    authRole === 'executive';
+
+  const hasFinanceAccess = hasSportsAdminClearance || (
+    authMemberId === 'HCC-CMO-SPRT-TR' ||
+    authRole.includes('treasurer') ||
+    authRole.includes('financial') ||
+    authRole.includes('fin_sec')
+  );
+
+  const hasAdminAccess = hasSportsAdminClearance;
 
   // Render Access Guard screen
   const renderAccessRestricted = (message: string) => (
@@ -230,10 +222,18 @@ export const SportsHub = () => {
 
         {activeTab === 'admin' && (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-            {hasAdminAccess ? (
+            {hasSportsAdminClearance ? (
               <SportsAdminPanel />
             ) : (
-              renderAccessRestricted('This panel is reserved for the Sports Director and authorized executive administration.')
+              <div className="flex flex-col items-center justify-center p-8 bg-slate-900 border border-emerald-900/40 rounded-2xl text-center">
+                <div className="h-14 w-14 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mb-4 text-rose-400 text-2xl font-bold">
+                  🛡️
+                </div>
+                <h3 className="text-lg font-bold text-rose-400">Access Restricted</h3>
+                <p className="text-xs text-slate-400 mt-2">
+                  This panel is reserved for the <span className="text-amber-400 font-semibold">Sports Director</span> and executive administration.
+                </p>
+              </div>
             )}
           </div>
         )}

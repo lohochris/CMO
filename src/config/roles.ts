@@ -15,9 +15,9 @@ export const STRICT_OFFICE_ROLES: Record<string, string[]> = {
   'liturgist': ['liturgist', 'super_admin'],
 
   // Sports Hubs
+  'sports-admin': ['sports director', 'sports coordinator', 'team manager', 'sports_director', 'super_admin'],
   'sports': ['sports director', 'sports coordinator', 'team manager', 'sports_director', 'coach', 'referee', 'medical_officer', 'athlete', 'super_admin'],
-  'sports-admin': ['sports director', 'sports coordinator', 'sports_director', 'super_admin'],
-  'sports_director': ['sports director', 'sports coordinator', 'sports_director', 'super_admin'],
+  'sports_director': ['sports director', 'sports coordinator', 'team manager', 'sports_director', 'super_admin'],
 
   // Family Units
   'family-head': ['family_chairman', 'family_head', 'family chairman', 'family head', 'chairman', 'cmo_chairman', 'super_admin'],

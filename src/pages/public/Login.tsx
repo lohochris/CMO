@@ -31,91 +31,94 @@ export const Login = () => {
 
       if (loginType === 'executive') {
         // ── EXECUTIVE AUTHENTICATION PIPELINE ──────────────────────────────────────────
-        // Direct route to public.cmo_executives filtering exclusively on text-based executive_id
-        const EXEC_ALIAS_MAP: Record<string, string> = {
-          'CHAIRMAN':          'CMO-CHAIRMAN-2026',
-          'CMO-CHAIRMAN':      'CMO-CHAIRMAN-2026',
-          'CMO-CHAIRMAN-2026': 'CMO-CHAIRMAN-2026',
-          'FINSEC':            'FIN-SEC-2026',
-          'FIN-SEC':           'FIN-SEC-2026',
-          'FIN-SEC-2026':      'FIN-SEC-2026',
-          'WELFARE':           'WELFARE-2026',
-          'WEL-OFF-2026':      'WELFARE-2026',
-          'WELFORCE-2026':     'WELFARE-2026',
-          'WELFARE-2026':      'WELFARE-2026',
-          'TREASURER':         'TREASURER-2026',
-          'TREAS-2026':        'TREASURER-2026',
-          'TREASURER-2026':    'TREASURER-2026',
-          'SECRETARY':         'SECRETARY-2026',
-          'GEN-SEC':           'SECRETARY-2026',
-          'SECRETARY-2026':    'SECRETARY-2026',
-          'PRO':               'PRO-2026',
-          'PRO-2026':          'PRO-2026',
-          'PROVOST':           'PROVOST-2026',
-          'PROVOST-2026':      'PROVOST-2026',
-          'LITURGIST':         'LITURGIST-2026',
-          'LITURGIST-2026':    'LITURGIST-2026',
-        };
-        const resolvedId = EXEC_ALIAS_MAP[inputMemberId] ?? inputMemberId;
+        const cleanId = inputMemberId;
 
-        const ADMIN_REGISTRY: Record<string, Member> = {
-          'CMO-CHAIRMAN-2026': { id: 'CMO-CHAIRMAN-2026', name: 'STANLEY UKAH', full_name: 'STANLEY UKAH', official_member_id: 'CMO-CHAIRMAN-2026', status: 'Active (Cleared)', balance: 0, role: 'cmo_chairman', profilePic: null },
-          'FIN-SEC-2026':      { id: 'FIN-SEC-2026', name: 'LOHO DONDO, CHRISTOPHER', full_name: 'LOHO DONDO, CHRISTOPHER', official_member_id: 'FIN-SEC-2026', status: 'Active (Cleared)', balance: 0, role: 'fin_sec', profilePic: null },
-          'WELFARE-2026':      { id: 'WELFARE-2026', name: 'SAMSON, BALOGUN', full_name: 'SAMSON, BALOGUN', official_member_id: 'WELFARE-2026', status: 'Active (Cleared)', balance: 0, role: 'welfare', profilePic: null },
-          'TREASURER-2026':    { id: 'TREASURER-2026', name: 'FRANCIS IDIKU', full_name: 'FRANCIS IDIKU', official_member_id: 'TREASURER-2026', status: 'Active (Cleared)', balance: 0, role: 'treasurer', profilePic: null },
-          'SECRETARY-2026':    { id: 'SECRETARY-2026', name: 'PETER ALLEH', full_name: 'PETER ALLEH', official_member_id: 'SECRETARY-2026', status: 'Active (Cleared)', balance: 0, role: 'gen_sec', profilePic: null },
-          'PRO-2026':          { id: 'PRO-2026', name: 'RAPHAEL, GODWIN', full_name: 'RAPHAEL, GODWIN', official_member_id: 'PRO-2026', status: 'Active (Cleared)', balance: 0, role: 'pro', profilePic: null },
-          'PROVOST-2026':      { id: 'PROVOST-2026', name: 'PROVOST OFFICERS', full_name: 'PROVOST OFFICERS', official_member_id: 'PROVOST-2026', status: 'Active (Cleared)', balance: 0, role: 'provost', profilePic: null },
-          'LITURGIST-2026':    { id: 'LITURGIST-2026', name: 'LITURGICAL TEAM', full_name: 'LITURGICAL TEAM', official_member_id: 'LITURGIST-2026', status: 'Active (Cleared)', balance: 0, role: 'liturgist', profilePic: null },
-        };
+        // 1. Query public.members first by official_member_id
+        const { data: dbMember, error: dbErr } = await supabase
+          .from('members')
+          .select('id, official_member_id, full_name, role, cmo_family, phone_number, avatar_url')
+          .eq('official_member_id', cleanId)
+          .maybeSingle();
 
-        // Query cmo_executives using executive_id exclusively (bypassing UUID checks)
-        const { data: execData, error: execErr } = await supabase
-          .from('cmo_executives')
-          .select('*')
-          .eq('executive_id', resolvedId);
-
-        const execRecord = execData && execData.length > 0 ? execData[0] : null;
-
-        if (!execErr && execRecord) {
-          const execId = execRecord.executive_id || execRecord.id;
-          const roleKey = (execRecord.role_key || execRecord.role || '').toLowerCase();
+        if (dbMember) {
           member = {
-            id: execId,
-            official_member_id: execId,
-            name: execRecord.full_name || execRecord.name || execId,
-            full_name: execRecord.full_name || execRecord.name || execId,
-            phone_number: execRecord.phone_number || execRecord.phone || undefined,
-            status: (execRecord.status || 'Active') as any,
-            balance: Number(execRecord.balance || 0),
-            role: roleKey as any,
-            family: execRecord.cmo_family || execRecord.family as any || undefined,
-            cmo_family: execRecord.cmo_family || execRecord.family || undefined,
-            phone: execRecord.phone_number || execRecord.phone || undefined,
-            email: execRecord.email || undefined,
-            profilePic: execRecord.avatar_url || execRecord.profile_picture_url || null
+            id: dbMember.id,
+            official_member_id: dbMember.official_member_id || cleanId,
+            name: dbMember.full_name || cleanId,
+            full_name: dbMember.full_name || cleanId,
+            status: 'Active (Cleared)',
+            balance: 0,
+            role: (dbMember.role || 'member') as any,
+            family: dbMember.cmo_family as any,
+            cmo_family: dbMember.cmo_family,
+            profilePic: dbMember.avatar_url || null
           };
-        }
+        } else {
+          // Fallback query to cmo_executives & ADMIN_REGISTRY for administrative alias IDs
+          const EXEC_ALIAS_MAP: Record<string, string> = {
+            'CHAIRMAN':          'CMO-CHAIRMAN-2026',
+            'CMO-CHAIRMAN':      'CMO-CHAIRMAN-2026',
+            'CMO-CHAIRMAN-2026': 'CMO-CHAIRMAN-2026',
+            'FINSEC':            'FIN-SEC-2026',
+            'FIN-SEC':           'FIN-SEC-2026',
+            'FIN-SEC-2026':      'FIN-SEC-2026',
+            'WELFARE':           'WELFARE-2026',
+            'WEL-OFF-2026':      'WELFARE-2026',
+            'WELFORCE-2026':     'WELFARE-2026',
+            'WELFARE-2026':      'WELFARE-2026',
+            'TREASURER':         'TREASURER-2026',
+            'TREAS-2026':        'TREASURER-2026',
+            'TREASURER-2026':    'TREASURER-2026',
+            'SECRETARY':         'SECRETARY-2026',
+            'GEN-SEC':           'SECRETARY-2026',
+            'SECRETARY-2026':    'SECRETARY-2026',
+            'PRO':               'PRO-2026',
+            'PRO-2026':          'PRO-2026',
+            'PROVOST':           'PROVOST-2026',
+            'PROVOST-2026':      'PROVOST-2026',
+            'LITURGIST':         'LITURGIST-2026',
+            'LITURGIST-2026':    'LITURGIST-2026',
+            'SPORTS-ADMIN-2026': 'SPORTS-ADMIN-2026'
+          };
+          const resolvedId = EXEC_ALIAS_MAP[cleanId] ?? cleanId;
 
-        // Fallback for administrative registry whitelist
-        if (!member && resolvedId in ADMIN_REGISTRY) {
-          member = ADMIN_REGISTRY[resolvedId];
-        }
-        if (!member && inputMemberId in ADMIN_REGISTRY) {
-          member = ADMIN_REGISTRY[inputMemberId];
+          const ADMIN_REGISTRY: Record<string, Member> = {
+            'CMO-CHAIRMAN-2026': { id: 'CMO-CHAIRMAN-2026', name: 'STANLEY UKAH', full_name: 'STANLEY UKAH', official_member_id: 'CMO-CHAIRMAN-2026', status: 'Active (Cleared)', balance: 0, role: 'cmo_chairman', profilePic: null },
+            'FIN-SEC-2026':      { id: 'FIN-SEC-2026', name: 'LOHO DONDO, CHRISTOPHER', full_name: 'LOHO DONDO, CHRISTOPHER', official_member_id: 'FIN-SEC-2026', status: 'Active (Cleared)', balance: 0, role: 'fin_sec', profilePic: null },
+            'WELFARE-2026':      { id: 'WELFARE-2026', name: 'SAMSON BALOGUN', full_name: 'SAMSON BALOGUN', official_member_id: 'WELFARE-2026', status: 'Active (Cleared)', balance: 0, role: 'welfare', profilePic: null },
+            'TREASURER-2026':    { id: 'TREASURER-2026', name: 'FRANCIS IDIKU', full_name: 'FRANCIS IDIKU', official_member_id: 'TREASURER-2026', status: 'Active (Cleared)', balance: 0, role: 'treasurer', profilePic: null },
+            'SECRETARY-2026':    { id: 'SECRETARY-2026', name: 'PETER ALLEH', full_name: 'PETER ALLEH', official_member_id: 'SECRETARY-2026', status: 'Active (Cleared)', balance: 0, role: 'gen_sec', profilePic: null },
+            'PRO-2026':          { id: 'PRO-2026', name: 'RAPHAEL GODWIN', full_name: 'RAPHAEL GODWIN', official_member_id: 'PRO-2026', status: 'Active (Cleared)', balance: 0, role: 'pro', profilePic: null },
+            'PROVOST-2026':      { id: 'PROVOST-2026', name: 'PROVOST OFFICERS', full_name: 'PROVOST OFFICERS', official_member_id: 'PROVOST-2026', status: 'Active (Cleared)', balance: 0, role: 'provost', profilePic: null },
+            'LITURGIST-2026':    { id: 'LITURGIST-2026', name: 'LITURGICAL TEAM', full_name: 'LITURGICAL TEAM', official_member_id: 'LITURGIST-2026', status: 'Active (Cleared)', balance: 0, role: 'liturgist', profilePic: null },
+            'SPORTS-ADMIN-2026': { id: 'SPORTS-ADMIN-2026', name: 'SPORTS DIRECTOR', full_name: 'SPORTS DIRECTOR', official_member_id: 'SPORTS-ADMIN-2026', status: 'Active (Cleared)', balance: 0, role: 'sports_director', profilePic: null }
+          };
+
+          if (resolvedId in ADMIN_REGISTRY) {
+            member = ADMIN_REGISTRY[resolvedId];
+          } else if (cleanId in ADMIN_REGISTRY) {
+            member = ADMIN_REGISTRY[cleanId];
+          }
         }
 
         if (!member) {
-          setError('Invalid Executive / Official ID. Please check your credentials or contact system administrator.');
+          setError(`Invalid Executive ID: "${cleanId}". Record not found in official roster.`);
           setLoading(false);
           return;
         }
 
-        const roleLower = (member.role || 'member').toLowerCase().trim();
-        if (roleLower === 'member' || roleLower === 'regular' || roleLower === '' || roleLower === 'member_active') {
-          setError('Access Denied: General Member IDs must use the "Member ID" login tab.');
+        const userRole = (member.role || 'member').toLowerCase().trim();
+
+        if (userRole === 'member' || userRole === 'regular' || userRole === '' || userRole === 'member_active') {
+          setError(`Access Denied: ${cleanId} is a General Member ID. Please use the "Member ID" tab.`);
           setLoading(false);
           return;
+        }
+
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('cmo_auth_member_id', member.official_member_id || cleanId);
+          sessionStorage.setItem('cmo_auth_role', member.role || userRole);
+          sessionStorage.setItem('cmo_auth_name', member.full_name || member.name || cleanId);
         }
 
         const idUpper = inputMemberId.toUpperCase();
