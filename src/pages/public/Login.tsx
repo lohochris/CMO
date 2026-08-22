@@ -111,6 +111,13 @@ export const Login = () => {
           return;
         }
 
+        const roleLower = (member.role || 'member').toLowerCase().trim();
+        if (roleLower === 'member' || roleLower === 'member_active') {
+          setError(`Access Denied: ID ${inputMemberId} (${member.full_name || 'Member'}) is a General Member account and does not hold executive clearance.`);
+          setLoading(false);
+          return;
+        }
+
         const idUpper = inputMemberId.toUpperCase();
         let parsedFamily: string | undefined = undefined;
         if (idUpper.includes('HONOUR')) parsedFamily = 'Honour';
