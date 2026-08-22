@@ -89,12 +89,28 @@ interface LineupAthlete {
 export const RefereeMatchCenter = () => {
   const { currentUser } = useApp();
 
-  const role = currentUser?.role?.toLowerCase();
+  const authMemberId = (
+    (typeof window !== 'undefined' ? sessionStorage.getItem('cmo_auth_member_id') : '') ||
+    currentUser?.official_member_id ||
+    currentUser?.id ||
+    ''
+  ).trim().toUpperCase();
+
+  const authRole = (
+    (typeof window !== 'undefined' ? sessionStorage.getItem('cmo_auth_role') : '') ||
+    currentUser?.role ||
+    ''
+  ).toLowerCase().trim();
+
   const isAuthorised =
-    role === 'referee' ||
-    role === 'sports_director' ||
-    role === 'chairman' ||
-    role === 'cmo_chairman';
+    authMemberId === 'HCC-CMO-SPRT-DIR' ||
+    authRole === 'sports director' ||
+    authRole === 'sports_director' ||
+    authRole.includes('sports') ||
+    authRole === 'referee' ||
+    authRole === 'chairman' ||
+    authRole === 'cmo_chairman' ||
+    authRole === 'super_admin';
 
   // ── Selectors & Data States ────────────────────────────────────────────────
   const [tournaments, setTournaments] = useState<Tournament[]>([]);

@@ -413,15 +413,30 @@ export const SportsFinancialHub = () => {
     'FINANCIAL_SECRETARY'
   ];
 
-  const role = currentUser?.role?.toUpperCase();
-  const officialId = (currentUser?.official_member_id || currentUser?.id || '').toUpperCase();
+  const authMemberId = (
+    (typeof window !== 'undefined' ? sessionStorage.getItem('cmo_auth_member_id') : '') ||
+    currentUser?.official_member_id ||
+    currentUser?.id ||
+    ''
+  ).trim().toUpperCase();
+
+  const authRole = (
+    (typeof window !== 'undefined' ? sessionStorage.getItem('cmo_auth_role') : '') ||
+    currentUser?.role ||
+    ''
+  ).toLowerCase().trim();
+
   const isAuthorised =
-    ALLOWED_FINANCIAL_ROLES.includes(officialId) ||
-    ALLOWED_FINANCIAL_ROLES.includes(role || '') ||
-    role === 'SPORTS_DIRECTOR' ||
-    role === 'FIN_SEC' ||
-    role === 'CHAIRMAN' ||
-    role === 'CMO_CHAIRMAN';
+    authMemberId === 'HCC-CMO-SPRT-DIR' ||
+    authRole === 'sports director' ||
+    authRole === 'sports_director' ||
+    authRole.includes('sports') ||
+    ALLOWED_FINANCIAL_ROLES.includes(authMemberId) ||
+    ALLOWED_FINANCIAL_ROLES.includes(authRole.toUpperCase()) ||
+    authRole === 'fin_sec' ||
+    authRole === 'chairman' ||
+    authRole === 'cmo_chairman' ||
+    authRole === 'super_admin';
 
   const [isExecutiveUnlocked, setIsExecutiveUnlocked] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {

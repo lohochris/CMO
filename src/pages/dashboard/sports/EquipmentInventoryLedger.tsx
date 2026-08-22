@@ -753,16 +753,30 @@ const NewItemForm = ({ onClose, onSaved, managerName }: NewItemFormProps) => {
 export const EquipmentInventoryLedger = () => {
   const { currentUser, members } = useApp();
 
-  const activeOfficialId =
+  const authMemberId = (
+    (typeof window !== 'undefined' ? sessionStorage.getItem('cmo_auth_member_id') : '') ||
     currentUser?.official_member_id ||
-    'HCC-CMO-SPRT-DIR';
+    currentUser?.id ||
+    'HCC-CMO-SPRT-DIR'
+  ).trim().toUpperCase();
 
-  const role = currentUser?.role?.toLowerCase();
+  const authRole = (
+    (typeof window !== 'undefined' ? sessionStorage.getItem('cmo_auth_role') : '') ||
+    currentUser?.role ||
+    ''
+  ).toLowerCase().trim();
+
+  const activeOfficialId = authMemberId;
+
   const isAuthorised =
-    role === 'sports_director' ||
-    role === 'coach' ||
-    role === 'chairman' ||
-    role === 'cmo_chairman';
+    authMemberId === 'HCC-CMO-SPRT-DIR' ||
+    authRole === 'sports director' ||
+    authRole === 'sports_director' ||
+    authRole.includes('sports') ||
+    authRole === 'coach' ||
+    authRole === 'chairman' ||
+    authRole === 'cmo_chairman' ||
+    authRole === 'super_admin';
 
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [allocations, setAllocations] = useState<AllocationLog[]>([]);

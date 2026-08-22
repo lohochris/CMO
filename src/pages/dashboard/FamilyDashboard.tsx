@@ -11,7 +11,7 @@ import { calculateTotal, formatCurrency, formatDate, getCombinedTransactions, fo
 import { generateTicketId, generateExpenseId, generateAnnouncementId } from '../../utils/idGenerators';
 import { Heading } from '../../app/components/common/Heading';
 import { supabase } from '../../lib/supabase';
-import { isRoleAuthorizedForOffice } from '../../config/roles';
+import { STRICT_OFFICE_ROLES, isRoleAuthorizedForOffice } from '../../config/roles';
 
 const familyList: Family[] = ['Wisdom', 'Honour', 'Integrity', 'Talent'];
 const familyColors: Record<Family, string> = {
@@ -105,45 +105,27 @@ export const FamilyHub = () => {
 
       let fetchedMember: { id: string; official_member_id?: string; full_name?: string; role?: string; family?: string } | null = null;
 
-      if (cleanId in ADMIN_ALIAS_REGISTRY) {
+      const { data: memberData, error: dbError } = await supabase
+        .from('members')
+        .select('id, official_member_id, full_name, role, cmo_family')
+        .eq('official_member_id', cleanId)
+        .maybeSingle();
+
+      if (memberData) {
+        fetchedMember = {
+          id: memberData.id,
+          official_member_id: memberData.official_member_id || cleanId,
+          full_name: memberData.full_name || 'Organization Member',
+          role: memberData.role || 'member',
+          family: memberData.cmo_family || undefined
+        };
+      } else if (cleanId in ADMIN_ALIAS_REGISTRY) {
         fetchedMember = {
           id: cleanId,
           official_member_id: cleanId,
           full_name: ADMIN_ALIAS_REGISTRY[cleanId].name,
           role: ADMIN_ALIAS_REGISTRY[cleanId].role
         };
-      } else {
-        const { data: memberData } = await supabase
-          .from('members')
-          .select('id, official_member_id, full_name, role, cmo_family')
-          .eq('official_member_id', cleanId)
-          .maybeSingle();
-
-        if (memberData) {
-          fetchedMember = {
-            id: memberData.id,
-            official_member_id: memberData.official_member_id || cleanId,
-            full_name: memberData.full_name || 'Organization Member',
-            role: memberData.role || 'member',
-            family: memberData.cmo_family || undefined
-          };
-        } else {
-          const { data: execData } = await supabase
-            .from('cmo_executives')
-            .select('id, executive_id, full_name, role, role_key, cmo_family')
-            .eq('executive_id', cleanId)
-            .maybeSingle();
-
-          if (execData) {
-            fetchedMember = {
-              id: execData.executive_id || execData.id,
-              official_member_id: execData.executive_id || execData.id,
-              full_name: execData.full_name || 'Executive Officer',
-              role: execData.role_key || execData.role,
-              family: execData.cmo_family || undefined
-            };
-          }
-        }
       }
 
       if (!fetchedMember) {

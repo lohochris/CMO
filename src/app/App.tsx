@@ -82,7 +82,15 @@ function AppContent() {
     const initialPath = window.location.pathname;
     if (initialPath !== '/') {
       const cleanPath = initialPath.startsWith('/') ? initialPath.substring(1) : initialPath;
-      if (['about', 'services', 'register', 'login', 'dashboard', 'familyHub', 'dashboard/sports', 'terms', 'privacy', 'legal', 'verify'].includes(cleanPath) || cleanPath.startsWith('verify') || cleanPath.startsWith('family/')) {
+      if (cleanPath.startsWith('executive/') || cleanPath.startsWith('sports/')) {
+        const authRole = (typeof window !== 'undefined' ? sessionStorage.getItem('cmo_auth_role') : '') || '';
+        if (!authRole || authRole.toLowerCase() === 'member' || authRole.toLowerCase() === 'regular') {
+          window.history.replaceState(null, '', '/');
+          setCurrentPage('home');
+        } else {
+          setCurrentPage(cleanPath as any);
+        }
+      } else if (['about', 'services', 'register', 'login', 'dashboard', 'familyHub', 'dashboard/sports', 'terms', 'privacy', 'legal', 'verify'].includes(cleanPath) || cleanPath.startsWith('verify') || cleanPath.startsWith('family/')) {
         if (cleanPath.startsWith('verify')) {
           setCurrentPage('verify' as any);
         } else {
@@ -145,6 +153,29 @@ function AppContent() {
     if (currentPage === 'verify' || (typeof currentPage === 'string' && currentPage.startsWith('verify'))) return <VerifyMember />;
     if (currentPage === 'terms') return <TermsAndConditions />;
     if (currentPage === 'privacy' || currentPage === 'legal') return <PrivacyPolicy />;
+
+    // Protection guard for direct /executive/* URL routes
+    if (currentPage.startsWith('executive/')) {
+      const parts = currentPage.split('/');
+      const officeKey = (parts[1] || '').toLowerCase();
+      const sessionRole = typeof window !== 'undefined' ? sessionStorage.getItem('cmo_auth_role')?.toLowerCase() : '';
+      const userRole = (currentUser?.role || sessionRole || 'member').toLowerCase().trim();
+
+      if (!userRole || userRole === 'member' || userRole === 'regular') {
+        setError(`Access Denied: Direct URL navigation blocked. General Member accounts cannot access executive workspaces.`);
+        setTimeout(() => setCurrentPage('home'), 10);
+        return <Home />;
+      }
+
+      if (officeKey === 'chairman') return <ChairmanDashboard />;
+      if (officeKey === 'fin-sec' || officeKey === 'financial-secretary') return <FinanceDashboard />;
+      if (officeKey === 'general-secretary' || officeKey === 'secretary') return <SecretaryDashboard />;
+      if (officeKey === 'treasury' || officeKey === 'treasurer') return <TreasurerDashboard />;
+      if (officeKey === 'welfare') return <WelfareDashboard />;
+      if (officeKey === 'pro') return <PRODashboard />;
+      if (officeKey === 'provost') return <ProvostDashboard />;
+      if (officeKey === 'liturgist') return <LiturgistDashboard />;
+    }
 
     // 1. Strict route guard and handler for /family/:familyName
     if (currentPage.startsWith('family/')) {

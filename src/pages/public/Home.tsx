@@ -30,7 +30,7 @@ import { useApp } from '../../contexts/AppContext';
 import { Page } from '../../types';
 import { Heading } from '../../app/components/common/Heading';
 import { supabase } from '../../lib/supabase';
-import { isRoleAuthorizedForOffice } from '../../config/roles';
+import { STRICT_OFFICE_ROLES, isRoleAuthorizedForOffice } from '../../config/roles';
 
 // ── 1. EXECUTIVE OFFICES DATA MATRIX (10 CARDS) ─────────────────────────────────
 interface ExecOffice {
@@ -297,50 +297,31 @@ export const Home = () => {
 
       let fetchedMember: { id: string; official_member_id?: string; full_name?: string; role?: string; family?: string } | null = null;
 
-      if (cleanId in ADMIN_ALIAS_REGISTRY) {
+      // 1. Query Supabase public.members directly
+      const { data: memberData, error: dbError } = await supabase
+        .from('members')
+        .select('id, official_member_id, full_name, role, cmo_family')
+        .eq('official_member_id', cleanId)
+        .maybeSingle();
+
+      if (memberData) {
+        fetchedMember = {
+          id: memberData.id,
+          official_member_id: memberData.official_member_id || cleanId,
+          full_name: memberData.full_name || 'Organization Member',
+          role: memberData.role || 'member',
+          family: memberData.cmo_family || undefined
+        };
+      } else if (cleanId in ADMIN_ALIAS_REGISTRY) {
         fetchedMember = {
           id: cleanId,
           official_member_id: cleanId,
           full_name: ADMIN_ALIAS_REGISTRY[cleanId].name,
           role: ADMIN_ALIAS_REGISTRY[cleanId].role
         };
-      } else {
-        // Query Supabase public.members
-        const { data: memberData } = await supabase
-          .from('members')
-          .select('id, official_member_id, full_name, role, cmo_family')
-          .eq('official_member_id', cleanId)
-          .maybeSingle();
-
-        if (memberData) {
-          fetchedMember = {
-            id: memberData.id,
-            official_member_id: memberData.official_member_id || cleanId,
-            full_name: memberData.full_name || 'Organization Member',
-            role: memberData.role || 'member',
-            family: memberData.cmo_family || undefined
-          };
-        } else {
-          // Fallback query cmo_executives
-          const { data: execData } = await supabase
-            .from('cmo_executives')
-            .select('id, executive_id, full_name, role, role_key, cmo_family')
-            .eq('executive_id', cleanId)
-            .maybeSingle();
-
-          if (execData) {
-            fetchedMember = {
-              id: execData.executive_id || execData.id,
-              official_member_id: execData.executive_id || execData.id,
-              full_name: execData.full_name || 'Executive Officer',
-              role: execData.role_key || execData.role,
-              family: execData.cmo_family || undefined
-            };
-          }
-        }
       }
 
-      if (!fetchedMember) {
+      if (dbError || !fetchedMember) {
         setAuthError(`Invalid Member or Executive ID: "${cleanId}". Record not found.`);
         return;
       }
@@ -350,14 +331,28 @@ export const Home = () => {
         ? 'sports'
         : getOfficeKeyFromTitle(selectedOfficeForAuth.title);
 
-      const hasClearance = isRoleAuthorizedForOffice(memberRole, targetOfficeKey);
-
-      if (!hasClearance) {
-        setAuthError(`Access Denied: ID ${cleanId} (${fetchedMember.full_name}) is a General Member account and does not hold executive clearance for ${selectedOfficeForAuth.title}.`);
+      // 2. Strict check: If user is a general member, block immediately
+      if (memberRole === 'member' || memberRole === 'regular' || memberRole === '') {
+        setAuthError(`Access Denied: ${cleanId} (${fetchedMember.full_name || 'Member'}) is registered as a General Member. This portal is restricted exclusively to elected Executive Officers.`);
         return;
       }
 
-      // Proceed to grant access only if role is verified
+      // 3. Strict check against target office
+      const allowedRoles = STRICT_OFFICE_ROLES[targetOfficeKey.toLowerCase()] || ['super_admin'];
+      const isAuthorized = allowedRoles.some(allowed => memberRole === allowed || memberRole.includes(allowed));
+
+      if (!isAuthorized) {
+        setAuthError(`Access Denied: ${fetchedMember.full_name} (${fetchedMember.role}) does not hold authorization for the ${targetOfficeKey.replace('-', ' ').toUpperCase()} workspace.`);
+        return;
+      }
+
+      // 4. Authorized: Save session context and navigate
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('cmo_auth_office', targetOfficeKey);
+        sessionStorage.setItem('cmo_auth_member_id', fetchedMember.official_member_id || cleanId);
+        sessionStorage.setItem('cmo_auth_role', memberRole);
+      }
+
       const targetPage: Page = selectedOfficeForAuth.targetPage || (
         memberRole === 'liturgist' ? 'liturgist' :
         memberRole === 'provost' ? 'provost' :
