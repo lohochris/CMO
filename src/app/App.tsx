@@ -174,7 +174,7 @@ function AppContent() {
       if (officeKey === 'welfare') return <WelfareDashboard />;
       if (officeKey === 'pro') return <PRODashboard />;
       if (officeKey === 'provost') return <ProvostDashboard />;
-      if (officeKey === 'liturgist') return <LiturgistDashboard />;
+      if (officeKey === 'liturgist' || officeKey === 'liturgy') return <LiturgistDashboard />;
     }
 
     // 1. Strict route guard and handler for /family/:familyName
