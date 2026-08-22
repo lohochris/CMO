@@ -93,7 +93,8 @@ export const DigitalIdCardModal: React.FC<DigitalIdCardModalProps> = ({
 
   const memberCode = member.official_member_id?.trim() || (member as any)?.member_id || 'HCC-CMO-26-003';
   const cleanId = (memberCode || 'MEMBER').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const canonicalVerifyUrl = `${window.location.origin}/verify?id=${encodeURIComponent(memberCode)}`;
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin.replace(/\/$/, '') : 'https://cmo-eta.vercel.app';
+  const canonicalVerifyUrl = `${baseUrl}/verify?id=${encodeURIComponent(memberCode.trim())}`;
 
   const handleDownloadPNG = async () => {
     if (!cardRef.current) return;
@@ -220,6 +221,7 @@ export const DigitalIdCardModal: React.FC<DigitalIdCardModalProps> = ({
                   value={canonicalVerifyUrl}
                   size={96}
                   level="M"
+                  includeMargin={false}
                   className="w-full h-full"
                 />
               </div>
