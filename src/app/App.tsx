@@ -13,7 +13,7 @@ import { PublicGallery } from '../pages/public/PublicGallery';
 import { MemberDashboard } from '../pages/dashboard/MemberDashboard';
 import { TermsAndConditions } from '../pages/TermsAndConditions';
 import { PrivacyPolicy } from '../pages/PrivacyPolicy';
-import { VerifyMember } from '../pages/VerifyMember';
+import { VerifyMember } from '../pages/public/VerifyMember';
 import { FinSecDashboard as FinanceDashboard } from '../pages/dashboard/FinSecDashboard';
 import { WelfareDashboard } from '../pages/dashboard/WelfareDashboard';
 import { TreasurerDashboard } from '../pages/dashboard/TreasurerDashboard';
