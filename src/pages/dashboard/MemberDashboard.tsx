@@ -139,17 +139,46 @@ export const MemberDashboard = () => {
 
   const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
     if (!currentUser) return;
+    const memberIdToUse = currentUser.official_member_id || currentUser.id;
+    if (!memberIdToUse) return;
 
-    const storageUrl = await uploadProfilePicture(currentUser.id, imageFile, imageDataUrl);
-    const finalImageUrl = storageUrl || imageDataUrl;
+    try {
+      // 1. Upload to Supabase Storage bucket 'profile-pictures' & get permanent public URL
+      const storageUrl = await uploadProfilePicture(memberIdToUse, imageFile);
 
-    const updatedMembers = members.map(m =>
-      m.id === currentUser.id ? { ...m, profilePic: finalImageUrl } : m
-    );
-    setMembers(updatedMembers);
-    setCurrentUser({ ...currentUser, profilePic: finalImageUrl });
-    setSuccess('✓ Profile picture updated successfully!');
-    setTimeout(() => setSuccess(''), 3000);
+      if (!storageUrl || storageUrl.startsWith('blob:') || storageUrl.startsWith('data:')) {
+        throw new Error('Supabase Storage upload failed or returned an invalid URL.');
+      }
+
+      // 2. Explicitly update database table public.members with avatar_url: storageUrl
+      const { error: dbError } = await supabase
+        .from('members')
+        .update({ avatar_url: storageUrl })
+        .or(`official_member_id.eq.${memberIdToUse},id.eq.${memberIdToUse}`);
+
+      if (dbError) {
+        console.warn('Database update notification:', dbError.message);
+      }
+
+      // 3. Update local component state with permanent public URL
+      const updatedMembers = members.map(m =>
+        (m.id === currentUser.id || m.official_member_id === memberIdToUse)
+          ? { ...m, profilePic: storageUrl, photo_url: storageUrl, avatar_url: storageUrl }
+          : m
+      );
+      setMembers(updatedMembers);
+      setCurrentUser({
+        ...currentUser,
+        profilePic: storageUrl,
+        photo_url: storageUrl,
+        avatar_url: storageUrl
+      });
+      setSuccess('✓ Profile picture uploaded to Supabase Storage and saved permanently!');
+      setTimeout(() => setSuccess(''), 4000);
+    } catch (err: any) {
+      console.error('Error uploading photo:', err);
+      setError('Failed to upload profile picture to cloud storage.');
+    }
   };
 
   const handleSettingsOpen = () => {

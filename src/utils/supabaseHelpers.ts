@@ -18,32 +18,33 @@ export const getMemberQueryField = (memberId: string | null | undefined): 'id' |
 
 export const uploadProfilePicture = async (memberId: string, file: Blob | string, fallbackUrl?: string) => {
   const url = await uploadProfilePhotoToStorage(memberId, file);
-  const finalUrl = url || fallbackUrl;
 
-  if (finalUrl && memberId) {
+  // Strictly enforce permanent storage URLs. Never save temporary blob: or data: URLs to database.
+  const isPermanentUrl = Boolean(url && !url.startsWith('blob:') && !url.startsWith('data:'));
+  const targetUrl = isPermanentUrl ? url : null;
+
+  if (targetUrl && memberId) {
     const queryField = getMemberQueryField(memberId);
     try {
       const { error } = await supabase
         .from('members')
-        .update({ avatar_url: finalUrl })
+        .update({ avatar_url: targetUrl })
         .eq(queryField, memberId);
       
       if (error) {
-        throw error;
-      }
-    } catch (e) {
-      try {
+        // Retry updating by official_member_id if primary query field failed
         await supabase
           .from('members')
-          .update({ avatar_url: finalUrl })
-          .eq(queryField, memberId);
-      } catch (err) {
-        // Silent fallback
+          .update({ avatar_url: targetUrl })
+          .eq('official_member_id', memberId);
       }
+    } catch (e) {
+      console.error('Failed updating members avatar_url in database:', e);
     }
   }
 
-  return finalUrl;
+  // Return the permanent URL if successful, otherwise null
+  return targetUrl;
 };
 
 /**
