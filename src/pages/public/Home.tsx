@@ -30,7 +30,7 @@ import { useApp } from '../../contexts/AppContext';
 import { Page } from '../../types';
 import { Heading } from '../../app/components/common/Heading';
 import { supabase } from '../../lib/supabase';
-import { STRICT_OFFICE_ROLES, isRoleAuthorizedForOffice } from '../../config/roles';
+import { STRICT_OFFICE_ROLES, isRoleAuthorizedForOffice, EXECUTIVE_OFFICES as CANONICAL_EXECUTIVE_OFFICES } from '../../config/roles';
 
 // ── 1. EXECUTIVE OFFICES DATA MATRIX (10 CARDS) ─────────────────────────────────
 interface ExecOffice {
@@ -272,6 +272,39 @@ export const Home = () => {
     try {
       if (!selectedOfficeForAuth) return;
       const cleanId = inputCredential.toUpperCase().trim();
+
+      // 1. Direct match with Institutional Office Key
+      if (CANONICAL_EXECUTIVE_OFFICES[cleanId]) {
+        const office = CANONICAL_EXECUTIVE_OFFICES[cleanId];
+        const executiveSession = {
+          id: office.officeId,
+          official_member_id: office.officeId,
+          full_name: office.title,
+          role: office.role,
+          is_executive_office: true,
+          cmo_family: 'Executive Council',
+        };
+
+        localStorage.setItem('cmo_current_member', JSON.stringify(executiveSession));
+        setCurrentUser(executiveSession as any);
+        setSuccess(`Authenticated as ${office.title}`);
+        setShowExecModal(false);
+        setShowSportsModal(false);
+        setSelectedOfficeForAuth(null);
+
+        const targetPage: Page = selectedOfficeForAuth.targetPage || (
+          office.role === 'liturgist' ? 'liturgist' :
+          office.role === 'provost' ? 'provost' :
+          office.role === 'pro' ? 'pro' :
+          office.role === 'welfare' ? 'welfare' :
+          office.role === 'treasurer' ? 'treasurer' :
+          office.role === 'secretary' ? 'secretary' :
+          office.role === 'fin_sec' ? 'fin_sec' :
+          office.role === 'chairman' ? 'chairman' : 'dashboard'
+        );
+        setCurrentPage(targetPage);
+        return;
+      }
 
       // Static administrative alias whitelist & canonical executive IDs
       const ADMIN_ALIAS_REGISTRY: Record<string, { role: string; name: string; family?: string }> = {
@@ -744,12 +777,12 @@ export const Home = () => {
 
             <form onSubmit={handlePerformModalAuth} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-gray-300">Official Executive / Role ID</label>
+                <label className="text-xs font-semibold text-[#ffd700]">Official ID / Key</label>
                 <Input
                   type="text"
                   value={inputCredential}
                   onChange={(e) => setInputCredential(e.target.value)}
-                  placeholder="Enter Official Executive ID"
+                  placeholder="Enter your ID"
                   className="bg-[#001a16] border-[#ffd700]/40 text-white font-mono text-sm uppercase p-2.5 focus:border-[#ffd700]"
                   required
                 />

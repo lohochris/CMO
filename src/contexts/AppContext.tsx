@@ -398,7 +398,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentUser, setCurrentUser] = useState<Member | null>(() => {
     try {
       if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem('cmo_current_user');
+        const saved = localStorage.getItem('cmo_current_member') || localStorage.getItem('cmo_current_user');
         if (saved) {
           const parsed = JSON.parse(saved);
           let fUnit = parsed.familyUnit || parsed.cmo_family || parsed.family;
@@ -429,12 +429,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (typeof window !== 'undefined') {
         if (currentUser) {
           localStorage.setItem('cmo_current_user', JSON.stringify(currentUser));
+          localStorage.setItem('cmo_current_member', JSON.stringify(currentUser));
           localStorage.setItem('cmo_member_session', currentUser.id);
           if (currentUser.id === 'WEL-OFF-2026' || currentUser.id === 'TREAS-2026') {
             localStorage.setItem('cmo_admin_id', currentUser.id);
           }
         } else {
           localStorage.removeItem('cmo_current_user');
+          localStorage.removeItem('cmo_current_member');
           localStorage.removeItem('cmo_member_session');
           localStorage.removeItem('cmo_admin_id');
         }

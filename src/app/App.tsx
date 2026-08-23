@@ -63,7 +63,23 @@ const matchFamily = (param: string): import('../types').Family | null => {
 };
 
 function AppContent() {
-  const { currentPage, currentUser, announcements, setError, setCurrentPage, loading } = useApp();
+  const { currentPage, currentUser, setCurrentUser, announcements, setError, setCurrentPage, loading } = useApp();
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('cmo_current_member') || localStorage.getItem('cmo_current_user');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (!currentUser || (currentUser as any).official_member_id !== parsed.official_member_id) {
+            setCurrentUser(parsed);
+          }
+        } catch (e) {
+          console.error('Error parsing stored session', e);
+        }
+      }
+    }
+  }, []);
 
   // Synchronize browser history and pathnames
   useEffect(() => {
@@ -160,8 +176,10 @@ function AppContent() {
       const officeKey = (parts[1] || '').toLowerCase();
       const sessionRole = typeof window !== 'undefined' ? sessionStorage.getItem('cmo_auth_role')?.toLowerCase() : '';
       const userRole = (currentUser?.role || sessionRole || 'member').toLowerCase().trim();
+      const memberId = (currentUser?.official_member_id || currentUser?.id || '').toUpperCase().trim();
+      const isInstitutionalOffice = memberId.startsWith('HCC-CMO-EXEC-') || memberId.startsWith('HCC-CMO-SPRT-') || (currentUser as any)?.is_executive || (currentUser as any)?.is_executive_office;
 
-      if (!userRole || userRole === 'member' || userRole === 'regular') {
+      if (!isInstitutionalOffice && (!userRole || userRole === 'member' || userRole === 'regular')) {
         setError(`Access Denied: Direct URL navigation blocked. General Member accounts cannot access executive workspaces.`);
         setTimeout(() => setCurrentPage('home'), 10);
         return <Home />;
@@ -303,10 +321,11 @@ function AppContent() {
 
       const officialId = currentUser.official_member_id || currentUser.id;
       const userRole = (currentUser.role || 'member').toLowerCase().trim();
+      const isExecOffice = (currentUser as any).is_executive_office || (officialId && (officialId.startsWith('HCC-CMO-EXEC-') || officialId.startsWith('HCC-CMO-SPRT-')));
 
       // Explicit route access control when a specific executive route is requested
       if (currentPage === 'chairman') {
-        if (!['chairman', 'cmo_chairman', 'super_admin', 'executive'].includes(userRole)) {
+        if (!['chairman', 'cmo_chairman', 'super_admin', 'executive'].includes(userRole) && !isExecOffice) {
           setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold executive clearance for Chairman Office.`);
           setTimeout(() => setCurrentPage('dashboard'), 10);
           return <MemberDashboard />;
@@ -315,7 +334,7 @@ function AppContent() {
       }
 
       if (currentPage === 'fin_sec') {
-        if (!['fin_sec', 'financial_secretary', 'super_admin', 'executive'].includes(userRole)) {
+        if (!['fin_sec', 'financial_secretary', 'super_admin', 'executive'].includes(userRole) && !isExecOffice) {
           setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold executive clearance for Financial Secretary Office.`);
           setTimeout(() => setCurrentPage('dashboard'), 10);
           return <MemberDashboard />;
@@ -324,7 +343,7 @@ function AppContent() {
       }
 
       if (currentPage === 'secretary') {
-        if (!['gen_sec', 'secretary', 'general_secretary', 'super_admin', 'executive'].includes(userRole)) {
+        if (!['gen_sec', 'secretary', 'general_secretary', 'super_admin', 'executive'].includes(userRole) && !isExecOffice) {
           setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold executive clearance for General Secretary Office.`);
           setTimeout(() => setCurrentPage('dashboard'), 10);
           return <MemberDashboard />;
@@ -333,7 +352,7 @@ function AppContent() {
       }
 
       if (currentPage === 'treasurer') {
-        if (!['treasurer', 'super_admin', 'executive'].includes(userRole)) {
+        if (!['treasurer', 'super_admin', 'executive'].includes(userRole) && !isExecOffice) {
           setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold executive clearance for Treasury Office.`);
           setTimeout(() => setCurrentPage('dashboard'), 10);
           return <MemberDashboard />;
@@ -343,7 +362,7 @@ function AppContent() {
       }
 
       if (currentPage === 'welfare') {
-        if (!['welfare', 'welfare_officer', 'super_admin', 'executive'].includes(userRole)) {
+        if (!['welfare', 'welfare_officer', 'super_admin', 'executive'].includes(userRole) && !isExecOffice) {
           setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold executive clearance for Welfare Office.`);
           setTimeout(() => setCurrentPage('dashboard'), 10);
           return <MemberDashboard />;
@@ -352,7 +371,7 @@ function AppContent() {
       }
 
       if (currentPage === 'pro') {
-        if (!['pro', 'public_relations_officer', 'super_admin', 'executive'].includes(userRole)) {
+        if (!['pro', 'public_relations_officer', 'super_admin', 'executive'].includes(userRole) && !isExecOffice) {
           setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold executive clearance for PRO Office.`);
           setTimeout(() => setCurrentPage('dashboard'), 10);
           return <MemberDashboard />;
@@ -361,7 +380,7 @@ function AppContent() {
       }
 
       if (currentPage === 'provost') {
-        if (!['provost', 'provost_marshall', 'super_admin', 'executive'].includes(userRole)) {
+        if (!['provost', 'provost_marshall', 'super_admin', 'executive'].includes(userRole) && !isExecOffice) {
           setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold executive clearance for Provost Office.`);
           setTimeout(() => setCurrentPage('dashboard'), 10);
           return <MemberDashboard />;
@@ -370,7 +389,7 @@ function AppContent() {
       }
 
       if (currentPage === 'liturgist') {
-        if (!['liturgist', 'super_admin', 'executive'].includes(userRole)) {
+        if (!['liturgist', 'super_admin', 'executive'].includes(userRole) && !isExecOffice) {
           setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold executive clearance for Liturgical Team.`);
           setTimeout(() => setCurrentPage('dashboard'), 10);
           return <MemberDashboard />;
