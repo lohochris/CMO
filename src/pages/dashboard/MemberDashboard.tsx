@@ -1008,10 +1008,16 @@ export const MemberDashboard = () => {
                     {sub.reference_no && <p className="text-xs text-slate-400 mt-0.5 font-mono">Ref: {sub.reference_no}</p>}
                     <p className="text-[10px] text-slate-500 mt-1">Submitted: {sub.created_at ? new Date(sub.created_at).toLocaleDateString() : 'N/A'}</p>
 
-                    {sub.status === 'rejected' && sub.rejection_reason && (
-                      <div className="mt-3 p-2.5 bg-rose-950/60 border border-rose-900/80 rounded-lg text-xs text-rose-300">
-                        <strong>Rejection Reason:</strong> {sub.rejection_reason}
-                      </div>
+                    {sub.status === 'approved' && sub.verified_at && (
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Verified: {new Date(sub.verified_at).toLocaleDateString()}
+                      </p>
+                    )}
+
+                    {sub.status === 'rejected' && (sub.rejection_reason || sub.review_notes) && (
+                      <p className="text-xs text-rose-400 mt-1">
+                        Reason: {sub.rejection_reason || sub.review_notes}
+                      </p>
                     )}
                   </div>
 
