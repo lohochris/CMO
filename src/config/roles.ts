@@ -1,3 +1,24 @@
+export interface ExecutiveOffice {
+  officeId: string;
+  title: string;
+  role: string;
+  route: string;
+}
+
+export const EXECUTIVE_OFFICES: Record<string, ExecutiveOffice> = {
+  'HCC-CMO-EXEC-CH': { officeId: 'HCC-CMO-EXEC-CH', title: 'Chairman Office', role: 'chairman', route: '/executive/chairman' },
+  'HCC-CMO-EXEC-SEC': { officeId: 'HCC-CMO-EXEC-SEC', title: 'General Secretariat', role: 'secretary', route: '/executive/secretary' },
+  'HCC-CMO-EXEC-SE': { officeId: 'HCC-CMO-EXEC-SEC', title: 'General Secretariat', role: 'secretary', route: '/executive/secretary' },
+  'HCC-CMO-EXEC-FS': { officeId: 'HCC-CMO-EXEC-FS', title: 'Financial Secretariat', role: 'fin_sec', route: '/executive/fin-sec' },
+  'HCC-CMO-EXEC-TR': { officeId: 'HCC-CMO-EXEC-TR', title: 'Treasury Office', role: 'treasurer', route: '/executive/treasury' },
+  'HCC-CMO-EXEC-PRO': { officeId: 'HCC-CMO-EXEC-PRO', title: 'Public Relations Office', role: 'pro', route: '/executive/pro' },
+  'HCC-CMO-EXEC-PR': { officeId: 'HCC-CMO-EXEC-PRO', title: 'Public Relations Office', role: 'pro', route: '/executive/pro' },
+  'HCC-CMO-EXEC-PV': { officeId: 'HCC-CMO-EXEC-PV', title: 'Provost Marshall Office', role: 'provost', route: '/executive/provost' },
+  'HCC-CMO-EXEC-WF': { officeId: 'HCC-CMO-EXEC-WF', title: 'Welfare Directorate', role: 'welfare', route: '/executive/welfare' },
+  'HCC-CMO-EXEC-WE': { officeId: 'HCC-CMO-EXEC-WF', title: 'Welfare Directorate', role: 'welfare', route: '/executive/welfare' },
+  'HCC-CMO-SPRT-DIR': { officeId: 'HCC-CMO-SPRT-DIR', title: 'Sports Directorate', role: 'sports_director', route: '/sports/admin' },
+};
+
 export const OFFICE_ROLE_MAP: Record<string, string[]> = {
   'chairman': ['chairman', 'vice chairman', 'super_admin'],
   'general-secretary': ['secretary', 'general secretary', 'super_admin'],
