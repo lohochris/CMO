@@ -22,6 +22,8 @@ import { sendPaymentReceiptNotification, sendRejectionSmsNotification, getSmsBal
 import { toast } from 'sonner';
 
 
+import { getCanonicalLedgerSummary } from '../../lib/ledgerService';
+
 export const FinSecDashboard = () => {
   const {
     members, setMembers,
@@ -31,9 +33,9 @@ export const FinSecDashboard = () => {
     announcements, setAnnouncements,
     currentUser, setCurrentUser,
     setError, setSuccess,
-    totalIncome,
-    totalExpenses,
-    vaultBalance,
+    totalIncome: appTotalIncome,
+    totalExpenses: appTotalExpenses,
+    vaultBalance: appVaultBalance,
     refreshDatabase
   } = useApp();
 
@@ -41,6 +43,38 @@ export const FinSecDashboard = () => {
   const [dbMembersList, setDbMembersList] = useState<any[]>([]);
   const [rosterList, setRosterList] = useState<any[]>([]);
   const [registrySearch, setRegistrySearch] = useState('');
+
+  // Consolidated General Ledger State
+  const [totalIncome, setTotalIncome] = useState<number>(0);
+  const [totalExpenses, setTotalExpenses] = useState<number>(0);
+  const [vaultBalance, setVaultBalance] = useState<number>(0);
+  const [sessionCash, setSessionCash] = useState<number>(0);
+  const [inflows, setInflows] = useState<any[]>([]);
+  const [outflows, setOutflows] = useState<any[]>([]);
+  const [timeline, setTimeline] = useState<any[]>([]);
+  const [loadingLedger, setLoadingLedger] = useState<boolean>(false);
+
+  const loadFinancials = async () => {
+    try {
+      setLoadingLedger(true);
+      const summary = await getCanonicalLedgerSummary();
+      setTotalIncome(summary.totalIncome);
+      setTotalExpenses(summary.totalExpenses);
+      setVaultBalance(summary.vaultBalance);
+      setSessionCash(summary.vaultBalance);
+      setInflows(summary.inflows);
+      setOutflows(summary.outflows);
+      setTimeline(summary.allTransactions);
+    } catch (err) {
+      console.error('Error fetching canonical ledger summary in FinSec:', err);
+    } finally {
+      setLoadingLedger(false);
+    }
+  };
+
+  useEffect(() => {
+    loadFinancials();
+  }, []);
 
   useEffect(() => {
     const fetchLiveCounts = async () => {
@@ -72,7 +106,41 @@ export const FinSecDashboard = () => {
 
     fetchLiveCounts();
     fetchTransactions();
+    loadFinancials();
   }, [members]);
+
+  // Real-time Postgres subscriptions for financial sources
+  useEffect(() => {
+    const channel = supabase
+      .channel('finsec-realtime-financial-sources')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_submissions' }, () => {
+        loadFinancials();
+        loadPendingSubmissions();
+        refreshDatabase();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'incomes' }, () => {
+        loadFinancials();
+        refreshDatabase();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => {
+        loadFinancials();
+        refreshDatabase();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lodgments' }, () => {
+        loadFinancials();
+        refreshDatabase();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => {
+        fetchTransactions();
+        loadFinancials();
+        refreshDatabase();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   // Step-up authentication states
   const [isExecutiveUnlocked, setIsExecutiveUnlocked] = useState<boolean>(() => {
@@ -124,6 +192,7 @@ export const FinSecDashboard = () => {
       } else {
         toast.success(`Payment of ₦${sub.amount.toLocaleString()} for ${sub.full_name} approved and ledger updated!`);
         loadPendingSubmissions();
+        loadFinancials();
         refreshDatabase();
       }
     } catch (err) {
@@ -149,6 +218,7 @@ export const FinSecDashboard = () => {
         setRejectionModalSub(null);
         setRejectionNoteInput('');
         loadPendingSubmissions();
+        loadFinancials();
       }
     } catch (err) {
       console.error('Rejection exception:', err);
@@ -445,11 +515,33 @@ export const FinSecDashboard = () => {
     return txDate >= start && txDate <= end;
   });
 
-  const filteredSummary = calculateUnifiedFinancialSummary(filteredTransactions);
-  const filteredIncome = filteredSummary.totalIncome;
-  const filteredExpenses = filteredSummary.totalExpenses;
+  const filteredInflows = inflows.filter(item => {
+    const rawDate = item.created_at || item.timestamp || item.date;
+    if (!rawDate) return true;
+    const itemDate = new Date(rawDate);
+    const start = new Date(filterStartDate + "T00:00:00");
+    const end = new Date(filterEndDate + "T23:59:59");
+    return itemDate >= start && itemDate <= end;
+  });
 
-  const incomeRecords = filteredTransactions.filter(tx => (tx.transactionType === 'income' || (tx as any).transaction_type === 'income') && validStatus.includes((tx as any).status || 'Approved'));
+  const filteredOutflows = outflows.filter(item => {
+    const rawDate = item.created_at || item.timestamp || item.date;
+    if (!rawDate) return true;
+    const itemDate = new Date(rawDate);
+    const start = new Date(filterStartDate + "T00:00:00");
+    const end = new Date(filterEndDate + "T23:59:59");
+    return itemDate >= start && itemDate <= end;
+  });
+
+  const totalInflowsSum = filteredInflows.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const totalOutflowsSum = filteredOutflows.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const netBalanceSum = totalInflowsSum - totalOutflowsSum;
+
+  const filteredSummary = calculateUnifiedFinancialSummary(filteredTransactions);
+  const filteredIncome = totalInflowsSum;
+  const filteredExpenses = totalOutflowsSum;
+
+  const incomeRecords = filteredInflows;
   console.log("4. TOTAL RAW STATE ARRAY COUNT:", transactions.length);
   console.log("4. FILTERED INFLOWS COUNT:", incomeRecords.length);
 
@@ -1888,6 +1980,8 @@ export const FinSecDashboard = () => {
               </div>
             </TabsContent>
 
+
+
             {/* Validation Queue */}
             <TabsContent value="validation">
               <Card className="bg-[#002520] border-2 border-[#ffd700] p-4 md:p-6">
@@ -2433,6 +2527,9 @@ export const FinSecDashboard = () => {
                 </button>
               </div>
             </div>
+
+
+
             {/* SUB-SECTION A: INFLOWS / INCOME GENERATED */}
             <div className="mb-4 mt-6 border-b border-[#ffd700]/30 print:border-[#002B19] pb-2 flex flex-wrap justify-between items-center gap-2">
               <h4 className="text-lg font-bold text-[#ffd700] print:text-[#002B19] uppercase tracking-wide">
@@ -2499,32 +2596,31 @@ export const FinSecDashboard = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTransactions
-                    .filter(tx => (tx.transactionType === 'income' || (tx as any).transaction_type === 'income') && validStatus.includes((tx as any).status || 'Approved'))
+                  {filteredInflows
                     .slice()
-                    .reverse()
                     .map((transaction) => {
                       const isEditing = editingTxId === transaction.id;
-                      let memberName = (transaction as any).member_name || transaction.memberName || '';
-                      if (transaction.memberId === 'GENERAL-INCOME') {
+                      let memberName = transaction.member_name || transaction.memberName || '';
+                      const memberIdVal = transaction.official_member_id || transaction.member_id || transaction.memberId || 'N/A';
+                      if (memberIdVal === 'GENERAL-INCOME') {
                         memberName = 'CMO General Account';
-                      } else if (transaction.memberId === 'GENERAL-EXPENSE') {
+                      } else if (memberIdVal === 'GENERAL-EXPENSE') {
                         memberName = 'CMO Operational Expense';
                       } else if (!memberName || memberName === 'Member' || memberName === 'Unknown Member') {
-                        const matchedMember = members.find(m => m.official_member_id === transaction.memberId) ||
-                                              rosterList.find(r => r.official_member_id === transaction.memberId);
-                        memberName = matchedMember ? (matchedMember.full_name || matchedMember.name) : (transaction.memberId || 'N/A (General Entry)');
+                        const matchedMember = members.find(m => m.official_member_id === memberIdVal) ||
+                                              rosterList.find(r => r.official_member_id === memberIdVal);
+                        memberName = matchedMember ? (matchedMember.full_name || matchedMember.name) : (memberIdVal || 'N/A (General Entry)');
                       }
 
-                      const paymentDate = new Date(transaction.timestamp);
-                      const formattedDate = paymentDate.toLocaleDateString('en-US', { 
+                      const paymentDate = new Date(transaction.created_at || transaction.timestamp || transaction.date);
+                      const formattedDate = !isNaN(paymentDate.getTime()) ? (paymentDate.toLocaleDateString('en-US', { 
                         year: 'numeric', 
                         month: 'short', 
                         day: 'numeric' 
                       }) + ' ' + paymentDate.toLocaleTimeString('en-US', { 
                         hour: '2-digit', 
                         minute: '2-digit' 
-                      });
+                      })) : 'N/A';
 
                       return (
                         <TableRow key={transaction.id} className="border-[#ffd700]/30 hover:bg-[#001a16]">
@@ -2538,7 +2634,7 @@ export const FinSecDashboard = () => {
                           </TableCell>
                           <TableCell className="text-gray-400 text-sm">{formattedDate}</TableCell>
                           <TableCell className="text-white font-semibold">{memberName}</TableCell>
-                          <TableCell className="text-white font-mono text-sm">{transaction.memberId}</TableCell>
+                          <TableCell className="text-white font-mono text-sm">{memberIdVal}</TableCell>
                           <TableCell className="text-white">
                             {isEditing ? (
                               <div className="flex flex-col gap-2">
@@ -2663,9 +2759,9 @@ export const FinSecDashboard = () => {
                         </TableRow>
                       );
                     })}
-                  {filteredTransactions.filter(tx => (tx.transactionType === 'income' || (tx as any).transaction_type === 'income') && validStatus.includes((tx as any).status || 'Approved')).length === 0 && (
+                  {filteredInflows.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-gray-400 py-8">
+                      <TableCell colSpan={7} className="text-center text-gray-400 py-8">
                         No matching income records registered for this date period.
                       </TableCell>
                     </TableRow>
@@ -2693,38 +2789,37 @@ export const FinSecDashboard = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTransactions
-                    .filter(tx => (tx.transactionType === 'expense' || (tx as any).transaction_type === 'expense') && validStatus.includes((tx as any).status || 'Approved'))
+                  {filteredOutflows
                     .slice()
-                    .reverse()
                     .map((transaction) => {
                       const isEditing = editingTxId === transaction.id;
-                      let memberName = (transaction as any).member_name || transaction.memberName || '';
-                      if (transaction.memberId === 'GENERAL-INCOME') {
+                      let memberName = transaction.member_name || transaction.memberName || '';
+                      const memberIdVal = transaction.official_member_id || transaction.member_id || transaction.memberId || 'GENERAL-EXPENSE';
+                      if (memberIdVal === 'GENERAL-INCOME') {
                         memberName = 'CMO General Account';
-                      } else if (transaction.memberId === 'GENERAL-EXPENSE') {
+                      } else if (memberIdVal === 'GENERAL-EXPENSE') {
                         memberName = 'CMO Operational Expense';
                       } else if (!memberName || memberName === 'Member' || memberName === 'Unknown Member') {
-                        const matchedMember = members.find(m => m.official_member_id === transaction.memberId) ||
-                                              rosterList.find(r => r.official_member_id === transaction.memberId);
-                        memberName = matchedMember ? (matchedMember.full_name || matchedMember.name) : (transaction.memberId || 'N/A (General Entry)');
+                        const matchedMember = members.find(m => m.official_member_id === memberIdVal) ||
+                                              rosterList.find(r => r.official_member_id === memberIdVal);
+                        memberName = matchedMember ? (matchedMember.full_name || matchedMember.name) : (memberIdVal || 'N/A (General Entry)');
                       }
 
-                      const paymentDate = new Date(transaction.timestamp);
-                      const formattedDate = paymentDate.toLocaleDateString('en-US', { 
+                      const paymentDate = new Date(transaction.created_at || transaction.timestamp || transaction.date);
+                      const formattedDate = !isNaN(paymentDate.getTime()) ? (paymentDate.toLocaleDateString('en-US', { 
                         year: 'numeric', 
                         month: 'short', 
                         day: 'numeric' 
                       }) + ' ' + paymentDate.toLocaleTimeString('en-US', { 
                         hour: '2-digit', 
                         minute: '2-digit' 
-                      });
+                      })) : 'N/A';
 
                       return (
                         <TableRow key={transaction.id} className="border-[#ffd700]/30 hover:bg-[#001a16]">
                           <TableCell className="text-gray-400 text-sm">{formattedDate}</TableCell>
                           <TableCell className="text-white font-semibold">{memberName}</TableCell>
-                          <TableCell className="text-white font-mono text-sm">{transaction.memberId}</TableCell>
+                          <TableCell className="text-white font-mono text-sm">{memberIdVal}</TableCell>
                           <TableCell className="text-white">
                             {isEditing ? (
                               <div className="flex flex-col gap-2">
@@ -2849,7 +2944,7 @@ export const FinSecDashboard = () => {
                         </TableRow>
                       );
                     })}
-                  {filteredTransactions.filter(tx => (tx.transactionType === 'expense' || (tx as any).transaction_type === 'expense') && validStatus.includes((tx as any).status || 'Approved')).length === 0 && (
+                  {filteredOutflows.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center text-gray-400 py-8">
                         No matching expense records registered for this date period.

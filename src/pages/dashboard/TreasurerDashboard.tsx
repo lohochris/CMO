@@ -18,6 +18,8 @@ import { PaymentSubmission } from '../../types';
 import { toast } from 'sonner';
 
 
+import { getCanonicalLedgerSummary } from '../../lib/ledgerService';
+
 export const TreasurerDashboard = () => {
   const [isExecutiveUnlocked, setIsExecutiveUnlocked] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -44,6 +46,15 @@ export const TreasurerDashboard = () => {
   const [incomePurpose, setIncomePurpose] = useState('');
   const [incomeDate, setIncomeDate] = useState(new Date().toISOString().split('T')[0]);
 
+  // Unified Canonical Financial State
+  const [totalIncome, setTotalIncome] = useState<number>(0);
+  const [totalExpenses, setTotalExpenses] = useState<number>(0);
+  const [vaultBalance, setVaultBalance] = useState<number>(0);
+  const [sessionCash, setSessionCash] = useState<number>(0);
+  const [inflows, setInflows] = useState<any[]>([]);
+  const [outflows, setOutflows] = useState<any[]>([]);
+  const [timeline, setTimeline] = useState<any[]>([]);
+
   const {
     welfareTickets,
     setWelfareTickets,
@@ -57,9 +68,6 @@ export const TreasurerDashboard = () => {
     setCurrentUser,
     setSuccess,
     setError,
-    totalIncome,
-    totalExpenses,
-    vaultBalance,
     refreshDatabase,
     lodgments,
     setLodgments,
@@ -87,6 +95,25 @@ export const TreasurerDashboard = () => {
   const [rejectionModalSub, setRejectionModalSub] = useState<PaymentSubmission | null>(null);
   const [rejectionNoteInput, setRejectionNoteInput] = useState('');
 
+  const loadFinancials = async () => {
+    try {
+      const summary = await getCanonicalLedgerSummary();
+      setTotalIncome(summary.totalIncome);
+      setTotalExpenses(summary.totalExpenses);
+      setVaultBalance(summary.vaultBalance);
+      setSessionCash(summary.vaultBalance);
+      setInflows(summary.inflows);
+      setOutflows(summary.outflows);
+      setTimeline(summary.allTransactions);
+    } catch (err) {
+      console.error('Error fetching canonical ledger summary in Treasurer:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadFinancials();
+  }, []);
+
   const loadPendingSubmissions = async () => {
     try {
       const { data } = await fetchPaymentSubmissions({ status: 'pending' });
@@ -104,13 +131,14 @@ export const TreasurerDashboard = () => {
     if (!sub.id) return;
     setIsAuditingSubId(sub.id);
     try {
-      const officerName = currentUser?.full_name || currentUser?.name || 'Treasurer';
+      const officerName = currentUser?.full_name || currentUser?.official_member_id || currentUser?.name || 'Treasurer';
       const res = await auditPaymentSubmission(sub.id, 'approved', officerName);
       if (res.error) {
         toast.error('Failed to approve payment submission.');
       } else {
-        toast.success(`Payment of ₦${sub.amount.toLocaleString()} for ${sub.full_name} approved and ledger updated!`);
+        toast.success(`Payment of ₦${sub.amount.toLocaleString()} for ${sub.full_name} approved and credited to transactions ledger!`);
         loadPendingSubmissions();
+        loadFinancials();
         refreshDatabase();
       }
     } catch (err) {
@@ -127,7 +155,7 @@ export const TreasurerDashboard = () => {
     }
     setIsAuditingSubId(rejectionModalSub.id);
     try {
-      const officerName = currentUser?.full_name || currentUser?.name || 'Treasurer';
+      const officerName = currentUser?.full_name || currentUser?.official_member_id || currentUser?.name || 'Treasurer';
       const res = await auditPaymentSubmission(rejectionModalSub.id, 'rejected', officerName, rejectionNoteInput.trim());
       if (res.error) {
         toast.error('Failed to reject payment submission.');
@@ -136,6 +164,7 @@ export const TreasurerDashboard = () => {
         setRejectionModalSub(null);
         setRejectionNoteInput('');
         loadPendingSubmissions();
+        loadFinancials();
       }
     } catch (err) {
       console.error('Rejection exception:', err);
