@@ -763,88 +763,7 @@ export const TreasurerDashboard = () => {
         </Card>
       </div>
 
-      {/* ── Pending Member Payment Receipts Audit Queue ── */}
-      <Card className="bg-[#0b1c16] border border-amber-500/30 p-6 rounded-2xl shadow-xl text-white mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-4 border-b border-amber-500/20 gap-2">
-          <div>
-            <h3 className="text-base font-bold text-amber-400 flex items-center gap-2">
-              💳 Pending Member Payment Audits ({pendingSubmissions.length})
-            </h3>
-            <p className="text-xs text-slate-300">Review and verify uploaded bank transfer receipts from members.</p>
-          </div>
-          <button
-            onClick={loadPendingSubmissions}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-400/30 rounded-lg text-xs font-bold cursor-pointer"
-          >
-            🔄 Refresh Queue
-          </button>
-        </div>
 
-        {pendingSubmissions.length === 0 ? (
-          <div className="text-center py-8 bg-[#04160f] rounded-xl border border-emerald-900/40">
-            <p className="text-emerald-400 text-xs font-bold">✓ All clear! No pending payment receipts awaiting verification.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#04160f] text-amber-400 font-bold uppercase tracking-wider">
-                <tr>
-                  <th className="p-3">Member Details</th>
-                  <th className="p-3">Purpose</th>
-                  <th className="p-3">Amount</th>
-                  <th className="p-3">Ref No.</th>
-                  <th className="p-3">Receipt File</th>
-                  <th className="p-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-emerald-900/30">
-                {pendingSubmissions.map((sub) => (
-                  <tr key={sub.id} className="hover:bg-[#002520]/50 transition-colors">
-                    <td className="p-3">
-                      <p className="font-bold text-white uppercase">{sub.full_name}</p>
-                      <p className="text-[10px] text-amber-400 font-mono">{sub.official_member_id} • {sub.cmo_family || 'General'}</p>
-                    </td>
-                    <td className="p-3 font-semibold text-emerald-300">{(sub as any).payment_title || sub.purpose || 'Payment'}</td>
-                    <td className="p-3 font-black text-amber-400 text-sm">₦{sub.amount.toLocaleString()}</td>
-                    <td className="p-3 font-mono text-slate-300">{sub.reference_no || 'N/A'}</td>
-                    <td className="p-3">
-                      <a
-                        href={sub.receipt_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-2.5 py-1 bg-emerald-950 text-emerald-400 border border-emerald-500/40 rounded-md text-[11px] font-bold hover:underline inline-flex items-center gap-1"
-                      >
-                        📄 View Receipt ↗
-                      </a>
-                    </td>
-                    <td className="p-3 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => handleApproveSubmission(sub)}
-                          disabled={isAuditingSubId === sub.id}
-                          className="px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-lg text-xs disabled:opacity-50 cursor-pointer"
-                        >
-                          ✓ Approve
-                        </button>
-                        <button
-                          onClick={() => {
-                            setRejectionModalSub(sub);
-                            setRejectionNoteInput('');
-                          }}
-                          disabled={isAuditingSubId === sub.id}
-                          className="px-3 py-1 bg-rose-950 hover:bg-rose-900 border border-rose-500/40 text-rose-400 font-bold rounded-lg text-xs disabled:opacity-50 cursor-pointer"
-                        >
-                          ✕ Reject
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
 
       {/* Rejection Note Modal */}
       {rejectionModalSub && (
@@ -892,6 +811,14 @@ export const TreasurerDashboard = () => {
       <Tabs defaultValue="disbursement" className="w-full">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <TabsList className="bg-[#002520] border border-[#ffd700] mb-0">
+            <TabsTrigger value="payment-audits" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer flex items-center gap-1.5 font-bold">
+              <span>💳 Payment Audits</span>
+              {pendingSubmissions.length > 0 && (
+                <span className="bg-amber-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full ml-1">
+                  {pendingSubmissions.length}
+                </span>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="disbursement" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16]">
               Disbursement Queue
             </TabsTrigger>
@@ -958,6 +885,106 @@ export const TreasurerDashboard = () => {
           </div>
         ) : (
           <>
+            {/* Payment Audits Desk */}
+            <TabsContent value="payment-audits">
+              <div className="space-y-6">
+                {/* Header Banner */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0a1f18] border border-amber-500/30 rounded-2xl p-5">
+                  <div>
+                    <h3 className="text-base font-black text-amber-400">Member Payment Proof Verification Desk</h3>
+                    <p className="text-xs text-slate-400">Inspect bank transfer receipts and approve or reject submissions to credit the official CMO ledger.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={loadPendingSubmissions}
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-400/30 rounded-lg text-xs font-bold cursor-pointer"
+                    >
+                      🔄 Refresh Queue
+                    </button>
+                    <span className="px-3 py-1 bg-amber-400/10 border border-amber-400/30 rounded-full text-amber-400 text-xs font-bold">
+                      {pendingSubmissions.length} Pending Verification
+                    </span>
+                  </div>
+                </div>
+
+                {/* Submissions Queue */}
+                {pendingSubmissions.length === 0 ? (
+                  <div className="text-center py-12 border border-slate-800 rounded-2xl bg-[#06120e]">
+                    <p className="text-slate-400 text-sm font-semibold">🎉 All member payment submissions have been audited and cleared!</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {pendingSubmissions.map((submission) => (
+                      <div
+                        key={submission.id}
+                        className="bg-[#0b1c16] border border-emerald-900/60 rounded-2xl p-4 flex flex-col justify-between shadow-lg"
+                      >
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
+                              {(submission as any).payment_title || submission.purpose}
+                            </span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-400 font-bold border border-amber-400/20">
+                              Pending
+                            </span>
+                          </div>
+
+                          <h4 className="text-sm font-black text-white">{submission.full_name || submission.member_name}</h4>
+                          <p className="text-xs text-slate-400 font-mono">{submission.official_member_id || submission.member_id} • {submission.cmo_family || 'Parish'}</p>
+
+                          <div className="py-2 border-y border-emerald-900/40 my-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-slate-400">Amount Paid:</span>
+                              <span className="text-base font-black text-amber-400">₦{Number(submission.amount).toLocaleString()}</span>
+                            </div>
+                            {(submission.reference_no || submission.transaction_ref) && (
+                              <div className="flex justify-between items-center text-[11px] mt-1 text-slate-400">
+                                <span>Ref:</span>
+                                <span className="font-mono text-slate-300 truncate max-w-[180px]">
+                                  {submission.reference_no || submission.transaction_ref}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Receipt Thumbnail / View Link */}
+                          <a
+                            href={submission.receipt_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl text-xs text-slate-300 transition-colors"
+                          >
+                            🧾 View Attached Receipt ↗
+                          </a>
+                        </div>
+
+                        {/* Audit Action Buttons */}
+                        <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-emerald-900/40">
+                          <button
+                            onClick={() => {
+                              setRejectionModalSub(submission);
+                              setRejectionNoteInput('');
+                            }}
+                            disabled={isAuditingSubId === submission.id}
+                            className="py-2 px-3 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/60 text-rose-300 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
+                          >
+                            ✕ Reject
+                          </button>
+                          <button
+                            onClick={() => handleApproveSubmission(submission)}
+                            disabled={isAuditingSubId === submission.id}
+                            className="py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow transition-colors disabled:opacity-50 cursor-pointer"
+                          >
+                            ✓ Approve & Credit
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
             {/* Disbursement Queue */}
             <TabsContent value="disbursement">
           <Card className="bg-[#002520] border-2 border-[#ffd700] p-6">

@@ -420,8 +420,17 @@ export const fetchPaymentSubmissions = async (filters?: {
     ...row,
     official_member_id: row.official_member_id || row.member_id || '',
     full_name: row.full_name || row.member_name || 'Member',
+    member_name: row.member_name || row.full_name || 'Member',
     purpose: row.purpose || row.payment_title || 'Payment Dues',
-    reference_no: row.reference_no || row.transaction_ref || ''
+    payment_title: row.payment_title || row.purpose || 'Payment Dues',
+    reference_no: row.reference_no || row.transaction_ref || '',
+    transaction_ref: row.transaction_ref || row.reference_no || '',
+    rejection_reason: row.rejection_reason || row.review_notes || '',
+    review_notes: row.review_notes || row.rejection_reason || '',
+    verified_at: row.verified_at || row.reviewed_at || undefined,
+    reviewed_at: row.reviewed_at || row.verified_at || undefined,
+    verified_by: row.verified_by || row.reviewed_by || undefined,
+    reviewed_by: row.reviewed_by || row.verified_by || undefined,
   }));
   return { data: normalizedData, error };
 };
@@ -446,9 +455,10 @@ export const auditPaymentSubmission = async (
     return { error: fetchErr || new Error('Submission record not found') };
   }
 
+  const nowIso = new Date().toISOString();
   const updatePayload: any = {
     status: action,
-    verified_at: new Date().toISOString(),
+    verified_at: nowIso,
     verified_by: officerName
   };
 
@@ -456,10 +466,32 @@ export const auditPaymentSubmission = async (
     updatePayload.rejection_reason = rejectionReason;
   }
 
-  const { error: updateErr } = await supabase
+  let { error: updateErr } = await supabase
     .from('payment_submissions')
     .update(updatePayload)
     .eq('id', submissionId);
+
+  if (updateErr && (updateErr.code === 'PGRST204' || updateErr.message?.includes('column'))) {
+    console.warn('Audit update PGRST204 missing column error, retrying with fallback aliases:', updateErr.message);
+    const fallbackPayload: any = { status: action };
+    const errMsg = updateErr.message || '';
+
+    if (!errMsg.includes('verified_at')) fallbackPayload.verified_at = nowIso;
+    if (!errMsg.includes('verified_by')) fallbackPayload.verified_by = officerName;
+    if (errMsg.includes('verified_at')) fallbackPayload.reviewed_at = nowIso;
+    if (errMsg.includes('verified_by')) fallbackPayload.reviewed_by = officerName;
+
+    if (action === 'rejected' && rejectionReason) {
+      if (!errMsg.includes('rejection_reason')) fallbackPayload.rejection_reason = rejectionReason;
+      if (errMsg.includes('rejection_reason')) fallbackPayload.review_notes = rejectionReason;
+    }
+
+    const res = await supabase
+      .from('payment_submissions')
+      .update(fallbackPayload)
+      .eq('id', submissionId);
+    updateErr = res.error;
+  }
 
   if (updateErr) {
     return { error: updateErr };
