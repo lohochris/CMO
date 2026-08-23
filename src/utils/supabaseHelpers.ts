@@ -265,7 +265,7 @@ function publicUrlUrlString(url?: string): string | null {
 }
 
 /**
- * Submits proof of payment to public.payment_submissions table with schema resilience.
+ * Submits proof of payment to public.payment_submissions table matching canonical Supabase types.
  */
 export const submitPaymentReceipt = async (submissionInput: {
   member_id?: string;
@@ -285,103 +285,43 @@ export const submitPaymentReceipt = async (submissionInput: {
   receipt_url?: string;
   receiptUrl?: string;
 }) => {
-  const memberId = submissionInput.member_id || submissionInput.memberId || '';
-  const officialMemberId = submissionInput.official_member_id || submissionInput.officialMemberId || memberId;
-  const fullName = submissionInput.full_name || submissionInput.fullName || 'Member';
-  const cmoFamily = submissionInput.cmo_family || submissionInput.cmoFamily || null;
-  const title = submissionInput.purpose || submissionInput.payment_title || submissionInput.paymentTitle || 'Payment Dues';
-  const refNo = submissionInput.reference_no || submissionInput.referenceNo || null;
-  const url = submissionInput.receipt_url || submissionInput.receiptUrl || '';
+  const memberId = submissionInput.memberId || submissionInput.member_id || '';
+  const officialMemberId = submissionInput.officialMemberId || submissionInput.official_member_id;
+  const resolvedMemberId = officialMemberId || memberId;
 
-  // 1. Try standard insert payload containing standard columns
-  const standardPayload: any = {
-    member_id: memberId,
-    official_member_id: officialMemberId,
+  const fullName = submissionInput.fullName || submissionInput.full_name || 'Member';
+  const cmoFamily = submissionInput.cmoFamily || submissionInput.cmo_family || null;
+  const paymentTitle = submissionInput.paymentTitle || submissionInput.payment_title || submissionInput.purpose || 'Payment Dues';
+  const referenceNo = submissionInput.referenceNo || submissionInput.reference_no || null;
+  const receiptUrl = submissionInput.receiptUrl || submissionInput.receipt_url || '';
+
+  const payload = {
+    member_id: resolvedMemberId,
+    official_member_id: resolvedMemberId,
     full_name: fullName,
     member_name: fullName,
-    cmo_family: cmoFamily,
-    purpose: title,
-    payment_title: title,
+    cmo_family: cmoFamily || null,
+    payment_title: paymentTitle,
+    purpose: paymentTitle,
     amount: Number(submissionInput.amount),
-    reference_no: refNo,
-    transaction_ref: refNo,
-    receipt_url: url,
+    reference_no: referenceNo || null,
+    transaction_ref: referenceNo || null,
+    receipt_url: receiptUrl,
     status: 'pending',
-    created_at: new Date().toISOString()
   };
 
-  let { data, error } = await supabase
+  const { data, error } = await supabase
     .from('payment_submissions')
-    .insert([standardPayload])
+    .insert([payload])
     .select()
     .single();
 
-  // 2. If PostgreSQL schema cache errors occur (PGRST204 or missing column), dynamically strip missing columns and retry
-  if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('column'))) {
-    console.warn('Primary insert encountered column missing error:', error.message);
-
-    const prunedPayload: any = { ...standardPayload };
-
-    // Inspect error message for specific missing column names
-    const missingColMatch = error.message.match(/Could not find the '([^']+)' column/i);
-    if (missingColMatch && missingColMatch[1]) {
-      const missingCol = missingColMatch[1];
-      delete prunedPayload[missingCol];
-    }
-
-    // Always strip unneeded alias pairs if they caused errors
-    if (error.message.includes('official_member_id')) delete prunedPayload.official_member_id;
-    if (error.message.includes('full_name')) delete prunedPayload.full_name;
-    if (error.message.includes('member_name')) delete prunedPayload.member_name;
-    if (error.message.includes('payment_title')) delete prunedPayload.payment_title;
-    if (error.message.includes('purpose')) delete prunedPayload.purpose;
-    if (error.message.includes('transaction_ref')) delete prunedPayload.transaction_ref;
-    if (error.message.includes('reference_no')) delete prunedPayload.reference_no;
-
-    const retryRes = await supabase
-      .from('payment_submissions')
-      .insert([prunedPayload])
-      .select()
-      .maybeSingle();
-
-    data = retryRes.data;
-    error = retryRes.error;
-  }
-
-  // 3. Fallback: if still error, try minimal standard payload with only mandatory base fields
-  if (error && (error.code === 'PGRST204' || error.message?.includes('column'))) {
-    const basePayload: any = {
-      member_id: memberId,
-      amount: Number(submissionInput.amount),
-      receipt_url: url,
-      status: 'pending'
-    };
-    if (error.message.includes('purpose')) {
-      basePayload.payment_title = title;
-    } else {
-      basePayload.purpose = title;
-    }
-    if (!error.message.includes('full_name')) {
-      basePayload.full_name = fullName;
-    } else {
-      basePayload.member_name = fullName;
-    }
-
-    const baseRes = await supabase
-      .from('payment_submissions')
-      .insert([basePayload])
-      .select()
-      .maybeSingle();
-
-    data = baseRes.data;
-    error = baseRes.error;
-  }
-
   if (error) {
     console.error('Error inserting payment submission:', error);
+    throw error;
   }
 
-  return { data, error };
+  return data;
 };
 
 /**

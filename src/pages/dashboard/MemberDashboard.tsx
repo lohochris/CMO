@@ -89,6 +89,31 @@ export const MemberDashboard = () => {
     setPaymentSubmissions(data as PaymentSubmission[]);
   };
 
+  const [member, setMember] = useState<any>(currentUser);
+
+  useEffect(() => {
+    setMember(currentUser);
+  }, [currentUser]);
+
+  useEffect(() => {
+    const fetchActiveMemberProfile = async () => {
+      const userCode = currentUser?.official_member_id || currentUser?.id;
+      if (!userCode) return;
+
+      const { data } = await supabase
+        .from('members')
+        .select('id, official_member_id, full_name, phone_number, avatar_url, role, cmo_family')
+        .or(`official_member_id.eq.${userCode},id.eq.${userCode}`)
+        .maybeSingle();
+
+      if (data) {
+        setMember(data);
+      }
+    };
+
+    fetchActiveMemberProfile();
+  }, [currentUser?.id, currentUser?.official_member_id]);
+
   useEffect(() => {
     if (currentUser?.id || currentUser?.official_member_id) {
       loadMemberSubmissions();
@@ -254,6 +279,12 @@ export const MemberDashboard = () => {
         photo_url: storageUrl,
         avatar_url: storageUrl
       });
+      setMember((prev: any) => ({
+        ...prev,
+        avatar_url: storageUrl,
+        photo_url: storageUrl,
+        profilePic: storageUrl
+      }));
       setSuccess('✓ Profile picture uploaded to Supabase Storage and saved permanently!');
       setTimeout(() => setSuccess(''), 4000);
     } catch (err: any) {
@@ -855,33 +886,45 @@ export const MemberDashboard = () => {
           <div className="flex flex-col md:flex-row items-center gap-6">
             <div className="flex-shrink-0">
               <ProfilePictureUploader
-                currentImage={currentUser.profilePic}
+                currentImage={member?.avatar_url || member?.photo_url || member?.profilePic || currentUser?.avatar_url || currentUser?.photo_url || currentUser?.profilePic}
                 onSave={handleProfilePictureSave}
-                memberName={currentUser.full_name || currentUser.name || ''}
+                memberName={member?.full_name || member?.name || currentUser?.full_name || currentUser?.name || 'Member'}
                 size="sm"
               />
             </div>
-            <div className="flex-grow w-full">
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-center">
-                <div className="bg-[#002520] border border-[#ffd700]/10 rounded-lg p-3">
-                  <p className="text-gray-400 text-xs uppercase tracking-wider font-semibold">NAME</p>
-                  <p className="text-white font-bold text-sm truncate">{currentUser.name}</p>
-                </div>
-                <div className="bg-[#002520] border border-[#ffd700]/10 rounded-lg p-3">
-                  <p className="text-gray-400 text-xs uppercase tracking-wider font-semibold">MEMBER ID</p>
-                  <p className="text-white font-bold text-sm truncate">{currentUser.id}</p>
-                </div>
-                <div className="bg-[#002520] border border-[#ffd700]/10 rounded-lg p-3">
-                  <p className="text-gray-400 text-xs uppercase tracking-wider font-semibold">STATUS</p>
-                  <p className="text-green-400 font-bold text-sm flex items-center gap-1.5">
-                    <CheckCircle className="w-4 h-4" />
-                    {currentUser.status}
-                  </p>
-                </div>
-                <div className="bg-[#002520] border border-[#ffd700]/10 rounded-lg p-3">
-                  <p className="text-gray-400 text-xs uppercase tracking-wider font-semibold">PHONE</p>
-                  <p className="text-white font-bold text-sm truncate">{currentUser.phone || 'Not provided'}</p>
-                </div>
+            
+            {/* Member Metadata Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1 w-full">
+              {/* Name */}
+              <div className="bg-[#04140e] border border-emerald-900/60 rounded-xl p-3">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Name</p>
+                <p className="text-xs font-black text-white truncate mt-0.5">
+                  {member?.full_name || member?.name || currentUser?.full_name || currentUser?.name || 'N/A'}
+                </p>
+              </div>
+
+              {/* Official Member ID */}
+              <div className="bg-[#04140e] border border-emerald-900/60 rounded-xl p-3">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Member ID</p>
+                <p className="text-xs font-mono font-black text-amber-400 truncate mt-0.5">
+                  {member?.official_member_id || member?.member_id || member?.id || currentUser?.official_member_id || currentUser?.id || 'N/A'}
+                </p>
+              </div>
+
+              {/* Status */}
+              <div className="bg-[#04140e] border border-emerald-900/60 rounded-xl p-3">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Status</p>
+                <p className="text-xs font-bold text-emerald-400 flex items-center gap-1 mt-0.5">
+                  <span>✓</span> {currentUser?.status || 'Active'}
+                </p>
+              </div>
+
+              {/* Phone Number */}
+              <div className="bg-[#04140e] border border-emerald-900/60 rounded-xl p-3">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Phone</p>
+                <p className="text-xs font-bold text-slate-200 truncate mt-0.5">
+                  {member?.phone_number || member?.phone || currentUser?.phone_number || currentUser?.phone || 'Not provided'}
+                </p>
               </div>
             </div>
           </div>
@@ -2218,6 +2261,9 @@ export const MemberDashboard = () => {
 
       {(() => {
         const activePhotoUrl = 
+          member?.avatar_url ||
+          member?.photo_url ||
+          member?.profilePic ||
           getPhotoUrl((currentUser as any)?.photo_url || (currentUser as any)?.avatar_url || currentUser?.profilePic) ||
           (currentUser as any)?.photo_url || 
           (currentUser as any)?.avatar_url || 
@@ -2227,11 +2273,11 @@ export const MemberDashboard = () => {
         return (
           <DigitalIdCardModal
             member={{
-              full_name: currentUser?.full_name || currentUser?.name || 'LOHO CHRISTOPHER DONDO',
-              official_member_id: currentUser?.official_member_id || currentUser?.id || 'HCC-CMO-26-003',
-              phone_number: currentUser?.phone_number || currentUser?.phone || '+2348126000659',
-              family_unit: currentUser?.familyUnit || currentUser?.cmo_family || currentUser?.family || 'Wisdom',
-              role: currentUser?.role || 'Member',
+              full_name: member?.full_name || member?.name || currentUser?.full_name || currentUser?.name || 'LOHO CHRISTOPHER DONDO',
+              official_member_id: member?.official_member_id || member?.member_id || member?.id || currentUser?.official_member_id || currentUser?.id || 'HCC-CMO-26-003',
+              phone_number: member?.phone_number || member?.phone || currentUser?.phone_number || currentUser?.phone || '+2348126000659',
+              family_unit: member?.cmo_family || member?.family || currentUser?.familyUnit || currentUser?.cmo_family || currentUser?.family || 'Wisdom',
+              role: member?.role || currentUser?.role || 'Member',
               photo_url: activePhotoUrl,
             }}
             isOpen={isCardModalOpen}

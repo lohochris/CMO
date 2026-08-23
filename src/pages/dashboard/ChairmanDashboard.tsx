@@ -17,6 +17,8 @@ import { ChairmanAttendanceAnalyticsWidget } from '../../app/components/attendan
 import { Heading } from '../../app/components/common/Heading';
 import { CMO_CONSTITUTION_2023 } from '../../config/cmoConstitution';
 
+import { getCanonicalLedgerSummary } from '../../lib/ledgerService';
+
 const HARDCODED_OFFICES = [
   { office_id: 'HCC-CMO-EXEC-CH', office_name: 'Chairman Office', category: 'Executive' },
   { office_id: 'HCC-CMO-EXEC-FS', office_name: 'Financial Secretary', category: 'Executive' },
@@ -57,13 +59,40 @@ export const ChairmanDashboard = () => {
     setSuccess,
     setError,
     rosterCount,
-    vaultBalance,
+    vaultBalance: appVaultBalance,
     refreshDatabase,
     lodgments,
     setLodgments,
     bankWithdrawals,
     authorizeBankWithdrawal
   } = useApp();
+
+  // Unified Canonical Financial State
+  const [totalIncome, setTotalIncome] = useState<number>(0);
+  const [totalExpenses, setTotalExpenses] = useState<number>(0);
+  const [vaultBalance, setVaultBalance] = useState<number>(0);
+  const [sessionCash, setSessionCash] = useState<number>(0);
+  const [inflows, setInflows] = useState<any[]>([]);
+  const [outflows, setOutflows] = useState<any[]>([]);
+  const [timeline, setTimeline] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadFinancials = async () => {
+      try {
+        const summary = await getCanonicalLedgerSummary();
+        setTotalIncome(summary.totalIncome);
+        setTotalExpenses(summary.totalExpenses);
+        setVaultBalance(summary.vaultBalance);
+        setSessionCash(summary.vaultBalance);
+        setInflows(summary.inflows);
+        setOutflows(summary.outflows);
+        setTimeline(summary.allTransactions);
+      } catch (err) {
+        console.error('Error loading canonical financials in Chairman:', err);
+      }
+    };
+    loadFinancials();
+  }, []);
 
   // Executive Oversight & Bank Lodgment & Realtime Transaction States
   const visibleTransactions = transactions.filter(t => 
