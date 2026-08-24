@@ -381,19 +381,27 @@ export function ProvostAttendanceWorkspace({ members }: ProvostAttendanceWorkspa
             <p className="text-xl font-bold text-white mt-1">{totalRoster}</p>
           </div>
           <div className="bg-[#001a16] p-3 rounded-lg border border-emerald-500/30 text-center">
-            <p className="text-xs text-emerald-400 uppercase tracking-wider font-semibold">Present 🟢</p>
+            <p className="text-xs text-emerald-400 uppercase tracking-wider font-semibold flex items-center justify-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Present
+            </p>
             <p className="text-xl font-bold text-emerald-400 mt-1">{presentCount}</p>
           </div>
           <div className="bg-[#001a16] p-3 rounded-lg border border-amber-500/30 text-center">
-            <p className="text-xs text-amber-400 uppercase tracking-wider font-semibold">Late 🟡</p>
+            <p className="text-xs text-amber-400 uppercase tracking-wider font-semibold flex items-center justify-center gap-1">
+              <Clock className="w-3.5 h-3.5" /> Late
+            </p>
             <p className="text-xl font-bold text-amber-400 mt-1">{lateCount}</p>
           </div>
           <div className="bg-[#001a16] p-3 rounded-lg border border-sky-500/30 text-center">
-            <p className="text-xs text-sky-400 uppercase tracking-wider font-semibold">Excused 🔵</p>
+            <p className="text-xs text-sky-400 uppercase tracking-wider font-semibold flex items-center justify-center gap-1">
+              <FileCheck className="w-3.5 h-3.5" /> Excused
+            </p>
             <p className="text-xl font-bold text-sky-400 mt-1">{excusedCount}</p>
           </div>
           <div className="bg-[#001a16] p-3 rounded-lg border border-rose-500/30 text-center col-span-2 sm:col-span-1">
-            <p className="text-xs text-rose-400 uppercase tracking-wider font-semibold">Absent 🔴</p>
+            <p className="text-xs text-rose-400 uppercase tracking-wider font-semibold flex items-center justify-center gap-1">
+              <XCircle className="w-3.5 h-3.5" /> Absent
+            </p>
             <p className="text-xl font-bold text-rose-400 mt-1">{absentCount}</p>
           </div>
         </div>
@@ -583,7 +591,7 @@ export function ProvostAttendanceWorkspace({ members }: ProvostAttendanceWorkspa
                         type="button"
                         disabled={isSessionLocked || isUpdating}
                         onClick={() => handleMarkStatus(member, 'Present')}
-                        className={`px-3 py-1.5 rounded text-xs font-bold transition-colors border ${
+                        className={`px-3 py-1.5 rounded text-xs font-bold transition-colors border flex items-center gap-1 ${
                           isSessionLocked
                             ? 'opacity-40 cursor-not-allowed bg-gray-800 text-gray-500 border-gray-700'
                             : currentStatus === 'Present' 
@@ -592,14 +600,14 @@ export function ProvostAttendanceWorkspace({ members }: ProvostAttendanceWorkspa
                         }`}
                         title={isSessionLocked ? 'Register Locked' : 'Mark / Correct to Present (Clears Fine)'}
                       >
-                        🟢 Present
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Present
                       </button>
 
                       <button
                         type="button"
                         disabled={isSessionLocked || isUpdating}
                         onClick={() => handleMarkStatus(member, 'Late')}
-                        className={`px-3 py-1.5 rounded text-xs font-bold transition-colors border ${
+                        className={`px-3 py-1.5 rounded text-xs font-bold transition-colors border flex items-center gap-1 ${
                           isSessionLocked
                             ? 'opacity-40 cursor-not-allowed bg-gray-800 text-gray-500 border-gray-700'
                             : currentStatus === 'Late' 
@@ -608,14 +616,14 @@ export function ProvostAttendanceWorkspace({ members }: ProvostAttendanceWorkspa
                         }`}
                         title={isSessionLocked ? 'Register Locked' : 'Mark / Correct to Late (₦500 Fine)'}
                       >
-                        🟡 Late
+                        <Clock className="w-3.5 h-3.5" /> Late
                       </button>
 
                       <button
                         type="button"
                         disabled={isSessionLocked || isUpdating}
                         onClick={() => handleMarkStatus(member, 'Excused')}
-                        className={`px-3 py-1.5 rounded text-xs font-bold transition-colors border ${
+                        className={`px-3 py-1.5 rounded text-xs font-bold transition-colors border flex items-center gap-1 ${
                           isSessionLocked
                             ? 'opacity-40 cursor-not-allowed bg-gray-800 text-gray-500 border-gray-700'
                             : currentStatus === 'Excused' 
@@ -624,14 +632,14 @@ export function ProvostAttendanceWorkspace({ members }: ProvostAttendanceWorkspa
                         }`}
                         title={isSessionLocked ? 'Register Locked' : 'Mark / Correct to Excused (Clears Fine)'}
                       >
-                        🔵 Excused
+                        <FileCheck className="w-3.5 h-3.5" /> Excused
                       </button>
 
                       <button
                         type="button"
                         disabled={isSessionLocked || isUpdating}
                         onClick={() => handleMarkStatus(member, 'Absent')}
-                        className={`px-3 py-1.5 rounded text-xs font-bold transition-colors border ${
+                        className={`px-3 py-1.5 rounded text-xs font-bold transition-colors border flex items-center gap-1 ${
                           isSessionLocked
                             ? 'opacity-40 cursor-not-allowed bg-gray-800 text-gray-500 border-gray-700'
                             : currentStatus === 'Absent' 
@@ -640,7 +648,7 @@ export function ProvostAttendanceWorkspace({ members }: ProvostAttendanceWorkspa
                         }`}
                         title={isSessionLocked ? 'Register Locked' : 'Mark / Correct to Absent (₦1,000 Fine)'}
                       >
-                        🔴 Absent
+                        <XCircle className="w-3.5 h-3.5" /> Absent
                       </button>
                     </div>
                   </div>

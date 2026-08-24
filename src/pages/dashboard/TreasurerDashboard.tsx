@@ -9,12 +9,11 @@ import { SportsAuditReadOnlyView } from './sports/SportsAuditReadOnlyView';
 import { useApp } from '../../contexts/AppContext';
 import { generateExpenseId } from '../../utils/idGenerators';
 import { calculateTotal, formatCurrency, formatDate, getCombinedTransactions } from '../../utils/helpers';
-import { uploadProfilePicture, calculateUnifiedFinancialSummary, fetchUnifiedFinancialSummary, fetchPaymentSubmissions, auditPaymentSubmission } from '../../utils/supabaseHelpers';
+import { uploadProfilePicture, calculateUnifiedFinancialSummary, fetchUnifiedFinancialSummary } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { supabase } from '../../lib/supabaseClient';
 import { CMO_CONSTITUTION_2023 } from '../../config/cmoConstitution';
 import { sendWelfareDisbursalNotification } from '../../utils/messagingService';
-import { PaymentSubmission } from '../../types';
 import { toast } from 'sonner';
 
 
@@ -89,12 +88,6 @@ export const TreasurerDashboard = () => {
   const [isSubmittingWithdrawal, setIsSubmittingWithdrawal] = useState(false);
   const [authorizingWthId, setAuthorizingWthId] = useState<string | null>(null);
 
-  // ── Pending Member Payment Audits State ──
-  const [pendingSubmissions, setPendingSubmissions] = useState<PaymentSubmission[]>([]);
-  const [isAuditingSubId, setIsAuditingSubId] = useState<string | null>(null);
-  const [rejectionModalSub, setRejectionModalSub] = useState<PaymentSubmission | null>(null);
-  const [rejectionNoteInput, setRejectionNoteInput] = useState('');
-
   const loadFinancials = async () => {
     try {
       const summary = await getCanonicalLedgerSummary();
@@ -113,65 +106,6 @@ export const TreasurerDashboard = () => {
   useEffect(() => {
     loadFinancials();
   }, []);
-
-  const loadPendingSubmissions = async () => {
-    try {
-      const { data } = await fetchPaymentSubmissions({ status: 'pending' });
-      setPendingSubmissions(data as PaymentSubmission[]);
-    } catch (err) {
-      console.error('Error fetching pending payment submissions:', err);
-    }
-  };
-
-  useEffect(() => {
-    loadPendingSubmissions();
-  }, []);
-
-  const handleApproveSubmission = async (sub: PaymentSubmission) => {
-    if (!sub.id) return;
-    setIsAuditingSubId(sub.id);
-    try {
-      const officerName = currentUser?.full_name || currentUser?.official_member_id || currentUser?.name || 'Treasurer';
-      const res = await auditPaymentSubmission(sub.id, 'approved', officerName);
-      if (res.error) {
-        toast.error('Failed to approve payment submission.');
-      } else {
-        toast.success(`Payment of ₦${sub.amount.toLocaleString()} for ${sub.full_name} approved and credited to transactions ledger!`);
-        loadPendingSubmissions();
-        loadFinancials();
-        refreshDatabase();
-      }
-    } catch (err) {
-      console.error('Approval exception:', err);
-    } finally {
-      setIsAuditingSubId(null);
-    }
-  };
-
-  const handleRejectSubmission = async () => {
-    if (!rejectionModalSub?.id || !rejectionNoteInput.trim()) {
-      toast.error('Please enter a rejection reason.');
-      return;
-    }
-    setIsAuditingSubId(rejectionModalSub.id);
-    try {
-      const officerName = currentUser?.full_name || currentUser?.official_member_id || currentUser?.name || 'Treasurer';
-      const res = await auditPaymentSubmission(rejectionModalSub.id, 'rejected', officerName, rejectionNoteInput.trim());
-      if (res.error) {
-        toast.error('Failed to reject payment submission.');
-      } else {
-        toast.success(`Payment submission rejected.`);
-        setRejectionModalSub(null);
-        setRejectionNoteInput('');
-        loadPendingSubmissions();
-        loadFinancials();
-      }
-    } catch (err) {
-      console.error('Rejection exception:', err);
-    } finally {
-      setIsAuditingSubId(null);
-    }
-  };
 
   // Real-Time Supabase Subscription for Treasurer Dashboard
   useEffect(() => {
@@ -794,60 +728,9 @@ export const TreasurerDashboard = () => {
 
 
 
-      {/* Rejection Note Modal */}
-      {rejectionModalSub && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-[#0b1311] border border-rose-900/60 rounded-2xl p-6 w-full max-w-md shadow-2xl text-white my-auto">
-            <h3 className="text-base font-bold text-rose-400 mb-1">Reject Payment Submission</h3>
-            <p className="text-xs text-slate-400 mb-4">
-              Member: <strong className="text-white">{rejectionModalSub.full_name}</strong> ({rejectionModalSub.official_member_id}) • ₦{rejectionModalSub.amount.toLocaleString()}
-            </p>
-
-            <div className="mb-4">
-              <label className="block text-xs font-bold uppercase text-slate-300 mb-1">Rejection Reason / Note</label>
-              <textarea
-                rows={3}
-                placeholder="e.g., Unclear image, amount mismatch, or invalid teller reference."
-                value={rejectionNoteInput}
-                onChange={(e) => setRejectionNoteInput(e.target.value)}
-                className="w-full bg-[#001a16] border border-rose-900/60 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-rose-400"
-                required
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-3 border-t border-rose-900/40">
-              <button
-                onClick={() => {
-                  setRejectionModalSub(null);
-                  setRejectionNoteInput('');
-                }}
-                className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl hover:bg-slate-700 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleRejectSubmission}
-                disabled={Boolean(isAuditingSubId)}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl disabled:opacity-50 cursor-pointer"
-              >
-                Confirm Rejection
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <Tabs defaultValue="disbursement" className="w-full">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <TabsList className="bg-[#002520] border border-[#ffd700] mb-0">
-            <TabsTrigger value="payment-audits" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer flex items-center gap-1.5 font-bold">
-              <span>💳 Payment Audits</span>
-              {pendingSubmissions.length > 0 && (
-                <span className="bg-amber-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full ml-1">
-                  {pendingSubmissions.length}
-                </span>
-              )}
-            </TabsTrigger>
             <TabsTrigger value="disbursement" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16]">
               Disbursement Queue
             </TabsTrigger>
@@ -914,106 +797,6 @@ export const TreasurerDashboard = () => {
           </div>
         ) : (
           <>
-            {/* Payment Audits Desk */}
-            <TabsContent value="payment-audits">
-              <div className="space-y-6">
-                {/* Header Banner */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0a1f18] border border-amber-500/30 rounded-2xl p-5">
-                  <div>
-                    <h3 className="text-base font-black text-amber-400">Member Payment Proof Verification Desk</h3>
-                    <p className="text-xs text-slate-400">Inspect bank transfer receipts and approve or reject submissions to credit the official CMO ledger.</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={loadPendingSubmissions}
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-400/30 rounded-lg text-xs font-bold cursor-pointer"
-                    >
-                      🔄 Refresh Queue
-                    </button>
-                    <span className="px-3 py-1 bg-amber-400/10 border border-amber-400/30 rounded-full text-amber-400 text-xs font-bold">
-                      {pendingSubmissions.length} Pending Verification
-                    </span>
-                  </div>
-                </div>
-
-                {/* Submissions Queue */}
-                {pendingSubmissions.length === 0 ? (
-                  <div className="text-center py-12 border border-slate-800 rounded-2xl bg-[#06120e]">
-                    <p className="text-slate-400 text-sm font-semibold">🎉 All member payment submissions have been audited and cleared!</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {pendingSubmissions.map((submission) => (
-                      <div
-                        key={submission.id}
-                        className="bg-[#0b1c16] border border-emerald-900/60 rounded-2xl p-4 flex flex-col justify-between shadow-lg"
-                      >
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
-                              {(submission as any).payment_title || submission.purpose}
-                            </span>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-400 font-bold border border-amber-400/20">
-                              Pending
-                            </span>
-                          </div>
-
-                          <h4 className="text-sm font-black text-white">{submission.full_name || submission.member_name}</h4>
-                          <p className="text-xs text-slate-400 font-mono">{submission.official_member_id || submission.member_id} • {submission.cmo_family || 'Parish'}</p>
-
-                          <div className="py-2 border-y border-emerald-900/40 my-2">
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs text-slate-400">Amount Paid:</span>
-                              <span className="text-base font-black text-amber-400">₦{Number(submission.amount).toLocaleString()}</span>
-                            </div>
-                            {(submission.reference_no || submission.transaction_ref) && (
-                              <div className="flex justify-between items-center text-[11px] mt-1 text-slate-400">
-                                <span>Ref:</span>
-                                <span className="font-mono text-slate-300 truncate max-w-[180px]">
-                                  {submission.reference_no || submission.transaction_ref}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Receipt Thumbnail / View Link */}
-                          <a
-                            href={submission.receipt_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl text-xs text-slate-300 transition-colors"
-                          >
-                            🧾 View Attached Receipt ↗
-                          </a>
-                        </div>
-
-                        {/* Audit Action Buttons */}
-                        <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-emerald-900/40">
-                          <button
-                            onClick={() => {
-                              setRejectionModalSub(submission);
-                              setRejectionNoteInput('');
-                            }}
-                            disabled={isAuditingSubId === submission.id}
-                            className="py-2 px-3 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/60 text-rose-300 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
-                          >
-                            ✕ Reject
-                          </button>
-                          <button
-                            onClick={() => handleApproveSubmission(submission)}
-                            disabled={isAuditingSubId === submission.id}
-                            className="py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow transition-colors disabled:opacity-50 cursor-pointer"
-                          >
-                            ✓ Approve & Credit
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </TabsContent>
-
             {/* Disbursement Queue */}
             <TabsContent value="disbursement">
           <Card className="bg-[#002520] border-2 border-[#ffd700] p-6">

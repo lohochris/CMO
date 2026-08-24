@@ -4,7 +4,7 @@ import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
-import { Users, CheckCircle, AlertCircle, TrendingUp, TrendingDown, DollarSign, Camera, Megaphone, FileText, Upload, Edit, Trash2, ShieldCheck, Trophy, Landmark, Calculator, Scale, Database, Printer, MessageSquare, Clock } from 'lucide-react';
+import { Users, CheckCircle, CheckCircle2, AlertCircle, TrendingUp, TrendingDown, DollarSign, Camera, Megaphone, FileText, Upload, Edit, Trash2, ShieldCheck, Trophy, Landmark, Calculator, Scale, Database, Printer, MessageSquare, Clock, CreditCard } from 'lucide-react';
 import { SportsAuditReadOnlyView } from './sports/SportsAuditReadOnlyView';
 import { useApp } from '../../contexts/AppContext';
 import { generateMemberId, generateExpenseId } from '../../utils/idGenerators';
@@ -1787,7 +1787,9 @@ export const FinSecDashboard = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 no-print">
           <TabsList className="bg-[#002520] border border-[#ffd700] flex-wrap mb-0">
             <TabsTrigger value="payment-audits" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] cursor-pointer flex items-center gap-1.5 font-bold">
-              <span>💳 Payment Audits</span>
+              <span className="flex items-center gap-1.5">
+                <CreditCard className="w-3.5 h-3.5" /> Payment Audits
+              </span>
               {pendingSubmissions.length > 0 && (
                 <span className="bg-amber-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full ml-1">
                   {pendingSubmissions.length}

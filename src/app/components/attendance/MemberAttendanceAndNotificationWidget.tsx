@@ -187,7 +187,13 @@ export function MemberAttendanceAndNotificationWidget({ currentUser }: MemberAtt
               >
                 <div className="space-y-0.5">
                   <p className="text-white font-bold text-xs flex items-center gap-1.5">
-                    {notif.type === 'excuse' ? '🔵' : notif.type === 'fine' ? '🔴' : '🟢'}
+                    {notif.type === 'excuse' ? (
+                      <FileCheck className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                    ) : notif.type === 'fine' ? (
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                    ) : (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    )}
                     {notif.title}
                   </p>
                   <p className="text-xs text-gray-300">{notif.message}</p>
@@ -316,22 +322,22 @@ export function MemberAttendanceAndNotificationWidget({ currentUser }: MemberAtt
                   <div>
                     {rec.status === 'Present' && (
                       <span className="px-2.5 py-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-xs font-bold rounded flex items-center gap-1">
-                        🟢 Present
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Present
                       </span>
                     )}
                     {rec.status === 'Late' && (
                       <span className="px-2.5 py-1 bg-amber-500/20 border border-amber-500/40 text-amber-400 text-xs font-bold rounded flex items-center gap-1">
-                        🟡 Late (₦{rec.fine_amount || 500})
+                        <Clock className="w-3.5 h-3.5" /> Late (₦{rec.fine_amount || 500})
                       </span>
                     )}
                     {rec.status === 'Excused' && (
                       <span className="px-2.5 py-1 bg-sky-500/20 border border-sky-500/40 text-sky-400 text-xs font-bold rounded flex items-center gap-1">
-                        🔵 Excused
+                        <FileCheck className="w-3.5 h-3.5" /> Excused
                       </span>
                     )}
                     {rec.status === 'Absent' && (
                       <span className="px-2.5 py-1 bg-rose-500/20 border border-rose-500/40 text-rose-400 text-xs font-bold rounded flex items-center gap-1">
-                        🔴 Absent (₦{rec.fine_amount || 1000})
+                        <XCircle className="w-3.5 h-3.5" /> Absent (₦{rec.fine_amount || 1000})
                       </span>
                     )}
                   </div>

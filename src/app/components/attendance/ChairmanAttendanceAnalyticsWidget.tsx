@@ -67,13 +67,13 @@ export function ChairmanAttendanceAnalyticsWidget({ totalRosterCount }: Chairman
   const numericQuorum = parseFloat(quorumPercentage);
 
   let quorumStatusColor = 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10';
-  let quorumBadgeText = '🟢 Strong Executive Quorum';
+  let quorumBadgeText = 'Strong Executive Quorum';
   if (numericQuorum < 50) {
     quorumStatusColor = 'text-rose-400 border-rose-500/40 bg-rose-500/10';
-    quorumBadgeText = '🔴 Below Quorum Threshold';
+    quorumBadgeText = 'Below Quorum Threshold';
   } else if (numericQuorum < 75) {
     quorumStatusColor = 'text-amber-400 border-amber-500/40 bg-amber-500/10';
-    quorumBadgeText = '🟡 Moderate Attendance Quorum';
+    quorumBadgeText = 'Moderate Attendance Quorum';
   }
 
   return (
@@ -144,7 +144,7 @@ export function ChairmanAttendanceAnalyticsWidget({ totalRosterCount }: Chairman
           <div className="flex justify-center mb-1 text-emerald-400">
             <CheckCircle className="w-4 h-4" />
           </div>
-          <p className="text-[11px] text-emerald-400 uppercase tracking-wider font-semibold">Present 🟢</p>
+          <p className="text-[11px] text-emerald-400 uppercase tracking-wider font-semibold">Present</p>
           <p className="text-xl font-bold text-emerald-400 mt-0.5">{presentCount}</p>
         </div>
 
@@ -152,7 +152,7 @@ export function ChairmanAttendanceAnalyticsWidget({ totalRosterCount }: Chairman
           <div className="flex justify-center mb-1 text-amber-400">
             <Clock className="w-4 h-4" />
           </div>
-          <p className="text-[11px] text-amber-400 uppercase tracking-wider font-semibold">Late 🟡</p>
+          <p className="text-[11px] text-amber-400 uppercase tracking-wider font-semibold">Late</p>
           <p className="text-xl font-bold text-amber-400 mt-0.5">{lateCount}</p>
         </div>
 
@@ -160,7 +160,7 @@ export function ChairmanAttendanceAnalyticsWidget({ totalRosterCount }: Chairman
           <div className="flex justify-center mb-1 text-sky-400">
             <FileText className="w-4 h-4" />
           </div>
-          <p className="text-[11px] text-sky-400 uppercase tracking-wider font-semibold">Excused 🔵</p>
+          <p className="text-[11px] text-sky-400 uppercase tracking-wider font-semibold">Excused</p>
           <p className="text-xl font-bold text-sky-400 mt-0.5">{excusedCount}</p>
         </div>
 
@@ -168,7 +168,7 @@ export function ChairmanAttendanceAnalyticsWidget({ totalRosterCount }: Chairman
           <div className="flex justify-center mb-1 text-rose-400">
             <XCircle className="w-4 h-4" />
           </div>
-          <p className="text-[11px] text-rose-400 uppercase tracking-wider font-semibold">Unexcused 🔴</p>
+          <p className="text-[11px] text-rose-400 uppercase tracking-wider font-semibold">Unexcused</p>
           <p className="text-xl font-bold text-rose-400 mt-0.5">{absentCount}</p>
         </div>
       </div>
