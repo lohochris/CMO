@@ -72,25 +72,26 @@ export const ChairmanDashboard = () => {
   const [totalExpenses, setTotalExpenses] = useState<number>(0);
   const [vaultBalance, setVaultBalance] = useState<number>(0);
   const [sessionCash, setSessionCash] = useState<number>(0);
-  const [inflows, setInflows] = useState<any[]>([]);
-  const [outflows, setOutflows] = useState<any[]>([]);
-  const [timeline, setTimeline] = useState<any[]>([]);
+  const [ledgerInflows, setLedgerInflows] = useState<any[]>([]);
+  const [ledgerOutflows, setLedgerOutflows] = useState<any[]>([]);
+  const [allTimelineTransactions, setAllTimelineTransactions] = useState<any[]>([]);
+
+  const loadFinancials = async () => {
+    try {
+      const summary = await getCanonicalLedgerSummary();
+      setTotalIncome(summary.totalIncome);
+      setTotalExpenses(summary.totalExpenses);
+      setVaultBalance(summary.vaultBalance);
+      setSessionCash(summary.vaultBalance);
+      setLedgerInflows(summary.inflows);
+      setLedgerOutflows(summary.outflows);
+      setAllTimelineTransactions(summary.allTransactions);
+    } catch (err) {
+      console.error('Error fetching canonical ledger in Chairman:', err);
+    }
+  };
 
   useEffect(() => {
-    const loadFinancials = async () => {
-      try {
-        const summary = await getCanonicalLedgerSummary();
-        setTotalIncome(summary.totalIncome);
-        setTotalExpenses(summary.totalExpenses);
-        setVaultBalance(summary.vaultBalance);
-        setSessionCash(summary.vaultBalance);
-        setInflows(summary.inflows);
-        setOutflows(summary.outflows);
-        setTimeline(summary.allTransactions);
-      } catch (err) {
-        console.error('Error loading canonical financials in Chairman:', err);
-      }
-    };
     loadFinancials();
   }, []);
 
@@ -153,11 +154,25 @@ export const ChairmanDashboard = () => {
   useEffect(() => {
     fetchLodgmentsAndFines();
     fetchLiveTransactions();
+    loadFinancials();
 
     const channel = supabase
       .channel('chairman-realtime-oversight')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => {
         fetchLiveTransactions();
+        loadFinancials();
+        refreshDatabase();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => {
+        loadFinancials();
+        refreshDatabase();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'incomes' }, () => {
+        loadFinancials();
+        refreshDatabase();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_submissions' }, () => {
+        loadFinancials();
         refreshDatabase();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, () => {
@@ -166,7 +181,10 @@ export const ChairmanDashboard = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, () => {
         refreshDatabase();
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'lodgments' }, () => fetchLodgmentsAndFines())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lodgments' }, () => {
+        fetchLodgmentsAndFines();
+        loadFinancials();
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'fines' }, () => fetchLodgmentsAndFines())
       .subscribe();
 
@@ -1744,18 +1762,20 @@ export const ChairmanDashboard = () => {
               <div className="bg-[#001a16] border border-emerald-500/30 p-4 rounded-lg">
                 <p className="text-xs text-emerald-400 uppercase font-semibold">Total Revenue Inflows</p>
                 <p className="text-2xl font-bold text-emerald-400 mt-1">
-                  {formatCurrency(visibleTransactions.filter(t => t.transactionType === 'income' || t.transactionType === 'inflow').reduce((sum, t) => sum + (t.amount || 0), 0))}
+                  {formatCurrency(totalIncome)}
                 </p>
               </div>
               <div className="bg-[#001a16] border border-rose-500/30 p-4 rounded-lg">
                 <p className="text-xs text-rose-400 uppercase font-semibold">Total Outflows & Expenses</p>
                 <p className="text-2xl font-bold text-rose-400 mt-1">
-                  {formatCurrency(visibleTransactions.filter(t => t.transactionType === 'expense' || t.transactionType === 'outflow').reduce((sum, t) => sum + (t.amount || 0), 0))}
+                  {formatCurrency(totalExpenses)}
                 </p>
               </div>
               <div className="bg-[#001a16] border border-[#ffd700]/30 p-4 rounded-lg">
                 <p className="text-xs text-gray-400 uppercase font-semibold">Total Ledger Entries</p>
-                <p className="text-2xl font-bold text-white mt-1">{visibleTransactions.length} Records</p>
+                <p className="text-2xl font-bold text-white mt-1">
+                  {(allTimelineTransactions.length > 0 ? allTimelineTransactions : visibleTransactions).length} Records
+                </p>
               </div>
             </div>
 
@@ -1774,19 +1794,27 @@ export const ChairmanDashboard = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {visibleTransactions.slice(0, 15).map((t, idx) => (
-                      <TableRow key={t.id || idx} className="border-b border-[#ffd700]/10 hover:bg-[#001a16]/50">
-                        <TableCell className="text-white font-medium">{t.memberName || t.memberId || 'General CMO'}</TableCell>
-                        <TableCell className="text-gray-300 text-xs">{t.purpose}</TableCell>
-                        <TableCell className="text-xs font-bold uppercase">
-                          <span className={t.transactionType === 'expense' || t.transactionType === 'outflow' ? 'text-rose-400' : 'text-emerald-400'}>
-                            {t.transactionType || 'inflow'}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-white font-bold font-mono text-xs">{formatCurrency(t.amount)}</TableCell>
-                        <TableCell className="text-gray-400 text-xs font-mono">{formatDate(t.timestamp)}</TableCell>
-                      </TableRow>
-                    ))}
+                    {(allTimelineTransactions.length > 0 ? allTimelineTransactions : visibleTransactions).slice(0, 15).map((t, idx) => {
+                      const txType = String(t.transaction_type || t.transactionType || t.type || '').toUpperCase();
+                      const isExpense = ['EXPENSE', 'OUTFLOW', 'DEBIT'].includes(txType);
+                      const displayType = t.transaction_type || t.transactionType || (isExpense ? 'expense' : 'income');
+                      const memberName = t.member_name || t.contributor || t.memberName || t.memberId || 'General CMO';
+                      const txDate = t.timestamp || t.created_at || t.date;
+
+                      return (
+                        <TableRow key={t.id || idx} className="border-b border-[#ffd700]/10 hover:bg-[#001a16]/50">
+                          <TableCell className="text-white font-medium">{memberName}</TableCell>
+                          <TableCell className="text-gray-300 text-xs">{t.purpose}</TableCell>
+                          <TableCell className="text-xs font-bold uppercase">
+                            <span className={isExpense ? 'text-rose-400' : 'text-emerald-400'}>
+                              {displayType}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-white font-bold font-mono text-xs">{formatCurrency(t.amount)}</TableCell>
+                          <TableCell className="text-gray-400 text-xs font-mono">{formatDate(txDate)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>

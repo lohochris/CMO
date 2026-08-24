@@ -16,6 +16,7 @@ import { DigitalReceiptModal } from '../../app/components/ui/DigitalReceiptModal
 import { DigitalIdCardModal } from '../../app/components/ui/DigitalIdCardModal';
 import { sendPaymentReceiptNotification } from '../../utils/messagingService';
 import { PaystackPaymentModal } from '../../components/payments/PaystackPaymentModal';
+import { DigitalReceiptModal as PaystackDigitalReceiptModal } from '../../components/payments/DigitalReceiptModal';
 
 const formatRefCode = (ref?: string, type?: string) => {
   if (!ref) return '';
@@ -76,6 +77,7 @@ export const MemberDashboard = () => {
 
   // ── Self-Service Payment & Levy Receipt States ──
   const [isPaystackModalOpen, setIsPaystackModalOpen] = useState(false);
+  const [selectedDigitalReceipt, setSelectedDigitalReceipt] = useState<any | null>(null);
   const [isSubmitPaymentModalOpen, setIsSubmitPaymentModalOpen] = useState(false);
   const [paymentPurpose, setPaymentPurpose] = useState('Monthly Dues');
   const [customPurpose, setCustomPurpose] = useState('');
@@ -84,6 +86,24 @@ export const MemberDashboard = () => {
   const [paymentFile, setPaymentFile] = useState<File | null>(null);
   const [isUploadingPayment, setIsUploadingPayment] = useState(false);
   const [paymentSubmissions, setPaymentSubmissions] = useState<PaymentSubmission[]>([]);
+
+  const handleViewReceipt = (submission: any) => {
+    const isOnlinePaystack = 
+      submission.receipt_url?.startsWith('PAYSTACK_INLINE_') || 
+      submission.verified_by === 'PAYSTACK_AUTOPAY';
+
+    if (isOnlinePaystack) {
+      setSelectedDigitalReceipt({
+        ...submission,
+        full_name: submission.full_name || submission.member_name || member?.full_name || currentUser?.full_name || currentUser?.name || 'Member',
+        official_member_id: submission.official_member_id || member?.official_member_id || currentUser?.official_member_id || 'MEMBER',
+      });
+    } else if (submission.receipt_url) {
+      window.open(submission.receipt_url, '_blank');
+    } else {
+      alert('No receipt file attached.');
+    }
+  };
 
   const loadMemberSubmissions = async () => {
     if (!currentUser) return;
@@ -140,6 +160,28 @@ export const MemberDashboard = () => {
       return;
     }
 
+    const cleanedRef = paymentRefNo.trim();
+
+    // 1. Guard against entering Paystack auto-references manually
+    if (cleanedRef.toUpperCase().startsWith('CMO_') || cleanedRef.toUpperCase().startsWith('PAYSTACK_')) {
+      toast.error('Invalid Reference Number. Online Paystack payments are automatically recorded and do not require manual upload.');
+      return;
+    }
+
+    // 2. Query database to check if this reference was already used
+    if (cleanedRef) {
+      const { data: existingSub } = await supabase
+        .from('payment_submissions')
+        .select('id, reference_no, status')
+        .eq('reference_no', cleanedRef)
+        .maybeSingle();
+
+      if (existingSub) {
+        toast.error(`This payment reference (${cleanedRef}) has already been submitted and is currently ${existingSub.status}. Duplicate submissions are not permitted.`);
+        return;
+      }
+    }
+
     setIsUploadingPayment(true);
     try {
       const memberCode = currentUser?.official_member_id || currentUser?.id || 'MEMBER';
@@ -157,7 +199,7 @@ export const MemberDashboard = () => {
         cmo_family: currentUser?.cmo_family || currentUser?.family || 'General',
         purpose: finalPurpose,
         amount: parsedAmount,
-        reference_no: paymentRefNo.trim() || undefined,
+        reference_no: cleanedRef || undefined,
         receipt_url: receiptUrl
       };
 
@@ -1052,14 +1094,14 @@ export const MemberDashboard = () => {
                       </div>
 
                       <div className="mt-4 pt-3 border-t border-emerald-900/40 flex justify-between items-center">
-                        <a
-                          href={sub.receipt_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs text-amber-400 font-bold hover:underline flex items-center gap-1"
+                        <button
+                          onClick={() => handleViewReceipt(sub)}
+                          className="flex items-center gap-1.5 text-xs font-semibold text-yellow-400 hover:text-yellow-300 transition-colors cursor-pointer"
                         >
-                          <FileText className="w-3.5 h-3.5" /> View Uploaded Receipt ↗
-                        </a>
+                          <FileText className="h-3.5 w-3.5" />
+                          {sub.verified_by === 'PAYSTACK_AUTOPAY' || sub.receipt_url?.startsWith('PAYSTACK_INLINE_') ? 'View Official E-Receipt' : 'View Uploaded Receipt'}
+                          <ExternalLink className="h-3 w-3" />
+                        </button>
                         {sub.verified_by && (
                           <span className="text-[10px] text-slate-400">Audited by: {sub.verified_by}</span>
                         )}
@@ -2292,6 +2334,13 @@ export const MemberDashboard = () => {
           }}
         />
       )}
+
+      {/* Paystack Official Digital E-Receipt Modal */}
+      <PaystackDigitalReceiptModal
+        isOpen={Boolean(selectedDigitalReceipt)}
+        onClose={() => setSelectedDigitalReceipt(null)}
+        receipt={selectedDigitalReceipt}
+      />
     </div>
   );
 };
