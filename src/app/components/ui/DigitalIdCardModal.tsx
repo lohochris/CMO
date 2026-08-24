@@ -3,6 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { supabase } from '../../../lib/supabase';
+import { FileImage, FileText } from 'lucide-react';
 
 export interface DigitalIdCardModalProps {
   isOpen: boolean;
@@ -242,14 +243,14 @@ export const DigitalIdCardModal: React.FC<DigitalIdCardModalProps> = ({
             disabled={downloading}
             className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
           >
-            🖼️ {downloading ? 'Processing...' : 'Download PNG'}
+            <FileImage className="w-4 h-4" /> {downloading ? 'Processing...' : 'Download PNG'}
           </button>
           <button
             onClick={handleDownloadPDF}
             disabled={downloading}
             className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black shadow-lg transition-all disabled:opacity-50 cursor-pointer"
           >
-            📄 {downloading ? 'Processing...' : 'Download PDF'}
+            <FileText className="w-4 h-4" /> {downloading ? 'Processing...' : 'Download PDF'}
           </button>
         </div>
       </div>

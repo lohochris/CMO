@@ -3,7 +3,7 @@ import type { WeddingStatus, Family, Transaction, PaymentSubmission } from '../.
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
-import { CheckCircle, FileText, Settings, X, Users, BookOpen, Sparkles, UserCheck, Calendar, MapPin, ArrowRight, Bell, Clock, LayoutDashboard, Trophy, CreditCard, Church, Download, ExternalLink, ShieldCheck, Search, Scale, Radio, Mic, MicOff, MessageSquare } from 'lucide-react';
+import { CheckCircle, CheckCircle2, FileText, Settings, X, Users, BookOpen, Sparkles, UserCheck, UserCheck as UserEdit, Calendar, MapPin, ArrowRight, Bell, Clock, LayoutDashboard, Trophy, CreditCard, Church, Download, ExternalLink, ShieldCheck, Search, Scale, Radio, Mic, MicOff, MessageSquare, HeartHandshake, BarChart3, UploadCloud } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import useLiveTranscriber from '../../hooks/useLiveTranscriber';
 import { formatCurrency, formatDateTime } from '../../utils/helpers';
@@ -15,6 +15,7 @@ import { MemberAttendanceAndNotificationWidget } from '../../app/components/atte
 import { DigitalReceiptModal } from '../../app/components/ui/DigitalReceiptModal';
 import { DigitalIdCardModal } from '../../app/components/ui/DigitalIdCardModal';
 import { sendPaymentReceiptNotification } from '../../utils/messagingService';
+import { PaystackPaymentModal } from '../../components/payments/PaystackPaymentModal';
 
 const formatRefCode = (ref?: string, type?: string) => {
   if (!ref) return '';
@@ -49,7 +50,8 @@ export const MemberDashboard = () => {
     speakQueue,
     requestFloor,
     leaveQueue,
-    broadcastLiveTranscript
+    broadcastLiveTranscript,
+    refreshDatabase
   } = useApp();
 
   const myId = currentUser?.official_member_id || currentUser?.id || '';
@@ -73,6 +75,7 @@ export const MemberDashboard = () => {
   const [smsCooldownMap, setSmsCooldownMap] = useState<Record<string, number>>({});
 
   // ── Self-Service Payment & Levy Receipt States ──
+  const [isPaystackModalOpen, setIsPaystackModalOpen] = useState(false);
   const [isSubmitPaymentModalOpen, setIsSubmitPaymentModalOpen] = useState(false);
   const [paymentPurpose, setPaymentPurpose] = useState('Monthly Dues');
   const [customPurpose, setCustomPurpose] = useState('');
@@ -858,25 +861,18 @@ export const MemberDashboard = () => {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <button
-              onClick={() => setIsSubmitPaymentModalOpen(true)}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md flex items-center gap-2 text-xs uppercase tracking-wider cursor-pointer"
-            >
-              💳 Submit Payment Proof
-            </button>
-            <button
               onClick={() => setIsCardModalOpen(true)}
               className="bg-amber-400 hover:bg-amber-300 text-[#001a16] px-4 py-2.5 rounded-xl font-bold transition-all shadow-md flex items-center gap-2 text-xs uppercase tracking-wider cursor-pointer"
             >
-              🪪 Download Digital ID
+              <Download className="w-4 h-4 mr-2" /> Download Digital ID
             </button>
             <button
               onClick={handleSettingsOpen}
               title="Edit profile settings"
               aria-label="Edit profile settings"
-              className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] p-2.5 rounded-xl font-bold transition-all shadow-md flex items-center gap-2"
+              className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] px-4 py-2.5 rounded-xl font-bold transition-all shadow-md flex items-center gap-2 text-xs uppercase tracking-wider cursor-pointer"
             >
-              <Settings className="w-5 h-5" />
-              <span className="text-xs font-bold uppercase tracking-wider hidden sm:inline">Edit Profile</span>
+              <UserEdit className="w-4 h-4 mr-2" /> Edit Profile
             </button>
           </div>
         </div>
@@ -930,68 +926,36 @@ export const MemberDashboard = () => {
           </div>
         </div>
 
-        {/* Tab Navigation Bar (Overview, Sports & Duties, Financials, Spiritual & Welfare, Payment Receipts) */}
+        {/* Tab Navigation Bar */}
         <div className="flex flex-wrap gap-2 pt-4 border-t border-[#ffd700]/20">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 transition-all ${
-              activeTab === 'overview'
-                ? 'bg-[#ffd700] text-[#001a16] shadow-lg font-bold'
-                : 'bg-[#001a16] text-[#ffd700] hover:bg-[#ffd700]/10 border border-[#ffd700]/20'
-            }`}
-          >
-            <LayoutDashboard className="w-4 h-4" /> Overview
-          </button>
-          <button
-            onClick={() => setActiveTab('payment_receipts')}
-            className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 transition-all ${
-              activeTab === 'payment_receipts'
-                ? 'bg-[#ffd700] text-[#001a16] shadow-lg font-bold'
-                : 'bg-[#001a16] text-[#ffd700] hover:bg-[#ffd700]/10 border border-[#ffd700]/20'
-            }`}
-          >
-            <CreditCard className="w-4 h-4" /> Payment Receipts ({paymentSubmissions.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('sports')}
-            className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 transition-all ${
-              activeTab === 'sports'
-                ? 'bg-[#ffd700] text-[#001a16] shadow-lg font-bold'
-                : 'bg-[#001a16] text-[#ffd700] hover:bg-[#ffd700]/10 border border-[#ffd700]/20'
-            }`}
-          >
-            <UserCheck className="w-4 h-4" /> Sports & Duties
-          </button>
-          <button
-            onClick={() => setActiveTab('financials')}
-            className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 transition-all ${
-              activeTab === 'financials'
-                ? 'bg-[#ffd700] text-[#001a16] shadow-lg font-bold'
-                : 'bg-[#001a16] text-[#ffd700] hover:bg-[#ffd700]/10 border border-[#ffd700]/20'
-            }`}
-          >
-            <CreditCard className="w-4 h-4" /> Financials
-          </button>
-          <button
-            onClick={() => setActiveTab('spiritual')}
-            className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 transition-all ${
-              activeTab === 'spiritual'
-                ? 'bg-[#ffd700] text-[#001a16] shadow-lg font-bold'
-                : 'bg-[#001a16] text-[#ffd700] hover:bg-[#ffd700]/10 border border-[#ffd700]/20'
-            }`}
-          >
-            <Church className="w-4 h-4" /> Spiritual & Welfare
-          </button>
-          <button
-            onClick={() => setActiveTab('constitution')}
-            className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 transition-all ${
-              activeTab === 'constitution'
-                ? 'bg-[#ffd700] text-[#001a16] shadow-lg font-bold'
-                : 'bg-[#001a16] text-[#ffd700] hover:bg-[#ffd700]/10 border border-[#ffd700]/20'
-            }`}
-          >
-            <BookOpen className="w-4 h-4" /> 2023 Bye-Laws
-          </button>
+          {[
+            { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+            { id: 'spiritual', label: 'Spiritual & Welfare', icon: HeartHandshake },
+            { 
+              id: 'payment_receipts', 
+              label: `Make Payment / Receipts (${paymentSubmissions.length})`, 
+              icon: CreditCard 
+            },
+            { id: 'sports', label: 'Sports & Duties', icon: Trophy },
+            { id: 'financials', label: 'Financials', icon: BarChart3 },
+            { id: 'constitution', label: '2023 Bye-Laws', icon: BookOpen },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 transition-all ${
+                  isActive
+                    ? 'bg-[#ffd700] text-[#001a16] shadow-lg font-bold'
+                    : 'bg-[#001a16] text-[#ffd700] hover:bg-[#ffd700]/10 border border-[#ffd700]/20'
+                }`}
+              >
+                <Icon className="w-4 h-4" /> {tab.label}
+              </button>
+            );
+          })}
         </div>
       </Card>
 
@@ -1000,87 +964,112 @@ export const MemberDashboard = () => {
       {/* ───────────────────────────────────────────────────────────── */}
       {activeTab === 'payment_receipts' && (
         <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 md:p-8 space-y-6 rounded-2xl text-white">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#ffd700]/20 gap-3">
-            <div>
-              <h3 className="text-lg font-bold text-amber-400">My Payment Receipts & Proofs</h3>
-              <p className="text-xs text-slate-300">Track verification status of bank transfers submitted to Executive Treasury.</p>
+          <div className="space-y-6">
+            {/* Top Action Card */}
+            <div className="rounded-2xl border border-yellow-500/20 bg-[#071d12]/80 p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-yellow-400" />
+                  Dues, Levies & Contributions
+                </h3>
+                <p className="text-xs text-gray-300 mt-1">
+                  Pay instantly via Card/Transfer/OPay or submit bank transfer payment receipts for executive audit.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => setIsPaystackModalOpen(true)}
+                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 px-4 py-2.5 text-sm font-bold text-gray-950 shadow-md hover:from-yellow-400 hover:to-amber-500 transition-all cursor-pointer"
+                >
+                  <CreditCard className="w-4 h-4" />
+                  Pay Online (Instant)
+                </button>
+                <button
+                  onClick={() => setIsSubmitPaymentModalOpen(true)}
+                  className="flex items-center gap-2 rounded-xl border border-yellow-500/40 bg-gray-900/80 px-4 py-2.5 text-sm font-semibold text-yellow-300 hover:bg-yellow-500/10 transition-all cursor-pointer"
+                >
+                  <UploadCloud className="w-4 h-4" />
+                  Submit Transfer Proof
+                </button>
+              </div>
             </div>
-            <button
-              onClick={() => setIsSubmitPaymentModalOpen(true)}
-              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto uppercase tracking-wider"
-            >
-              💳 + Submit New Receipt
-            </button>
-          </div>
 
-          {paymentSubmissions.length === 0 ? (
-            <div className="text-center py-12 bg-[#001a16] rounded-xl border border-emerald-900/40">
-              <p className="text-slate-300 text-sm font-semibold">No payment receipts uploaded yet.</p>
-              <button
-                onClick={() => setIsSubmitPaymentModalOpen(true)}
-                className="mt-3 text-xs text-amber-400 font-bold hover:underline cursor-pointer"
-              >
-                Click here to submit your first bank transfer receipt
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {paymentSubmissions.map((sub) => (
-                <div key={sub.id} className="bg-[#001a16] border border-emerald-900/60 rounded-xl p-4 flex flex-col justify-between shadow-md">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-amber-400 uppercase tracking-wide">{(sub as any).payment_title || sub.purpose || 'Payment'}</span>
-                      {sub.status === 'pending' && (
-                        <span className="px-2.5 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-full text-[10px] font-bold">
-                          🟡 Pending Verification
-                        </span>
-                      )}
-                      {sub.status === 'approved' && (
-                        <span className="px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold">
-                          🟢 Approved
-                        </span>
-                      )}
-                      {sub.status === 'rejected' && (
-                        <span className="px-2.5 py-0.5 bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded-full text-[10px] font-bold">
-                          🔴 Rejected
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="text-xl font-black text-white">{formatCurrency(sub.amount)}</p>
-                    {sub.reference_no && <p className="text-xs text-slate-400 mt-0.5 font-mono">Ref: {sub.reference_no}</p>}
-                    <p className="text-[10px] text-slate-500 mt-1">Submitted: {sub.created_at ? new Date(sub.created_at).toLocaleDateString() : 'N/A'}</p>
-
-                    {sub.status === 'approved' && sub.verified_at && (
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        Verified: {new Date(sub.verified_at).toLocaleDateString()}
-                      </p>
-                    )}
-
-                    {sub.status === 'rejected' && (sub.rejection_reason || sub.review_notes) && (
-                      <p className="text-xs text-rose-400 mt-1">
-                        Reason: {sub.rejection_reason || sub.review_notes}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-emerald-900/40 flex justify-between items-center">
-                    <a
-                      href={sub.receipt_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-amber-400 font-bold hover:underline flex items-center gap-1"
-                    >
-                      📄 View Uploaded Receipt ↗
-                    </a>
-                    {sub.verified_by && (
-                      <span className="text-[10px] text-slate-400">Audited by: {sub.verified_by}</span>
-                    )}
-                  </div>
+            {/* Receipt Submissions History Feed */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                Payment Verification History
+              </h4>
+              {paymentSubmissions.length === 0 ? (
+                <div className="text-center py-12 bg-[#001a16] rounded-xl border border-emerald-900/40">
+                  <p className="text-slate-300 text-sm font-semibold">No payment receipts uploaded yet.</p>
+                  <button
+                    onClick={() => setIsSubmitPaymentModalOpen(true)}
+                    className="mt-3 text-xs text-amber-400 font-bold hover:underline cursor-pointer inline-flex items-center gap-1.5"
+                  >
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    Click here to submit your first bank transfer receipt
+                  </button>
                 </div>
-              ))}
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {paymentSubmissions.map((sub) => (
+                    <div key={sub.id} className="bg-[#001a16] border border-emerald-900/60 rounded-xl p-4 flex flex-col justify-between shadow-md">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-bold text-amber-400 uppercase tracking-wide">{(sub as any).payment_title || sub.purpose || 'Payment'}</span>
+                          {sub.status === 'pending' && (
+                            <span className="px-2.5 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-full text-[10px] font-bold flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-400" /> Pending Verification
+                            </span>
+                          )}
+                          {sub.status === 'approved' && (
+                            <span className="px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Approved
+                            </span>
+                          )}
+                          {sub.status === 'rejected' && (
+                            <span className="px-2.5 py-0.5 bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded-full text-[10px] font-bold flex items-center gap-1">
+                              <X className="w-3 h-3 text-rose-400" /> Rejected
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-xl font-black text-white">{formatCurrency(sub.amount)}</p>
+                        {sub.reference_no && <p className="text-xs text-slate-400 mt-0.5 font-mono">Ref: {sub.reference_no}</p>}
+                        <p className="text-[10px] text-slate-500 mt-1">Submitted: {sub.created_at ? new Date(sub.created_at).toLocaleDateString() : 'N/A'}</p>
+
+                        {sub.status === 'approved' && sub.verified_at && (
+                          <p className="text-[10px] text-slate-400 mt-1">
+                            Verified: {new Date(sub.verified_at).toLocaleDateString()}
+                          </p>
+                        )}
+
+                        {sub.status === 'rejected' && (sub.rejection_reason || sub.review_notes) && (
+                          <p className="text-xs text-rose-400 mt-1">
+                            Reason: {sub.rejection_reason || sub.review_notes}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-emerald-900/40 flex justify-between items-center">
+                        <a
+                          href={sub.receipt_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-amber-400 font-bold hover:underline flex items-center gap-1"
+                        >
+                          <FileText className="w-3.5 h-3.5" /> View Uploaded Receipt ↗
+                        </a>
+                        {sub.verified_by && (
+                          <span className="text-[10px] text-slate-400">Audited by: {sub.verified_by}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </Card>
       )}
 
@@ -2165,9 +2154,9 @@ export const MemberDashboard = () => {
               </div>
               <button
                 onClick={() => setIsSubmitPaymentModalOpen(false)}
-                className="text-slate-400 hover:text-white text-lg font-bold p-1 rounded cursor-pointer"
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
               >
-                ✕
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -2285,6 +2274,24 @@ export const MemberDashboard = () => {
           />
         );
       })()}
+
+      {/* Paystack Instant Payment Modal */}
+      {currentUser && (
+        <PaystackPaymentModal
+          isOpen={isPaystackModalOpen}
+          onClose={() => setIsPaystackModalOpen(false)}
+          member={{
+            id: currentUser.id || currentUser.official_member_id || 'MEMBER',
+            official_member_id: currentUser.official_member_id || currentUser.id || 'MEMBER',
+            full_name: currentUser.full_name || currentUser.name || 'CMO Member',
+            email: currentUser.email
+          }}
+          onPaymentSuccess={() => {
+            loadMemberSubmissions();
+            refreshDatabase?.();
+          }}
+        />
+      )}
     </div>
   );
 };

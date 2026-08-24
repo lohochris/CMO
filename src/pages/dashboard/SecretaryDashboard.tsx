@@ -152,7 +152,7 @@ export const SecretaryDashboard = () => {
           const extractedText = await extractTextFromDocumentImage(base64Data, file.type);
           
           setMinutesText((prev) => 
-            prev ? `${prev}\n\n[📄 Extracted Document Note]:\n${extractedText}` : `[📄 Extracted Document Note]:\n${extractedText}`
+            prev ? `${prev}\n\n[Extracted Document Note]:\n${extractedText}` : `[Extracted Document Note]:\n${extractedText}`
           );
           
           toast.success('Document transcribed and appended to live minutes!', { id: toastId });
