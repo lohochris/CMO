@@ -189,6 +189,8 @@ export const FinSecDashboard = () => {
       if (data) {
         setFinsecWelfareTickets(data);
         const mapped = data.map((t: any) => ({
+          id: t.id,
+          ticket_id: t.ticket_id,
           ticketId: t.ticket_id || t.id,
           memberId: t.official_member_id || t.member_id,
           memberName: t.member_name || 'Member',
@@ -538,8 +540,8 @@ export const FinSecDashboard = () => {
   });
   const rawTicketsList = finsecWelfareTickets.length > 0 ? finsecWelfareTickets : welfareTickets;
   const pendingTickets = rawTicketsList.filter((t: any) => {
-    const st = (t.status || '').toLowerCase();
-    return st === 'pending' || st === 'awaiting financial audit';
+    const st = (t.status || '').toLowerCase().trim();
+    return st === 'pending' || st === 'awaiting_audit' || st === 'awaiting audit' || st === 'awaiting financial audit';
   });
   const totalSessionCash = vaultBalance;
 
@@ -834,41 +836,54 @@ export const FinSecDashboard = () => {
     }
   };
 
-  const approveTicket = async (ticketId: string) => {
+  const approveTicket = async (ticketIdInput: string) => {
     setError('');
-    const ticket = welfareTickets.find(t => t.ticketId === ticketId);
+    const ticket = rawTicketsList.find((t: any) => 
+      t.id === ticketIdInput || t.ticket_id === ticketIdInput || t.ticketId === ticketIdInput
+    );
     if (!ticket) {
       setError('Welfare ticket not found.');
       return;
     }
 
-    const member = members.find(m => m.official_member_id === ticket.memberId || m.id === ticket.memberId);
+    const targetUuid = ticket.id;
+    const targetTicketCode = ticket.ticket_id || ticket.ticketId || ticket.id;
+    const targetMemberId = ticket.memberId || ticket.official_member_id || ticket.member_id;
+
+    const member = members.find(m => m.official_member_id === targetMemberId || m.id === targetMemberId);
     if (!member) {
       setError('Associated member not found.');
       return;
     }
 
+    const amount = Number(ticket.requestedAmount ?? ticket.requested_amount ?? ticket.amount ?? 0);
+
     // 1. Cap Check: Max ₦50,000 disbursement
-    if (ticket.requestedAmount > 50000) {
-      setError(`Constitutional Policy Violation: Disbursement request of ₦${ticket.requestedAmount.toLocaleString()} exceeds the maximum cap of ₦50,000.`);
+    if (amount > 50000) {
+      setError(`Constitutional Policy Violation: Disbursement request of ₦${amount.toLocaleString()} exceeds the maximum cap of ₦50,000.`);
       return;
     }
 
     // 2. Member Balance Check: Dues must be cleared (balance must be >= 0)
     if (member.balance < 0) {
-      setError(`Constitutional Policy Violation: Member ${member.name} has outstanding dues (balance: ₦${member.balance.toLocaleString()}). Welfare tickets cannot be approved until balances are cleared.`);
+      setError(`Constitutional Policy Violation: Member ${member.full_name || member.name} has outstanding dues (balance: ₦${member.balance.toLocaleString()}). Welfare tickets cannot be approved until balances are cleared.`);
       return;
     }
 
     try {
-      const { error: dbErr } = await supabase
-        .from('welfare_tickets')
-        .update({
-          status: 'Approved',
-          approved_at: new Date().toISOString(),
-          decline_reason: null
-        })
-        .eq('ticket_id', ticketId);
+      let updateQuery = supabase.from('welfare_tickets').update({
+        status: 'Approved',
+        approved_at: new Date().toISOString(),
+        decline_reason: null
+      });
+
+      if (isUuid(targetUuid)) {
+        updateQuery = updateQuery.eq('id', targetUuid);
+      } else {
+        updateQuery = updateQuery.eq('ticket_id', targetTicketCode);
+      }
+
+      const { error: dbErr } = await updateQuery;
 
       if (dbErr) {
         console.error("Supabase update error on approval:", dbErr);
@@ -876,35 +891,87 @@ export const FinSecDashboard = () => {
         return;
       }
 
-      const updatedTickets = welfareTickets.map(t =>
-        t.ticketId === ticketId
-          ? { ...t, status: 'Approved' as const, approvedAt: new Date().toISOString(), declineReason: undefined }
-          : t
-      );
-      setWelfareTickets(updatedTickets);
-      setSuccess(`Ticket ${ticketId} approved for disbursement`);
+      // 2. Insert transaction record into public.transactions (without category column)
+      const ticketCategory = ticket.category || ticket.eventCategory || ticket.reason || 'Welfare Assistance';
+      const memberFullName = member.full_name || (member as any).name || ticket.memberName || ticket.member_name || 'Member';
+      const officialMemberId = member.official_member_id || targetMemberId || 'GENERAL-EXPENSE';
+
+      const transactionPayload = {
+        official_member_id: officialMemberId,
+        member_name: memberFullName,
+        amount: amount,
+        purpose: `Welfare Assistance: ${ticketCategory} (${targetTicketCode})`,
+        transaction_type: 'EXPENSE',
+        recorded_by: currentUser?.name || 'Financial Secretary',
+        receipt_number: targetTicketCode,
+        status: 'Approved',
+        created_at: new Date().toISOString(),
+        timestamp: new Date().toISOString()
+      };
+
+      const { error: txErr } = await supabase.from('transactions').insert([transactionPayload]);
+      if (txErr) {
+        console.error("Failed to insert welfare transaction on approval:", txErr);
+      }
+
+      // 3. Insert expense log into public.expenses (omitting custom string id so Postgres auto-generates UUID)
+      const expensePayload = {
+        amount: amount,
+        purpose: `Welfare Assistance: ${ticketCategory} [${targetTicketCode}] for ${memberFullName}`,
+        date: new Date().toISOString().split('T')[0],
+        recorded_by: currentUser?.name || 'Financial Secretary',
+        official_member_id: officialMemberId
+      };
+
+      const { error: expErr } = await supabase.from('expenses').insert([expensePayload]);
+      if (expErr) {
+        console.error("Failed to insert welfare expense log on approval:", expErr);
+      }
+
+      // Optimistic State Removal & Update
+      setFinsecWelfareTickets(prev => prev.filter((t: any) => t.id !== targetUuid && t.ticket_id !== targetTicketCode));
+      setWelfareTickets(prev => prev.filter((t: any) => t.id !== targetUuid && t.ticketId !== targetTicketCode && t.ticket_id !== targetTicketCode));
+
+      setSuccess(`Ticket ${targetTicketCode} approved for disbursement, transaction & expense logged.`);
       setTimeout(() => setSuccess(''), 3000);
+      loadWelfareTickets();
     } catch (err: any) {
       console.error("Failed to approve ticket:", err);
       setError(`Failed to approve ticket: ${err.message}`);
     }
   };
 
-  const submitDeclineTicket = async (ticketId: string) => {
+  const submitDeclineTicket = async (ticketIdInput: string) => {
     setError('');
     if (!declineReasonText.trim()) {
       setError('Please type a reason for declining this request.');
       return;
     }
 
+    const ticket = rawTicketsList.find((t: any) => 
+      t.id === ticketIdInput || t.ticket_id === ticketIdInput || t.ticketId === ticketIdInput
+    );
+    if (!ticket) {
+      setError('Welfare ticket not found.');
+      return;
+    }
+
+    const targetUuid = ticket.id;
+    const targetTicketCode = ticket.ticket_id || ticket.ticketId || ticket.id;
+
     try {
-      const { error: dbErr } = await supabase
-        .from('welfare_tickets')
-        .update({
-          status: 'Declined',
-          decline_reason: declineReasonText.trim()
-        })
-        .eq('ticket_id', ticketId);
+      let updateQuery = supabase.from('welfare_tickets').update({
+        status: 'Declined',
+        decline_reason: declineReasonText.trim()
+      });
+
+      if (isUuid(targetUuid)) {
+        updateQuery = updateQuery.eq('id', targetUuid);
+      } else {
+        updateQuery = updateQuery.eq('ticket_id', targetTicketCode);
+      }
+
+      const { error: dbErr } = await updateQuery;
 
       if (dbErr) {
         console.error("Supabase update error on decline:", dbErr);
@@ -912,16 +979,15 @@ export const FinSecDashboard = () => {
         return;
       }
 
-      const updatedTickets = welfareTickets.map(t =>
-        t.ticketId === ticketId
-          ? { ...t, status: 'Declined' as const, declineReason: declineReasonText.trim() }
-          : t
-      );
-      setWelfareTickets(updatedTickets);
-      setSuccess(`Ticket ${ticketId} declined successfully.`);
+      // Optimistic State Removal & Update
+      setFinsecWelfareTickets(prev => prev.filter((t: any) => t.id !== targetUuid && t.ticket_id !== targetTicketCode));
+      setWelfareTickets(prev => prev.filter((t: any) => t.id !== targetUuid && t.ticketId !== targetTicketCode && t.ticket_id !== targetTicketCode));
+
+      setSuccess(`Ticket ${targetTicketCode} declined successfully.`);
       setDecliningTicketId(null);
       setDeclineReasonText('');
       setTimeout(() => setSuccess(''), 3000);
+      loadWelfareTickets();
     } catch (err: any) {
       console.error("Failed to decline ticket:", err);
       setError(`Failed to decline ticket: ${err.message}`);
@@ -1396,6 +1462,18 @@ export const FinSecDashboard = () => {
         setError(`Database Error: ${txErr.message}`);
         return;
       }
+
+      // Sync into public.expenses table (omitting custom id string so Postgres auto-generates UUID)
+      const { error: expErr } = await supabase
+        .from('expenses')
+        .insert([{
+          amount: parseFloat(expenseAmount),
+          purpose: expensePurpose,
+          date: expenseDate,
+          recorded_by: currentUser?.name || 'Financial Secretary',
+          official_member_id: 'GENERAL-EXPENSE'
+        }]);
+      if (expErr) console.warn("Expenses table sync warning:", expErr);
 
       setSuccess(`Expense recorded: ${formatCurrency(amount)}`);
       setExpenseAmount('');
@@ -2089,16 +2167,20 @@ export const FinSecDashboard = () => {
                 </TableHeader>
                 <TableBody>
                   {pendingTickets.map(ticket => {
+                    const ticketKey = ticket.id || ticket.ticket_id || ticket.ticketId;
+                    const ticketDisplayCode = ticket.ticket_id || ticket.ticketId || ticket.id;
                     const member = members.find(m => m.official_member_id === ticket.memberId || m.id === ticket.memberId);
+                    const isDecliningThis = decliningTicketId === ticketKey || decliningTicketId === ticket.ticketId || decliningTicketId === ticket.id;
+
                     return (
-                      <TableRow key={ticket.ticketId} className="border-[#ffd700]/30 hover:bg-[#001a16]">
-                        <TableCell className="text-white">{ticket.ticketId}</TableCell>
-                        <TableCell className="text-white">{ticket.memberName}</TableCell>
+                      <TableRow key={ticketKey} className="border-[#ffd700]/30 hover:bg-[#001a16]">
+                        <TableCell className="text-white font-mono text-xs">{ticketDisplayCode}</TableCell>
+                        <TableCell className="text-white font-semibold">{ticket.memberName}</TableCell>
                         <TableCell className="text-gray-400">{ticket.category}</TableCell>
                         <TableCell className="text-[#ffd700]">{formatCurrency(ticket.requestedAmount ?? (ticket as any).requested_amount ?? (ticket as any).amount ?? 0)}</TableCell>
                         <TableCell className="text-green-500">{formatCurrency(member?.balance || 0)}</TableCell>
                         <TableCell className="space-x-2">
-                          {decliningTicketId === ticket.ticketId ? (
+                          {isDecliningThis ? (
                             <div className="flex flex-col space-y-2 min-w-[200px]">
                               <textarea
                                 value={declineReasonText}
@@ -2110,7 +2192,7 @@ export const FinSecDashboard = () => {
                               <div className="flex space-x-2">
                                 <button
                                   type="button"
-                                  onClick={() => submitDeclineTicket(ticket.ticketId)}
+                                  onClick={() => submitDeclineTicket(ticketKey)}
                                   className="bg-red-600 text-white hover:bg-red-500 text-xs cursor-pointer rounded px-2 py-1 flex-1 font-semibold"
                                 >
                                   Submit
@@ -2131,18 +2213,18 @@ export const FinSecDashboard = () => {
                             <>
                               <button
                                 type="button"
-                                onClick={() => approveTicket(ticket.ticketId)}
-                                className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] text-xs cursor-pointer rounded px-3 py-2"
+                                onClick={() => approveTicket(ticketKey)}
+                                className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] text-xs font-bold cursor-pointer rounded px-3 py-2"
                               >
                                 Approve
                               </button>
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setDecliningTicketId(ticket.ticketId);
+                                  setDecliningTicketId(ticketKey);
                                   setDeclineReasonText('');
                                 }}
-                                className="bg-red-600 text-white hover:bg-red-500 text-xs cursor-pointer rounded px-3 py-2"
+                                className="bg-red-600 text-white hover:bg-red-500 text-xs font-semibold cursor-pointer rounded px-3 py-2"
                               >
                                 Decline
                               </button>
