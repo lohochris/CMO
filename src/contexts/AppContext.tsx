@@ -4,7 +4,7 @@ import { seedAnnouncements } from '../data/seedData';
 import { supabase } from '../lib/supabaseClient';
 import { toast } from 'sonner';
 import { isAdministrativeId } from '../utils/helpers';
-import { calculateUnifiedFinancialSummary, fetchUnifiedFinancialSummary } from '../utils/supabaseHelpers';
+import { calculateUnifiedFinancialSummary, fetchUnifiedFinancialSummary, isUuid } from '../utils/supabaseHelpers';
 
 interface AppContextType {
   members: Member[];
@@ -335,9 +335,9 @@ const expenseToDb = (e: Expense): any => {
     amount: e.amount,
     purpose: e.purpose,
     date: e.date,
-    recorded_by: e.recordedBy
+    recorded_by: e.recordedBy || (e as any).recorded_by
   };
-  if (e.id && e.id.includes('-') && e.id.length > 15) {
+  if (e.id && isUuid(e.id)) {
     payload.id = e.id;
   }
   return payload;
@@ -1362,7 +1362,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           recordedBy: `Signatories: ${updatedSigs.join(', ')}`
         };
 
-        const { error: expErr } = await supabase.from('expenses').insert([expensePayload]);
+        const dbExpensePayload = {
+          amount: target.amount,
+          purpose: `[Section I Bank Withdrawal] ${target.purpose} (Ref: ${expensePayload.id})`,
+          date: expensePayload.date,
+          recorded_by: expensePayload.recordedBy
+        };
+
+        const { error: expErr } = await supabase.from('expenses').insert([dbExpensePayload]);
         if (expErr) console.warn('Supabase expense insert warning:', expErr);
         setExpensesState(prev => [...prev, expensePayload]);
 

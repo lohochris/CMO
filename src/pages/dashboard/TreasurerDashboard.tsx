@@ -9,7 +9,7 @@ import { SportsAuditReadOnlyView } from './sports/SportsAuditReadOnlyView';
 import { useApp } from '../../contexts/AppContext';
 import { generateExpenseId } from '../../utils/idGenerators';
 import { calculateTotal, formatCurrency, formatDate, getCombinedTransactions } from '../../utils/helpers';
-import { uploadProfilePicture, calculateUnifiedFinancialSummary, fetchUnifiedFinancialSummary } from '../../utils/supabaseHelpers';
+import { uploadProfilePicture, isUuid, calculateUnifiedFinancialSummary, fetchUnifiedFinancialSummary } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { supabase } from '../../lib/supabaseClient';
 import { CMO_CONSTITUTION_2023 } from '../../config/cmoConstitution';
@@ -389,23 +389,35 @@ export const TreasurerDashboard = () => {
     }
   };
 
-  const settleTicket = async (ticketId: string) => {
+  const settleTicket = async (ticketIdInput: string) => {
     setError('');
-    const ticket = welfareTickets.find(t => t.ticketId === ticketId);
+    const ticket = welfareTickets.find(t => 
+      t.ticketId === ticketIdInput || (t as any).id === ticketIdInput || (t as any).ticket_id === ticketIdInput
+    );
     if (!ticket) {
       setError('Ticket not found');
       return;
     }
 
+    const targetUuid = (ticket as any).id;
+    const targetTicketCode = (ticket as any).ticket_id || ticket.ticketId || ticketIdInput;
+
     try {
       // 1. Explicit update mutation to the database for welfare ticket status
-      const { error: ticketErr } = await supabase
+      let updateQuery = supabase
         .from('welfare_tickets')
         .update({ 
           status: 'Completed', 
           settled_at: new Date().toISOString() 
-        })
-        .eq('ticket_id', ticketId);
+        });
+
+      if (isUuid(targetUuid)) {
+        updateQuery = updateQuery.eq('id', targetUuid);
+      } else {
+        updateQuery = updateQuery.eq('ticket_id', targetTicketCode);
+      }
+
+      const { error: ticketErr } = await updateQuery;
 
       if (ticketErr) {
         console.error("Failed to update ticket in Supabase:", ticketErr);
@@ -442,7 +454,6 @@ export const TreasurerDashboard = () => {
             amount: ticket.requestedAmount,
             purpose: `Welfare Assistance: ${ticket.category || 'Disbursal'}`,
             transaction_type: 'Welfare Disbursal',
-            category: 'Welfare',
             receipt_number: ticket.ticketId,
             timestamp: new Date().toISOString(),
             status: 'Approved'
@@ -459,7 +470,7 @@ export const TreasurerDashboard = () => {
 
         if (!memberPhone && ticket.memberId) {
           const isTicketIdUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test((ticket.memberId || '').trim());
-          let memberQuery = supabase.from('members').select('phone_number, full_name, name');
+          let memberQuery = supabase.from('members').select('phone_number, full_name');
           if (isTicketIdUuid) {
             memberQuery = memberQuery.or(`official_member_id.eq.${ticket.memberId},id.eq.${ticket.memberId}`);
           } else {
@@ -468,8 +479,8 @@ export const TreasurerDashboard = () => {
           const { data: dbMem } = await memberQuery.maybeSingle();
           if (dbMem) {
             memberPhone = dbMem.phone_number;
-            if (dbMem.full_name || dbMem.name) {
-              firstName = (dbMem.full_name || dbMem.name).split(' ')[0];
+            if (dbMem.full_name) {
+              firstName = dbMem.full_name.split(' ')[0];
             }
           }
         }
@@ -489,7 +500,7 @@ export const TreasurerDashboard = () => {
 
       // 3. Update local state context (which also handles local state sync to expenses table if applicable)
       const updatedTickets = welfareTickets.map(t =>
-        t.ticketId === ticketId
+        (t.ticketId === targetTicketCode || (t as any).id === targetUuid || (t as any).ticket_id === targetTicketCode)
           ? { ...t, status: 'Completed' as const, settledAt: new Date().toISOString() }
           : t
       );
@@ -515,7 +526,7 @@ export const TreasurerDashboard = () => {
       };
       setTransactions([...transactions, newTx]);
 
-      setSuccess(`Ticket ${ticketId} settled and expense logged to ledger`);
+      setSuccess(`Ticket ${ticket.ticketId || targetTicketCode} settled and expense logged to ledger`);
       setTimeout(() => setSuccess(''), 3000);
 
       // Refresh to synchronize totals across all dashboards

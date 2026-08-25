@@ -144,11 +144,10 @@ export const authorizeBankWithdrawal = async (
     if (txErr) console.warn('Supabase transaction insert error:', txErr);
 
     const expensePayload = {
-      id: `EXP-SEC1-${Date.now()}`,
       amount: existingData.amount,
-      purpose: `[Section I Bank Withdrawal] ${existingData.purpose}`,
+      purpose: `[Section I Bank Withdrawal] ${existingData.purpose} (Ref: EXP-SEC1-${Date.now()})`,
       date: new Date().toISOString().split('T')[0],
-      recordedBy: `Signatories: ${currentSigs.join(', ')}`
+      recorded_by: `Signatories: ${currentSigs.join(', ')}`
     };
 
     const { error: expErr } = await supabase.from('expenses').insert([expensePayload]);
