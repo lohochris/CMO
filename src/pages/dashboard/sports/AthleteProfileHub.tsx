@@ -19,6 +19,9 @@ import { Card } from '../../../app/components/ui/card';
 import { Button } from '../../../app/components/ui/button';
 import { toast } from 'sonner';
 
+const isUuid = (val?: string | null): boolean =>
+  Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim()));
+
 // ──────────────────────────────────────────────
 // Types
 // ──────────────────────────────────────────────
@@ -197,9 +200,8 @@ export const AthleteProfileHub = () => {
     }
 
     // 2. Fallback: Check member profile family unit if roster table row is unlinked
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(memberId);
     let memberQuery = supabase.from('members').select('cmo_family, family, full_name');
-    if (isUuid) {
+    if (isUuid(memberId)) {
       memberQuery = memberQuery.or(`official_member_id.eq.${memberId},id.eq.${memberId}`);
     } else {
       memberQuery = memberQuery.eq('official_member_id', memberId);
@@ -230,11 +232,20 @@ export const AthleteProfileHub = () => {
 
     try {
       // 1. Fetch athlete registry entry
-      const { data: regData } = await supabase
-        .from('sports_athletes_registry')
-        .select('*')
-        .or(`member_id.eq.${memberId},member_id.eq.${currentUser.id}`)
-        .maybeSingle();
+      const isMemberUuid = isUuid(memberId);
+      const isUserUuid = isUuid(currentUser.id);
+
+      let regQuery = supabase.from('sports_athletes_registry').select('*');
+      if (isMemberUuid && isUserUuid) {
+        regQuery = regQuery.or(`member_id.eq.${memberId},member_id.eq.${currentUser.id}`);
+      } else if (isMemberUuid) {
+        regQuery = regQuery.eq('member_id', memberId);
+      } else if (isUserUuid) {
+        regQuery = regQuery.eq('member_id', currentUser.id);
+      } else {
+        regQuery = regQuery.eq('official_member_id', memberId);
+      }
+      const { data: regData } = await regQuery.maybeSingle();
 
       if (regData) {
         setNotRegistered(false);

@@ -266,4 +266,46 @@ export interface PaymentSubmission {
   verified_at?: string;
   created_at?: string;
   updated_at?: string;
-}
+}
+
+export type WelfareEventCategory = 
+  | 'Loss of Wife'
+  | 'Loss of Child'
+  | 'Loss of Parent'
+  | 'Health & Hospitalization'
+  | 'Child Birth'
+  | 'Member Distress'
+  | 'Other';
+
+export type WelfareNotificationStatus = 
+  | 'Submitted'
+  | 'Family_Verified'
+  | 'Investigating'
+  | 'Elevated_To_Ticket'
+  | 'Resolved_Directly'
+  | 'Dismissed';
+
+export interface WelfareNotification {
+  id: string;
+  memberId: string;
+  officialMemberId: string;
+  memberName: string;
+  cmoFamily: Family;
+  eventCategory: WelfareEventCategory;
+  title: string;
+  description: string;
+  locationOrHospital?: string;
+  incidentDate: string;
+  status: WelfareNotificationStatus;
+  familyHeadNotes?: string;
+  familyHeadVerifiedAt?: string;
+  welfareOfficerNotes?: string;
+  welfareOfficerReviewedAt?: string;
+  elevatedTicketId?: string;
+  chairmanRead: boolean;
+  welfareOfficerRead: boolean;
+  familyHeadRead: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+

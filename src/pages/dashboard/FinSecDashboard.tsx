@@ -113,6 +113,11 @@ export const FinSecDashboard = () => {
   useEffect(() => {
     const channel = supabase
       .channel('finsec-realtime-financial-sources')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'welfare_tickets' }, () => {
+        loadWelfareTickets();
+        loadFinancials();
+        refreshDatabase();
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_submissions' }, () => {
         loadFinancials();
         loadPendingSubmissions();
@@ -168,6 +173,39 @@ export const FinSecDashboard = () => {
   const [rejectionModalSub, setRejectionModalSub] = useState<PaymentSubmission | null>(null);
   const [rejectionNoteInput, setRejectionNoteInput] = useState('');
 
+  const [finsecWelfareTickets, setFinsecWelfareTickets] = useState<any[]>([]);
+
+  const loadWelfareTickets = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('welfare_tickets')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching welfare_tickets in FinSec:', error);
+        return;
+      }
+      if (data) {
+        setFinsecWelfareTickets(data);
+        const mapped = data.map((t: any) => ({
+          ticketId: t.ticket_id || t.id,
+          memberId: t.official_member_id || t.member_id,
+          memberName: t.member_name || 'Member',
+          category: t.category,
+          requestedAmount: Number(t.requested_amount || t.amount || 0),
+          reasonDetails: t.reason_details || t.reason || '',
+          status: t.status,
+          createdAt: t.created_at,
+          declineReason: t.decline_reason
+        }));
+        setWelfareTickets(mapped);
+      }
+    } catch (err) {
+      console.error('Error in loadWelfareTickets:', err);
+    }
+  };
+
   const loadPendingSubmissions = async () => {
     try {
       const { data } = await fetchPaymentSubmissions({ status: 'pending' });
@@ -179,6 +217,7 @@ export const FinSecDashboard = () => {
 
   useEffect(() => {
     loadPendingSubmissions();
+    loadWelfareTickets();
   }, []);
 
   const handleApproveSubmission = async (sub: PaymentSubmission) => {
@@ -497,7 +536,11 @@ export const FinSecDashboard = () => {
       (m.phone_number || m.phone || '').toLowerCase().includes(q)
     );
   });
-  const pendingTickets = welfareTickets.filter(t => t.status === 'Awaiting Financial Audit' || t.status === 'Pending');
+  const rawTicketsList = finsecWelfareTickets.length > 0 ? finsecWelfareTickets : welfareTickets;
+  const pendingTickets = rawTicketsList.filter((t: any) => {
+    const st = (t.status || '').toLowerCase();
+    return st === 'pending' || st === 'awaiting financial audit';
+  });
   const totalSessionCash = vaultBalance;
 
   const validStatus = ['Approved', 'Completed', 'Cleared'];
@@ -2052,7 +2095,7 @@ export const FinSecDashboard = () => {
                         <TableCell className="text-white">{ticket.ticketId}</TableCell>
                         <TableCell className="text-white">{ticket.memberName}</TableCell>
                         <TableCell className="text-gray-400">{ticket.category}</TableCell>
-                        <TableCell className="text-[#ffd700]">{formatCurrency(ticket.requestedAmount)}</TableCell>
+                        <TableCell className="text-[#ffd700]">{formatCurrency(ticket.requestedAmount ?? (ticket as any).requested_amount ?? (ticket as any).amount ?? 0)}</TableCell>
                         <TableCell className="text-green-500">{formatCurrency(member?.balance || 0)}</TableCell>
                         <TableCell className="space-x-2">
                           {decliningTicketId === ticket.ticketId ? (

@@ -296,7 +296,7 @@ export const submitPaymentReceipt = async (submissionInput: {
   const receiptUrl = submissionInput.receiptUrl || submissionInput.receipt_url || '';
 
   const payload = {
-    member_id: resolvedMemberId,
+    member_id: isUuid(resolvedMemberId) ? resolvedMemberId : (isUuid(memberId) ? memberId : null),
     official_member_id: resolvedMemberId,
     full_name: fullName,
     member_name: fullName,
@@ -334,7 +334,12 @@ export const fetchPaymentSubmissions = async (filters?: {
   let query = supabase.from('payment_submissions').select('*').order('created_at', { ascending: false });
 
   if (filters?.official_member_id) {
-    query = query.or(`official_member_id.eq.${filters.official_member_id},member_id.eq.${filters.official_member_id}`);
+    const val = filters.official_member_id;
+    if (isUuid(val)) {
+      query = query.or(`official_member_id.eq.${val},member_id.eq.${val}`);
+    } else {
+      query = query.eq('official_member_id', val);
+    }
   }
   if (filters?.status) {
     query = query.eq('status', filters.status);
@@ -343,10 +348,15 @@ export const fetchPaymentSubmissions = async (filters?: {
   let { data, error } = await query;
 
   if (error) {
-    // Retry without OR filter if official_member_id column is missing
+    // Retry without OR filter if column queries fail
     let retryQuery = supabase.from('payment_submissions').select('*').order('created_at', { ascending: false });
     if (filters?.official_member_id) {
-      retryQuery = retryQuery.eq('member_id', filters.official_member_id);
+      const val = filters.official_member_id;
+      if (isUuid(val)) {
+        retryQuery = retryQuery.eq('member_id', val);
+      } else {
+        retryQuery = retryQuery.eq('official_member_id', val);
+      }
     }
     if (filters?.status) {
       retryQuery = retryQuery.eq('status', filters.status);

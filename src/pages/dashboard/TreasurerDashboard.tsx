@@ -458,11 +458,14 @@ export const TreasurerDashboard = () => {
         let firstName = (targetMember?.full_name || targetMember?.name || ticket.memberName || '').split(' ')[0] || 'Member';
 
         if (!memberPhone && ticket.memberId) {
-          const { data: dbMem } = await supabase
-            .from('members')
-            .select('phone_number, full_name, name')
-            .or(`official_member_id.eq.${ticket.memberId},id.eq.${ticket.memberId}`)
-            .maybeSingle();
+          const isTicketIdUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test((ticket.memberId || '').trim());
+          let memberQuery = supabase.from('members').select('phone_number, full_name, name');
+          if (isTicketIdUuid) {
+            memberQuery = memberQuery.or(`official_member_id.eq.${ticket.memberId},id.eq.${ticket.memberId}`);
+          } else {
+            memberQuery = memberQuery.eq('official_member_id', ticket.memberId);
+          }
+          const { data: dbMem } = await memberQuery.maybeSingle();
           if (dbMem) {
             memberPhone = dbMem.phone_number;
             if (dbMem.full_name || dbMem.name) {

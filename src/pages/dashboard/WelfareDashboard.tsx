@@ -2,16 +2,18 @@ import { useState, useEffect } from 'react';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
-import { Heart, Megaphone } from 'lucide-react';
+import { Heart, Megaphone, CheckCircle2, Clock, AlertTriangle, ShieldCheck, ArrowUpRight, X, MapPin, Sparkles } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { formatCurrency, formatDateTime, isAdministrativeId } from '../../utils/helpers';
 import { WELFARE_CATEGORIES } from '../../utils/constants';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { supabase } from '../../lib/supabaseClient';
-import { WelfareTicket } from '../../types';
+import { WelfareTicket, WelfareNotification } from '../../types';
+import { getAllWelfareNotifications, elevateToWelfareTicket } from '../../lib/welfareNotificationService';
 import { GeneralGalleryManager } from '../../app/components/gallery/GeneralGalleryManager';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/ui/tabs';
+
 
 export const WelfareDashboard = () => {
   const [isExecutiveUnlocked, setIsExecutiveUnlocked] = useState<boolean>(() => {
@@ -43,7 +45,72 @@ export const WelfareDashboard = () => {
 
   // Welfare Ticket Filter State
   const [ticketFilter, setTicketFilter] = useState<'All' | 'Pending' | 'Completed' | 'Declined'>('All');
-  
+
+  // Intake Queue & Ticket Elevation State
+  const [intakeNotifications, setIntakeNotifications] = useState<WelfareNotification[]>([]);
+  const [elevatingNotif, setElevatingNotif] = useState<WelfareNotification | null>(null);
+  const [elevateCategory, setElevateCategory] = useState<string>('Medical Assistance');
+  const [elevateAmount, setElevateAmount] = useState<string>('');
+  const [elevateDetails, setElevateDetails] = useState<string>('');
+  const [isElevating, setIsElevating] = useState<boolean>(false);
+
+  const fetchIntakeQueue = async () => {
+    const notifs = await getAllWelfareNotifications();
+    setIntakeNotifications(notifs);
+  };
+
+  useEffect(() => {
+    fetchIntakeQueue();
+    const channel = supabase
+      .channel('welfare_notifications_officer_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'welfare_notifications' }, () => {
+        fetchIntakeQueue();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const handleConfirmElevate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!elevatingNotif) return;
+    const amount = parseFloat(elevateAmount);
+    if (isNaN(amount) || amount <= 0) {
+      setError('Please specify a positive requested amount.');
+      return;
+    }
+    if (amount > 50000) {
+      setError('Constitutional Cap Violation: Welfare disbursement request cannot exceed ₦50,000.');
+      return;
+    }
+
+    setIsElevating(true);
+    setError('');
+    try {
+      const generatedTicketId = await elevateToWelfareTicket(elevatingNotif.id, {
+        requestedAmount: amount,
+        category: elevateCategory,
+        reasonDetails: elevateDetails.trim() || elevatingNotif.description,
+        memberName: elevatingNotif.memberName,
+        officialMemberId: elevatingNotif.officialMemberId,
+      });
+
+      setSuccess(`Emergency intake elevated to official Welfare Ticket (${generatedTicketId})!`);
+      setElevatingNotif(null);
+      setElevateAmount('');
+      setElevateDetails('');
+      fetchIntakeQueue();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('Error elevating ticket:', err);
+      setError(`Elevation failed: ${err.message}`);
+    } finally {
+      setIsElevating(false);
+    }
+  };
+
   const {
     members, setMembers,
     welfareTickets, setWelfareTickets,
@@ -51,6 +118,7 @@ export const WelfareDashboard = () => {
     currentUser, setCurrentUser,
     setError, setSuccess
   } = useApp();
+
 
   const handleProfilePictureSave = async (imageDataUrl: string, imageFile: Blob) => {
     if (!currentUser) return;
@@ -462,6 +530,9 @@ export const WelfareDashboard = () => {
             <TabsTrigger value="tickets" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
               Ticket Management
             </TabsTrigger>
+            <TabsTrigger value="intake" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded flex items-center gap-1.5">
+              Incident Intake Queue ({intakeNotifications.filter(n => n.status !== 'Elevated_To_Ticket' && n.status !== 'Dismissed').length})
+            </TabsTrigger>
             <TabsTrigger value="announcements" className="data-[state=active]:bg-[#ffd700] data-[state=active]:text-[#001a16] text-[#ffd700] cursor-pointer px-4 py-2 text-sm font-semibold rounded">
               Welfare Announcements
             </TabsTrigger>
@@ -469,6 +540,7 @@ export const WelfareDashboard = () => {
               Media & Gallery Pipeline
             </TabsTrigger>
           </TabsList>
+
 
           <TabsContent value="tickets" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -653,6 +725,179 @@ export const WelfareDashboard = () => {
               </Card>
             </div>
           </TabsContent>
+
+          <TabsContent value="intake" className="space-y-6">
+            <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-xl shadow-lg space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#ffd700]/20 pb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-[#ffd700] flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-amber-400" />
+                    Welfare Incident Intake Queue
+                  </h3>
+                  <p className="text-xs text-gray-300 mt-1">
+                    Review incoming emergency reports, inspect Family Head verification notes, and elevate valid cases into official Welfare Tickets (capped at ₦50,000).
+                  </p>
+                </div>
+              </div>
+
+              {intakeNotifications.length === 0 ? (
+                <div className="text-center py-12 bg-[#001a16] rounded-xl border border-emerald-900/40">
+                  <p className="text-gray-400 text-sm">No emergency incident notifications in the intake queue.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4">
+                  {intakeNotifications.map((notif) => {
+                    const isFamilyVerified = notif.status === 'Family_Verified' || Boolean(notif.familyHeadVerifiedAt);
+                    const isElevated = notif.status === 'Elevated_To_Ticket';
+                    const isSubmitted = notif.status === 'Submitted' && !isFamilyVerified;
+
+                    return (
+                      <div key={notif.id} className="bg-[#001a16] border border-[#ffd700]/20 rounded-xl p-5 shadow-md space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 pb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-amber-400 uppercase">{notif.memberName} ({notif.officialMemberId})</span>
+                            <span className="text-xs text-gray-400">• {notif.cmoFamily} Family</span>
+                            <span className="bg-[#ffd700]/15 text-[#ffd700] text-xs font-bold px-2 py-0.5 rounded border border-[#ffd700]/30">
+                              {notif.eventCategory}
+                            </span>
+                          </div>
+                          {isSubmitted && (
+                            <span className="px-2.5 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-full text-[10px] font-bold flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-400" /> Awaiting Family Head Verification
+                            </span>
+                          )}
+                          {isFamilyVerified && !isElevated && (
+                            <span className="px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Family Verified — Ready to Elevate
+                            </span>
+                          )}
+                          {isElevated && (
+                            <span className="px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold flex items-center gap-1">
+                              Elevated to Ticket #{notif.elevatedTicketId}
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          <h4 className="text-base font-bold text-white">{notif.title}</h4>
+                          <p className="text-xs text-gray-300 mt-1">{notif.description}</p>
+                          {notif.locationOrHospital && (
+                            <p className="text-xs text-amber-300 mt-1 flex items-center gap-1">
+                              <MapPin className="w-3.5 h-3.5 shrink-0" /> Hospital / Location: {notif.locationOrHospital}
+                            </p>
+                          )}
+                        </div>
+
+                        {notif.familyHeadNotes && (
+                          <div className="p-3 bg-blue-950/40 border border-blue-500/30 rounded-lg text-xs text-blue-200">
+                            <p className="font-bold text-blue-300 flex items-center gap-1">
+                              <ShieldCheck className="w-3.5 h-3.5" /> Family Head Verification Note:
+                            </p>
+                            <p className="italic mt-0.5">"{notif.familyHeadNotes}"</p>
+                          </div>
+                        )}
+
+                        <div className="pt-2 border-t border-gray-800 flex justify-between items-center flex-wrap gap-2">
+                          <span className="text-[10px] text-gray-500 font-mono">Reported Date: {notif.incidentDate}</span>
+                          {!isElevated && (
+                            <Button
+                              disabled={!isFamilyVerified}
+                              onClick={() => {
+                                if (!isFamilyVerified) return;
+                                setElevatingNotif(notif);
+                                setElevateCategory(notif.eventCategory === 'Health & Hospitalization' ? 'Medical Assistance' : notif.eventCategory === 'Loss of Wife' ? "Wife's Death" : 'Emergency Assistance');
+                                setElevateDetails(`Emergency Intake Report: ${notif.title}. ${notif.description}`);
+                                setElevateAmount('20000');
+                              }}
+                              className={`font-bold text-xs py-1.5 px-4 h-auto flex items-center gap-1 ${
+                                isFamilyVerified
+                                  ? 'bg-[#ffd700] hover:bg-[#ffc700] text-[#001a16] cursor-pointer'
+                                  : 'bg-gray-800 text-gray-400 border border-gray-700 cursor-not-allowed opacity-50'
+                              }`}
+                              title={!isFamilyVerified ? "Requires Family Head verification prior to ticket elevation" : "Elevate to official Welfare Ticket"}
+                            >
+                              <ArrowUpRight className="w-4 h-4" /> Elevate to Official Ticket
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Ticket Elevation Modal */}
+              {elevatingNotif && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                  <div className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-2xl max-w-md w-full shadow-2xl space-y-4 text-left">
+                    <div className="flex justify-between items-center border-b border-[#ffd700]/20 pb-3">
+                      <h3 className="text-base font-bold text-[#ffd700] flex items-center gap-2">
+                        <ArrowUpRight className="w-5 h-5 text-[#ffd700]" />
+                        Elevate to Official Welfare Ticket
+                      </h3>
+                      <button onClick={() => setElevatingNotif(null)} className="text-gray-400 hover:text-white">
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="bg-[#001a16] p-3 rounded-lg border border-[#ffd700]/20 text-xs text-gray-300">
+                      <p className="font-bold text-white">{elevatingNotif.memberName} ({elevatingNotif.officialMemberId})</p>
+                      <p className="text-amber-400 mt-0.5">{elevatingNotif.title}</p>
+                    </div>
+
+                    <form onSubmit={handleConfirmElevate} className="space-y-3">
+                      <div>
+                        <label className="text-xs font-semibold text-gray-300 block mb-1">Package Category</label>
+                        <select
+                          value={elevateCategory}
+                          onChange={(e) => setElevateCategory(e.target.value)}
+                          className="w-full bg-[#001a16] border border-[#ffd700]/30 rounded p-2 text-xs text-white focus:outline-none focus:border-[#ffd700]"
+                        >
+                          {WELFARE_CATEGORIES.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-gray-300 block mb-1">Requested Amount (₦) [Max ₦50,000]</label>
+                        <Input
+                          type="number"
+                          placeholder="e.g. 20000"
+                          max={50000}
+                          value={elevateAmount}
+                          onChange={(e) => setElevateAmount(e.target.value)}
+                          className="bg-[#001a16] border-[#ffd700]/30 text-white font-mono text-xs"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-gray-300 block mb-1">Case Details / Audit Narrative</label>
+                        <textarea
+                          rows={3}
+                          value={elevateDetails}
+                          onChange={(e) => setElevateDetails(e.target.value)}
+                          className="w-full bg-[#001a16] border border-[#ffd700]/30 rounded p-2 text-xs text-white focus:outline-none focus:border-[#ffd700]"
+                          required
+                        />
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-2 border-t border-gray-800">
+                        <Button type="button" variant="outline" onClick={() => setElevatingNotif(null)} className="text-xs border-gray-600 text-gray-300">
+                          Cancel
+                        </Button>
+                        <Button type="submit" disabled={isElevating} className="bg-[#ffd700] text-[#001a16] font-bold text-xs hover:bg-[#ffc700]">
+                          {isElevating ? 'Elevating...' : 'Confirm Ticket Elevation'}
+                        </Button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
 
           <TabsContent value="announcements" className="space-y-6">
             <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-xl shadow-lg">

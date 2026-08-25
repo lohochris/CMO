@@ -11,9 +11,11 @@ import { uploadProfilePicture, isUuid, getMemberQueryField } from '../../utils/s
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { formatCurrency, formatDate, isAdministrativeId } from '../../utils/helpers';
 import { supabase } from '../../lib/supabaseClient';
-import { Member, Family, MemberStatus } from '../../types';
+import { Member, Family, MemberStatus, WelfareNotification } from '../../types';
+import { getAllWelfareNotifications, markNotificationRead } from '../../lib/welfareNotificationService';
 import { GeneralGalleryManager } from '../../app/components/gallery/GeneralGalleryManager';
 import { ChairmanAttendanceAnalyticsWidget } from '../../app/components/attendance/ChairmanAttendanceAnalyticsWidget';
+
 import { Heading } from '../../app/components/common/Heading';
 import { CMO_CONSTITUTION_2023 } from '../../config/cmoConstitution';
 
@@ -831,6 +833,42 @@ export const ChairmanDashboard = () => {
   const pendingTickets = welfareTickets.filter(t => t.status === 'Awaiting Financial Audit' || t.status === 'Pending');
   const unreadWelfareCount = welfareTickets.filter(ticket => !ticket.chairmanRead).length;
 
+  // ── Member Emergency & Welfare Incidents Intake State ──
+  const [chairmanIncidents, setChairmanIncidents] = useState<WelfareNotification[]>([]);
+
+  const fetchChairmanIncidents = async () => {
+    const notifs = await getAllWelfareNotifications();
+    setChairmanIncidents(notifs);
+  };
+
+  useEffect(() => {
+    fetchChairmanIncidents();
+    const notifChannel = supabase
+      .channel('welfare_notifications_chairman_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'welfare_notifications' }, () => {
+        fetchChairmanIncidents();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(notifChannel);
+    };
+  }, []);
+
+  const unreadIncidentCount = chairmanIncidents.filter(n => !n.chairmanRead).length;
+
+  const handleAcknowledgeIncident = async (id: string) => {
+    try {
+      await markNotificationRead(id, 'chairman');
+      fetchChairmanIncidents();
+      setSuccess('Emergency incident acknowledged by Executive Chairman.');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('Error acknowledging incident:', err);
+    }
+  };
+
+
   const acknowledgeTicket = async (ticketId: string) => {
     setError('');
     try {
@@ -1572,6 +1610,76 @@ export const ChairmanDashboard = () => {
                   </div>
                 </div>
               </Card>
+
+              {/* Card 3B: Executive Member Emergency Intake & Incident Overview Deck */}
+              <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-xl shadow-xl space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-4 border-b border-[#ffd700]/20 pb-4">
+                  <div className="flex items-center gap-3">
+                    <Heart className="w-6 h-6 text-[#ffd700]" />
+                    <div>
+                      <h3 className="text-xl font-bold text-[#ffd700]">Member Emergency Intake & Incident Deck</h3>
+                      <p className="text-xs text-gray-300 mt-0.5">Live emergency intakes, family head verification notes, and incident elevation statuses.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold">
+                      {unreadIncidentCount} Unread Incidents
+                    </span>
+                    <span className="text-xs px-3 py-1 rounded-full bg-[#ffd700]/10 text-[#ffd700] border border-[#ffd700]/30 font-mono">
+                      {chairmanIncidents.length} Total Incidents
+                    </span>
+                  </div>
+                </div>
+
+                {chairmanIncidents.length === 0 ? (
+                  <p className="text-gray-400 text-xs text-center py-6">No emergency intake incidents logged in the system.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {chairmanIncidents.map((notif) => (
+                      <div key={notif.id} className="bg-[#001a16] border border-[#ffd700]/20 rounded-xl p-4 flex flex-col justify-between space-y-3 shadow-md">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center flex-wrap gap-2">
+                            <span className="text-xs font-bold text-amber-400 uppercase">{notif.memberName} ({notif.officialMemberId})</span>
+                            <span className="text-xs text-gray-400">• {notif.cmoFamily} Family</span>
+                          </div>
+                          <div className="flex justify-between items-center flex-wrap gap-2">
+                            <h4 className="text-sm font-bold text-white">{notif.title}</h4>
+                            <span className="bg-[#ffd700]/15 text-[#ffd700] text-[10px] font-bold px-2 py-0.5 rounded border border-[#ffd700]/30">
+                              {notif.eventCategory}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-300 line-clamp-3">{notif.description}</p>
+                          {notif.familyHeadNotes && (
+                            <div className="p-2.5 bg-blue-950/40 border border-blue-500/30 rounded text-[11px] text-blue-200">
+                              <p className="font-bold text-blue-300 flex items-center gap-1">
+                                <ShieldCheck className="w-3.5 h-3.5" /> Family Head Verification:
+                              </p>
+                              <p className="italic">"{notif.familyHeadNotes}"</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="pt-2 border-t border-gray-800 flex justify-between items-center flex-wrap gap-2">
+                          <span className="text-[10px] text-gray-500 font-mono">Date: {notif.incidentDate}</span>
+                          {!notif.chairmanRead ? (
+                            <Button
+                              onClick={() => handleAcknowledgeIncident(notif.id)}
+                              className="bg-[#ffd700] text-[#001a16] hover:bg-[#ffc700] text-xs font-bold py-1 px-3 h-auto cursor-pointer"
+                            >
+                              Acknowledge Incident
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Acknowledged
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+
 
               {/* Fellowship Attendance Macro Metric Widget */}
               <Card className="bg-[#002520] border border-[#ffd700]/20 p-6 mb-6 rounded-xl shadow-lg relative overflow-hidden">

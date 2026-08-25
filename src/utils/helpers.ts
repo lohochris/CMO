@@ -4,8 +4,11 @@ export const calculateTotal = (items: Array<{ amount: number }>): number => {
   return items.reduce((sum, item) => sum + item.amount, 0);
 };
 
-export const formatCurrency = (amount: number): string => {
-  return `₦${amount.toLocaleString()}`;
+export const formatCurrency = (amount: number | string | null | undefined): string => {
+  if (amount === null || amount === undefined) return '₦0.00';
+  const numericVal = typeof amount === 'number' ? amount : Number(amount);
+  if (isNaN(numericVal)) return '₦0.00';
+  return `₦${numericVal.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 export const formatDate = (dateString: string): string => {
