@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import type { WeddingStatus, Family, Transaction, PaymentSubmission } from '../../types';
+import type { WeddingStatus, Family, Transaction, PaymentSubmission, WelfareNotification, WelfareEventCategory } from '../../types';
+import { createWelfareNotification, getMemberNotifications } from '../../lib/welfareNotificationService';
+
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
@@ -87,6 +89,80 @@ export const MemberDashboard = () => {
   const [isUploadingPayment, setIsUploadingPayment] = useState(false);
   const [paymentSubmissions, setPaymentSubmissions] = useState<PaymentSubmission[]>([]);
 
+  // ── Welfare Emergency Intake States ──
+  const [memberNotifications, setMemberNotifications] = useState<WelfareNotification[]>([]);
+  const [isReportWelfareModalOpen, setIsReportWelfareModalOpen] = useState(false);
+  const [intakeCategory, setIntakeCategory] = useState<WelfareEventCategory>('Health & Hospitalization');
+  const [intakeTitle, setIntakeTitle] = useState('');
+  const [intakeDescription, setIntakeDescription] = useState('');
+  const [intakeLocation, setIntakeLocation] = useState('');
+  const [intakeIncidentDate, setIntakeIncidentDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [isSubmittingIntake, setIsSubmittingIntake] = useState(false);
+
+  const fetchMemberWelfareNotifications = async () => {
+    if (!currentUser) return;
+    const officialMemberId = currentUser.official_member_id || undefined;
+    const memberId = currentUser.id || undefined;
+    const notifs = await getMemberNotifications(officialMemberId, memberId);
+    setMemberNotifications(notifs);
+  };
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    fetchMemberWelfareNotifications();
+
+    const notifChannel = supabase
+      .channel(`member-welfare-notifs-${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'welfare_notifications' },
+        () => { fetchMemberWelfareNotifications(); }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(notifChannel);
+    };
+  }, [currentUser?.id]);
+
+  const handleCreateWelfareIntake = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!intakeTitle.trim() || !intakeDescription.trim() || !intakeIncidentDate) {
+      toast.error('Please fill in title, description, and incident date.');
+      return;
+    }
+
+    setIsSubmittingIntake(true);
+    try {
+      const officialMemberId = currentUser?.official_member_id || '';
+      const memberId = currentUser?.id || '';
+      await createWelfareNotification({
+        officialMemberId: officialMemberId,
+        memberId: memberId,
+        memberName: currentUser?.full_name || currentUser?.name || 'Member',
+        cmoFamily: (currentUser?.family || currentUser?.cmo_family || 'Wisdom') as Family,
+        eventCategory: intakeCategory,
+        title: intakeTitle.trim(),
+        description: intakeDescription.trim(),
+        locationOrHospital: intakeLocation.trim() || undefined,
+        incidentDate: intakeIncidentDate,
+      });
+
+      toast.success('Welfare emergency intake report submitted successfully!');
+      setIsReportWelfareModalOpen(false);
+      setIntakeTitle('');
+      setIntakeDescription('');
+      setIntakeLocation('');
+      fetchMemberWelfareNotifications();
+    } catch (err: any) {
+      console.error('Failed to submit welfare intake:', err);
+      toast.error(`Submission failed: ${err.message}`);
+    } finally {
+      setIsSubmittingIntake(false);
+    }
+  };
+
+
   const handleViewReceipt = (submission: any) => {
     const isOnlinePaystack = 
       submission.receipt_url?.startsWith('PAYSTACK_INLINE_') || 
@@ -123,11 +199,14 @@ export const MemberDashboard = () => {
       const userCode = currentUser?.official_member_id || currentUser?.id;
       if (!userCode) return;
 
-      const { data } = await supabase
-        .from('members')
-        .select('id, official_member_id, full_name, phone_number, avatar_url, role, cmo_family')
-        .or(`official_member_id.eq.${userCode},id.eq.${userCode}`)
-        .maybeSingle();
+      const isUserCodeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userCode.trim());
+      let query = supabase.from('members').select('id, official_member_id, full_name, phone_number, avatar_url, role, cmo_family');
+      if (isUserCodeUuid) {
+        query = query.or(`official_member_id.eq.${userCode},id.eq.${userCode}`);
+      } else {
+        query = query.eq('official_member_id', userCode);
+      }
+      const { data } = await query.maybeSingle();
 
       if (data) {
         setMember(data);
@@ -302,10 +381,14 @@ export const MemberDashboard = () => {
       }
 
       // 2. Explicitly update database table public.members with avatar_url: storageUrl
-      const { error: dbError } = await supabase
-        .from('members')
-        .update({ avatar_url: storageUrl })
-        .or(`official_member_id.eq.${memberIdToUse},id.eq.${memberIdToUse}`);
+      const isMemberIdUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(memberIdToUse.trim());
+      let updateQuery = supabase.from('members').update({ avatar_url: storageUrl });
+      if (isMemberIdUuid) {
+        updateQuery = updateQuery.or(`official_member_id.eq.${memberIdToUse},id.eq.${memberIdToUse}`);
+      } else {
+        updateQuery = updateQuery.eq('official_member_id', memberIdToUse);
+      }
+      const { error: dbError } = await updateQuery;
 
       if (dbError) {
         console.warn('Database update notification:', dbError.message);
@@ -420,12 +503,15 @@ export const MemberDashboard = () => {
 
         // 1. Fetch direct member transactions in a try/catch block
         let userLogs: any[] = [];
+        const isMemberCodeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(memberCode.trim());
         try {
-          const { data: txs, error: txError } = await supabase
-            .from('transactions')
-            .select('*')
-            .or(`official_member_id.eq.${memberCode},member_id.eq.${memberCode},member_code.eq.${memberCode}`)
-            .order('created_at', { ascending: false });
+          let txQuery = supabase.from('transactions').select('*');
+          if (isMemberCodeUuid) {
+            txQuery = txQuery.or(`official_member_id.eq.${memberCode},member_id.eq.${memberCode}`);
+          } else {
+            txQuery = txQuery.eq('official_member_id', memberCode);
+          }
+          const { data: txs, error: txError } = await txQuery.order('created_at', { ascending: false });
 
           if (txError) {
             console.warn('Warning fetching member transactions:', txError);
@@ -439,11 +525,13 @@ export const MemberDashboard = () => {
         // 2. Fetch completed/settled/disbursed welfare tickets in a try/catch block
         let welfareLogs: any[] = [];
         try {
-          const { data: tickets, error: wErr } = await supabase
-            .from('welfare_tickets')
-            .select('*')
-            .or(`official_member_id.eq.${memberCode},member_id.eq.${memberCode},member_code.eq.${memberCode}`)
-            .in('status', ['Completed', 'Settled & Cleared', 'Approved', 'Disbursed']);
+          let wlfQuery = supabase.from('welfare_tickets').select('*');
+          if (isMemberCodeUuid) {
+            wlfQuery = wlfQuery.or(`official_member_id.eq.${memberCode},member_id.eq.${memberCode}`);
+          } else {
+            wlfQuery = wlfQuery.eq('official_member_id', memberCode);
+          }
+          const { data: tickets, error: wErr } = await wlfQuery.in('status', ['Completed', 'Settled & Cleared', 'Approved', 'Disbursed']);
 
           if (wErr) {
             console.warn('Warning fetching welfare tickets:', wErr);
@@ -1289,14 +1377,225 @@ export const MemberDashboard = () => {
                 <Users className="w-5 h-5" />
                 Enter My {currentUser.family?.replace(/\s*Family\s*/gi, '').trim()} Portal
               </Button>
-            ) : (
-              <div className="bg-[#001a16] border border-yellow-500/30 p-4 rounded-xl text-center text-sm text-gray-300">
-                You do not have an assigned family yet. Please edit your Profile Settings above to join a family.
-              </div>
-            )}
+            ) : null}
           </div>
         </Card>
       )}
+
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 2. activeTab === 'spiritual' Panel                            */}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {activeTab === 'spiritual' && (
+        <Card className="bg-[#002520] border-2 border-[#ffd700] p-6 md:p-8 space-y-6 rounded-2xl text-white">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[#ffd700]/20 pb-4">
+            <div>
+              <h3 className="text-xl font-bold text-[#ffd700] flex items-center gap-2">
+                <HeartHandshake className="w-6 h-6 text-amber-400" />
+                Spiritual & Welfare Emergency Desk
+              </h3>
+              <p className="text-xs text-gray-300 mt-1">
+                Report bereavement, illness, hospitalization, or distress incidents for family head verification and officer support.
+              </p>
+            </div>
+            <button
+              onClick={() => setIsReportWelfareModalOpen(true)}
+              className="bg-[#ffd700] hover:bg-[#ffc700] text-[#001a16] px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg transition-all shrink-0 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4" />
+              Report Welfare / Emergency
+            </button>
+          </div>
+
+          {/* Welfare Incident Notifications List */}
+          <div className="space-y-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-400" /> Your Reported Emergency & Welfare Incidents ({memberNotifications.length})
+            </h4>
+
+            {memberNotifications.length === 0 ? (
+              <div className="text-center py-12 bg-[#001a16] rounded-xl border border-emerald-900/40 p-6">
+                <HeartHandshake className="w-12 h-12 text-[#ffd700]/40 mx-auto mb-3" />
+                <p className="text-sm font-semibold text-gray-300">No welfare emergency incidents reported yet.</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Click the button above to report a life event (Bereavement, Illness, Child Birth, etc.) to your Family Head and Welfare Officer.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {memberNotifications.map((notif) => {
+                  let statusBadge = (
+                    <span className="px-2.5 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-full text-[10px] font-bold flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-amber-400" /> Submitted (Family Verification Pending)
+                    </span>
+                  );
+                  if (notif.status === 'Family_Verified') {
+                    statusBadge = (
+                      <span className="px-2.5 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-full text-[10px] font-bold flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-blue-400" /> Verified by Family Head
+                      </span>
+                    );
+                  } else if (notif.status === 'Elevated_To_Ticket') {
+                    statusBadge = (
+                      <span className="px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3 text-emerald-400" /> Elevated to Official Welfare Ticket ({notif.elevatedTicketId || 'Ticket'})
+                      </span>
+                    );
+                  } else if (notif.status === 'Resolved_Directly') {
+                    statusBadge = (
+                      <span className="px-2.5 py-0.5 bg-purple-500/10 text-purple-400 border border-purple-500/30 rounded-full text-[10px] font-bold flex items-center gap-1">
+                        ✓ Resolved Directly
+                      </span>
+                    );
+                  } else if (notif.status === 'Dismissed') {
+                    statusBadge = (
+                      <span className="px-2.5 py-0.5 bg-gray-500/10 text-gray-400 border border-gray-500/30 rounded-full text-[10px] font-bold flex items-center gap-1">
+                        Dismissed
+                      </span>
+                    );
+                  }
+
+                  return (
+                    <div key={notif.id} className="bg-[#001a16] border border-[#ffd700]/20 rounded-xl p-5 shadow-lg space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 pb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="bg-[#ffd700]/15 text-[#ffd700] text-xs font-bold px-2.5 py-1 rounded border border-[#ffd700]/30">
+                            {notif.eventCategory}
+                          </span>
+                          <span className="text-xs text-gray-400 font-mono">Date: {notif.incidentDate}</span>
+                        </div>
+                        {statusBadge}
+                      </div>
+
+                      <div>
+                        <h4 className="text-base font-bold text-white">{notif.title}</h4>
+                        <p className="text-xs text-gray-300 mt-1 leading-relaxed">{notif.description}</p>
+                        {notif.locationOrHospital && (
+                          <p className="text-xs text-amber-300 mt-1 flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5 shrink-0" /> Location / Hospital: {notif.locationOrHospital}
+                          </p>
+                        )}
+                      </div>
+
+                      {notif.familyHeadNotes && (
+                        <div className="p-3 bg-blue-950/30 border border-blue-500/30 rounded-lg text-xs text-blue-200">
+                          <p className="font-bold text-blue-300">Family Head Verification Note:</p>
+                          <p className="mt-0.5 italic">"{notif.familyHeadNotes}"</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Modal for Emergency Intake */}
+          {isReportWelfareModalOpen && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-2xl max-w-lg w-full shadow-2xl space-y-4">
+                <div className="flex justify-between items-center border-b border-[#ffd700]/20 pb-3">
+                  <h3 className="text-lg font-bold text-[#ffd700] flex items-center gap-2">
+                    <HeartHandshake className="w-5 h-5" />
+                    Report Welfare Emergency / Life Event
+                  </h3>
+                  <button
+                    onClick={() => setIsReportWelfareModalOpen(false)}
+                    className="text-gray-400 hover:text-white"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleCreateWelfareIntake} className="space-y-4 text-left">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-300 block mb-1">Event Category</label>
+                    <select
+                      value={intakeCategory}
+                      onChange={(e) => setIntakeCategory(e.target.value as WelfareEventCategory)}
+                      className="w-full bg-[#001a16] border border-[#ffd700]/30 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-[#ffd700]"
+                    >
+                      <option value="Health & Hospitalization">Health & Hospitalization</option>
+                      <option value="Loss of Wife">Loss of Wife</option>
+                      <option value="Loss of Child">Loss of Child</option>
+                      <option value="Loss of Parent">Loss of Parent</option>
+                      <option value="Child Birth">Child Birth</option>
+                      <option value="Member Distress">Member Distress</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-gray-300 block mb-1">Title / Subject</label>
+                    <Input
+                      placeholder="e.g., Emergency Admission at Aminu Kano Teaching Hospital"
+                      value={intakeTitle}
+                      onChange={(e) => setIntakeTitle(e.target.value)}
+                      className="bg-[#001a16] border-[#ffd700]/30 text-white text-xs"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-gray-300 block mb-1">Incident Date</label>
+                      <Input
+                        type="date"
+                        value={intakeIncidentDate}
+                        onChange={(e) => setIntakeIncidentDate(e.target.value)}
+                        className="bg-[#001a16] border-[#ffd700]/30 text-white text-xs"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-gray-300 block mb-1">Location / Hospital (Optional)</label>
+                      <Input
+                        placeholder="e.g., Ward 4B, AKTH Kano"
+                        value={intakeLocation}
+                        onChange={(e) => setIntakeLocation(e.target.value)}
+                        className="bg-[#001a16] border-[#ffd700]/30 text-white text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-gray-300 block mb-1">Detailed Description / Emergency Situation</label>
+                    <textarea
+                      rows={4}
+                      placeholder="Provide detailed information regarding the emergency or life event..."
+                      value={intakeDescription}
+                      onChange={(e) => setIntakeDescription(e.target.value)}
+                      className="w-full bg-[#001a16] border border-[#ffd700]/30 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-[#ffd700]"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-2 border-t border-gray-800">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsReportWelfareModalOpen(false)}
+                      className="border-gray-600 text-gray-300 text-xs"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={isSubmittingIntake}
+                      className="bg-[#ffd700] text-[#001a16] font-bold text-xs hover:bg-[#ffc700]"
+                    >
+                      {isSubmittingIntake ? 'Submitting...' : 'Submit Emergency Report'}
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+
 
       {/* ───────────────────────────────────────────────────────────── */}
       {/* 3. activeTab === 'sports' Panel                               */}

@@ -19,15 +19,15 @@ const INSTITUTIONAL_OFFICE_REGISTRY: Record<string, { role: string; name: string
   'HCC-CMO-EXEC-SEC': { role: 'secretary', name: 'Office of the General Secretariat', route: '/executive/secretary' },
   'HCC-CMO-EXEC-LT':  { role: 'liturgist', name: 'Liturgical Team Directorate', route: '/executive/liturgist' },
   
-  // Family Administrative Heads
-  'HCC-CMO-WIS-FH':   { role: 'family_head', name: 'Wisdom Family Secretariat', route: '/family/wisdom', family: 'Wisdom' },
-  'HCC-CMO-WIS-FS':   { role: 'family_secretary', name: 'Wisdom Family Secretariat', route: '/family/wisdom', family: 'Wisdom' },
-  'HCC-CMO-TAL-FH':   { role: 'family_head', name: 'Talent Family Secretariat', route: '/family/talent', family: 'Talent' },
-  'HCC-CMO-TAL-FS':   { role: 'family_secretary', name: 'Talent Family Secretariat', route: '/family/talent', family: 'Talent' },
-  'HCC-CMO-HON-FH':   { role: 'family_head', name: 'Honour Family Secretariat', route: '/family/honour', family: 'Honour' },
-  'HCC-CMO-HON-FS':   { role: 'family_secretary', name: 'Honour Family Secretariat', route: '/family/honour', family: 'Honour' },
-  'HCC-CMO-INT-FH':   { role: 'family_head', name: 'Integrity Family Secretariat', route: '/family/integrity', family: 'Integrity' },
-  'HCC-CMO-INT-FS':   { role: 'family_secretary', name: 'Integrity Family Secretariat', route: '/family/integrity', family: 'Integrity' },
+  // Family Administrative Heads & Secretaries
+  'HCC-CMO-WIS-FH':   { role: 'family_head', name: 'Wisdom Family Head', route: 'familyChairman', family: 'Wisdom' },
+  'HCC-CMO-WIS-FS':   { role: 'family_secretary', name: 'Wisdom Family Secretary', route: 'familySecretary', family: 'Wisdom' },
+  'HCC-CMO-TAL-FH':   { role: 'family_head', name: 'Talent Family Head', route: 'familyChairman', family: 'Talent' },
+  'HCC-CMO-TAL-FS':   { role: 'family_secretary', name: 'Talent Family Secretary', route: 'familySecretary', family: 'Talent' },
+  'HCC-CMO-HON-FH':   { role: 'family_head', name: 'Honour Family Head', route: 'familyChairman', family: 'Honour' },
+  'HCC-CMO-HON-FS':   { role: 'family_secretary', name: 'Honour Family Secretary', route: 'familySecretary', family: 'Honour' },
+  'HCC-CMO-INT-FH':   { role: 'family_head', name: 'Integrity Family Head', route: 'familyChairman', family: 'Integrity' },
+  'HCC-CMO-INT-FS':   { role: 'family_secretary', name: 'Integrity Family Secretary', route: 'familySecretary', family: 'Integrity' },
   
   // Sports Directorate
   'HCC-CMO-SPRT-DIR': { role: 'sports_director', name: 'Sports Directorate', route: '/sports/admin' },
@@ -54,6 +54,8 @@ export const Login: React.FC = () => {
     else if (cleanPath === 'executive/provost') cleanPath = 'provost';
     else if (cleanPath === 'executive/liturgist' || cleanPath === 'executive/liturgy') cleanPath = 'liturgist';
     else if (cleanPath === 'sports/admin') cleanPath = 'sports-admin';
+    else if (cleanPath.startsWith('family/') && cleanPath.endsWith('fh')) cleanPath = 'familyChairman';
+    else if (cleanPath.startsWith('family/') && cleanPath.endsWith('fs')) cleanPath = 'familySecretary';
     
     setCurrentPage(cleanPath as any);
   };
@@ -81,16 +83,21 @@ export const Login: React.FC = () => {
         return;
       }
 
+      const activeFamily = office.family || 'Central Executive';
       const execSession = {
         id: cleanId,
         official_member_id: cleanId,
         full_name: office.name,
         role: office.role,
-        family: office.family || 'Central Executive',
-        cmo_family: office.family || 'Central Executive',
+        family: activeFamily,
+        cmo_family: activeFamily,
         is_executive: true,
         is_executive_office: true,
       };
+
+      if (office.family && setSelectedFamily) {
+        setSelectedFamily(office.family as any);
+      }
 
       // Persist clean session
       sessionStorage.setItem('cmo_auth_member_id', cleanId);

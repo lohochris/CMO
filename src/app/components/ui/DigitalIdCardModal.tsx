@@ -94,7 +94,7 @@ export const DigitalIdCardModal: React.FC<DigitalIdCardModalProps> = ({
 
   const memberCode = member.official_member_id?.trim() || (member as any)?.member_id || 'HCC-CMO-26-003';
   const cleanId = (memberCode || 'MEMBER').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin.replace(/\/$/, '') : 'https://cmo-eta.vercel.app';
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin.replace(/\/$/, '') : (import.meta.env.VITE_PUBLIC_SITE_URL || 'https://www.holycrosscmobadawa.org');
   const canonicalVerifyUrl = `${baseUrl}/verify?id=${encodeURIComponent(memberCode.trim())}`;
 
   const handleDownloadPNG = async () => {

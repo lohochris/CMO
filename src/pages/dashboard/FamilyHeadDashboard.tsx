@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { supabase } from '../../lib/supabaseClient';
-import { Member, Family, FamilyExpense, FamilyTransaction, FamilyAnnouncement } from '../../types';
+import { Member, Family, FamilyExpense, FamilyTransaction, FamilyAnnouncement, WelfareNotification } from '../../types';
+import { getFamilyNotifications, verifyByFamilyHead } from '../../lib/welfareNotificationService';
 import { Card } from '../../app/components/ui/card';
 import { Button } from '../../app/components/ui/button';
 import { Input } from '../../app/components/ui/input';
@@ -9,7 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
 import { Heading } from '../../app/components/common/Heading';
 import { toast } from 'sonner';
-import { Users, CalendarCheck, HeartPulse, Send, MessageSquare, Shield, PhoneCall, HeartHandshake, ClipboardList, BookOpen, TrendingUp, Receipt, DollarSign, Printer, Megaphone } from 'lucide-react';
+import { Users, CalendarCheck, HeartPulse, Send, MessageSquare, Shield, PhoneCall, HeartHandshake, ClipboardList, BookOpen, TrendingUp, Receipt, DollarSign, Printer, Megaphone, CheckCircle2, Clock, MapPin, Sparkles, X } from 'lucide-react';
+
 import { ProfilePictureUploader } from '../../app/components/common/ProfilePictureUploader';
 import { uploadProfilePicture } from '../../utils/supabaseHelpers';
 import { calculateTotal, formatCurrency, formatDate, getCombinedTransactions, formatDateTime } from '../../utils/helpers';
@@ -435,9 +437,59 @@ export default function FamilyHeadDashboard() {
     }
   };
 
+  // ── Family Welfare Incident Intake Desk State ──
+  const [familyNotifications, setFamilyNotifications] = useState<WelfareNotification[]>([]);
+  const [selectedNotifForVerify, setSelectedNotifForVerify] = useState<WelfareNotification | null>(null);
+  const [verificationNotes, setVerificationNotes] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  const fetchFamilyNotifications = async () => {
+    if (!activeFamilyUnit) return;
+    const notifs = await getFamilyNotifications(activeFamilyUnit);
+    setFamilyNotifications(notifs);
+  };
+
+  useEffect(() => {
+    fetchFamilyNotifications();
+    const notifChannel = supabase
+      .channel('welfare_notifications_family_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'welfare_notifications' }, () => {
+        fetchFamilyNotifications();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(notifChannel);
+    };
+  }, [activeFamilyUnit]);
+
+  const handleVerifyNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedNotifForVerify) return;
+    if (!verificationNotes.trim()) {
+      toast.error('Please enter a verification note.');
+      return;
+    }
+
+    setIsVerifying(true);
+    try {
+      await verifyByFamilyHead(selectedNotifForVerify.id, verificationNotes.trim());
+      toast.success('Incident verified by Family Head successfully!');
+      setSelectedNotifForVerify(null);
+      setVerificationNotes('');
+      fetchFamilyNotifications();
+    } catch (err: any) {
+      console.error('Error verifying incident:', err);
+      toast.error(`Verification failed: ${err.message}`);
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, [activeFamilyUnit, currentUser]);
+
 
   // Calculations
   const activeMembers = familyMembers.filter(m => m.status !== 'Deceased' && m.status !== 'Rejected' && m.status !== 'Pending');
@@ -1015,7 +1067,7 @@ export default function FamilyHeadDashboard() {
                               <a href={`sms:${m.phone_number}`} className="bg-purple-600 hover:bg-purple-700 text-white p-2 rounded-lg flex items-center justify-center transition-colors" title="Send SMS">
                                 <Send className="w-4 h-4" />
                               </a>
-                              <a href={`https://wa.me/${m.phone_number.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg flex items-center justify-center transition-colors" title="WhatsApp chat">
+                              <a href={`https://wa.me/${(m.phone_number || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg flex items-center justify-center transition-colors" title="WhatsApp chat">
                                 <MessageSquare className="w-4 h-4" />
                               </a>
                             </>
@@ -1059,9 +1111,9 @@ export default function FamilyHeadDashboard() {
                       {filteredRoster.length > 0 ? (
                         filteredRoster.map((member) => (
                           <tr key={member.id} className="border-b border-[#ffd700]/5 hover:bg-[#001a16]/40 transition-colors">
-                            <td className="py-4 px-4 font-bold text-white uppercase">{member.name}</td>
+                            <td className="py-4 px-4 font-bold text-white uppercase">{member.name || 'N/A'}</td>
                             <td className="py-4 px-4 font-mono text-gray-300">{member.official_member_id || 'Pending'}</td>
-                            <td className="py-4 px-4 text-xs text-gray-400 uppercase">{member.role.replace('_', ' ')}</td>
+                            <td className="py-4 px-4 text-xs text-gray-400 uppercase">{(member.role || '').replace(/_/g, ' ') || 'N/A'}</td>
                             <td className="py-4 px-4">
                               <span className={`px-2 py-1 rounded text-xs font-semibold ${
                                 member.status === 'Active' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
@@ -1108,7 +1160,118 @@ export default function FamilyHeadDashboard() {
 
             {/* TAB 2: WELFARE & DISBURSEMENT */}
             <TabsContent value="welfare" className="space-y-6">
+              {/* Family Welfare Incident Desk (Member Intake Reports) */}
+              <Card className="bg-[#002520] border-2 border-[#ffd700]/30 p-6 rounded-xl shadow-xl space-y-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[#ffd700]/20 pb-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-[#ffd700] flex items-center gap-2">
+                      <HeartHandshake className="w-6 h-6 text-amber-400" />
+                      Family Welfare Incident Desk ({familyDisplayName})
+                    </h3>
+                    <p className="text-xs text-gray-300 mt-1">
+                      Review emergency and life event notifications reported by members of {familyDisplayName} Family Unit. Add verification notes to confirm incident validity for the Welfare Officer.
+                    </p>
+                  </div>
+                  <span className="bg-[#ffd700]/10 text-[#ffd700] border border-[#ffd700]/30 px-3 py-1 rounded-full text-xs font-bold shrink-0">
+                    {familyNotifications.filter(n => n.status === 'Submitted').length} Unverified Incidents
+                  </span>
+                </div>
+
+                {familyNotifications.length === 0 ? (
+                  <p className="text-gray-400 text-xs text-center py-6">No welfare emergency notifications reported for {familyDisplayName} Family Unit.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {familyNotifications.map((notif) => (
+                      <div key={notif.id} className="bg-[#001a16] border border-[#ffd700]/20 rounded-xl p-4 flex flex-col justify-between space-y-3 shadow-md">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center flex-wrap gap-2">
+                            <span className="text-xs font-bold text-amber-400 uppercase">{notif.memberName || 'Member'} ({notif.officialMemberId || 'N/A'})</span>
+                            {notif.status === 'Submitted' ? (
+                              <span className="px-2 py-0.5 bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 rounded text-[10px] font-bold">
+                                Awaiting Verification
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded text-[10px] font-bold">
+                                {(notif.status || '').replace(/_/g, ' ') || 'N/A'}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm font-bold text-white">{notif.title}</p>
+                          <p className="text-xs text-gray-300 line-clamp-3">{notif.description}</p>
+                          {notif.locationOrHospital && (
+                            <p className="text-[11px] text-amber-300 flex items-center gap-1">
+                              <MapPin className="w-3 h-3 shrink-0" /> Location: {notif.locationOrHospital}
+                            </p>
+                          )}
+                          {notif.familyHeadNotes && (
+                            <div className="p-2.5 bg-blue-950/40 border border-blue-500/30 rounded text-[11px] text-blue-200">
+                              <p className="font-bold text-blue-300">Your Verification Note:</p>
+                              <p className="italic">"{notif.familyHeadNotes}"</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="pt-2 border-t border-gray-800 flex justify-between items-center">
+                          <span className="text-[10px] text-gray-500 font-mono">Date: {notif.incidentDate}</span>
+                          {notif.status === 'Submitted' && (
+                            <Button
+                              onClick={() => {
+                                setSelectedNotifForVerify(notif);
+                                setVerificationNotes('');
+                              }}
+                              className="bg-[#ffd700] hover:bg-[#ffc700] text-[#001a16] font-bold text-xs py-1 px-3 h-auto cursor-pointer"
+                            >
+                              Add Verification Note
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Verification Modal */}
+                {selectedNotifForVerify && (
+                  <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-[#002520] border-2 border-[#ffd700] p-6 rounded-2xl max-w-md w-full shadow-2xl space-y-4">
+                      <div className="flex justify-between items-center border-b border-[#ffd700]/20 pb-3">
+                        <h3 className="text-base font-bold text-[#ffd700]">Verify Family Incident</h3>
+                        <button onClick={() => setSelectedNotifForVerify(null)} className="text-gray-400 hover:text-white">
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-300 font-bold">{selectedNotifForVerify.memberName} — {selectedNotifForVerify.title}</p>
+                        <p className="text-xs text-gray-400 mt-1">{selectedNotifForVerify.description}</p>
+                      </div>
+                      <form onSubmit={handleVerifyNotification} className="space-y-3">
+                        <div>
+                          <label className="text-xs font-semibold text-gray-300 block mb-1">Family Head Verification Note</label>
+                          <textarea
+                            rows={3}
+                            placeholder="Enter verification notes (e.g., Confirmed hospital admission / Visited member's family home)..."
+                            value={verificationNotes}
+                            onChange={(e) => setVerificationNotes(e.target.value)}
+                            className="w-full bg-[#001a16] border border-[#ffd700]/30 rounded p-2 text-xs text-white focus:outline-none focus:border-[#ffd700]"
+                            required
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2 pt-2">
+                          <Button type="button" variant="outline" onClick={() => setSelectedNotifForVerify(null)} className="text-xs border-gray-600 text-gray-300">
+                            Cancel
+                          </Button>
+                          <Button type="submit" disabled={isVerifying} className="bg-[#ffd700] text-[#001a16] font-bold text-xs hover:bg-[#ffc700]">
+                            {isVerifying ? 'Verifying...' : 'Confirm Verification'}
+                          </Button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+              </Card>
+
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
                 {/* Welfare Case Tracker */}
                 <div className="lg:col-span-2 bg-[#002520] border border-[#ffd700]/10 rounded-xl p-6 shadow-lg">
                   <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-6">
@@ -1133,8 +1296,8 @@ export default function FamilyHeadDashboard() {
                             const isSettled = ticket.status === 'Settled & Cleared' || ticket.status === 'Approved' || ticket.status === 'Completed';
                             return (
                               <tr key={tId} className="border-b border-[#ffd700]/5 hover:bg-[#001a16]/40 transition-colors">
-                                <td className="py-4 px-4 font-bold text-white uppercase">{ticket.member_name}</td>
-                                <td className="py-4 px-4 text-gray-300">{ticket.category}</td>
+                                <td className="py-4 px-4 font-bold text-white uppercase">{ticket.member_name || 'N/A'}</td>
+                                <td className="py-4 px-4 text-gray-300">{(ticket.category || '').replace(/_/g, ' ') || 'N/A'}</td>
                                 <td className="py-4 px-4 text-[#ffd700] font-mono">₦{(ticket.requested_amount || ticket.amount || 0).toLocaleString()}</td>
                                 <td className="py-4 px-4">
                                   <span className={`px-2 py-1 rounded text-xs font-semibold ${

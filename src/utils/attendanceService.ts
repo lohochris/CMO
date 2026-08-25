@@ -41,25 +41,37 @@ export async function fetchPendingExcuses(): Promise<AttendanceRecord[]> {
   }
 }
 
+const isUuid = (val?: string | null): boolean =>
+  Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim()));
+
 export async function upsertAttendanceRecord(record: Partial<AttendanceRecord>): Promise<{ success: boolean; error?: string }> {
   try {
-    if (!record.meeting_date || !record.member_id) {
+    if (!record.meeting_date || (!record.member_id && !record.official_member_id)) {
       return { success: false, error: 'Meeting date and Member ID are required' };
     }
 
+    const isMemberUuid = isUuid(record.member_id);
+    const targetOfficialId = record.official_member_id || record.member_id || '';
+
     // Check if record exists for this date + member
-    const { data: existing } = await supabase
+    let checkQuery = supabase
       .from('cmo_attendance_and_excuses')
       .select('id, status, fine_amount')
-      .eq('meeting_date', record.meeting_date)
-      .eq('member_id', record.member_id)
-      .maybeSingle();
+      .eq('meeting_date', record.meeting_date);
+
+    if (isMemberUuid) {
+      checkQuery = checkQuery.eq('member_id', record.member_id);
+    } else {
+      checkQuery = checkQuery.eq('official_member_id', targetOfficialId);
+    }
+
+    const { data: existing } = await checkQuery.maybeSingle();
 
     const payload: any = {
       meeting_date: record.meeting_date,
       meeting_title: record.meeting_title || 'Monthly General Meeting',
-      member_id: record.member_id,
-      official_member_id: record.official_member_id || record.member_id,
+      member_id: isMemberUuid ? record.member_id : null,
+      official_member_id: targetOfficialId,
       member_name: record.member_name || 'Member',
       status: record.status || 'Present',
       fine_amount: record.fine_amount ?? 0,
@@ -91,7 +103,6 @@ export async function upsertAttendanceRecord(record: Partial<AttendanceRecord>):
     }
 
     // Pipeline Hook: Synchronize Attendance Fine into Fines Escrow Ledger (public.transactions)
-    const targetOfficialId = record.official_member_id || record.member_id;
     const purposeTag = `Provost Fine: Attendance (${record.meeting_date})`;
 
     if (record.fine_amount && record.fine_amount > 0) {
@@ -299,21 +310,30 @@ export async function createCmoNotification(params: {
 export async function fetchMemberNotifications(memberId: string, officialMemberId?: string): Promise<CmoNotification[]> {
   try {
     const targetId = officialMemberId || memberId;
-    const { data, error } = await supabase
-      .from('cmo_notifications')
-      .select('*')
-      .or(`member_id.eq.${memberId},official_member_id.eq.${targetId}`)
+    const isMemberUuid = isUuid(memberId);
+
+    let query = supabase.from('cmo_notifications').select('*');
+    if (isMemberUuid) {
+      query = query.or(`member_id.eq.${memberId},official_member_id.eq.${targetId}`);
+    } else {
+      query = query.eq('official_member_id', targetId);
+    }
+
+    const { data, error } = await query
       .order('created_at', { ascending: false })
       .limit(30);
 
     if (error) {
       console.warn('cmo_notifications primary query warning:', error.message);
 
-      // Fallback 1: Query by member_id
-      const { data: fb1, error: err1 } = await supabase
-        .from('cmo_notifications')
-        .select('*')
-        .eq('member_id', memberId)
+      // Fallback 1: Query by member_id or official_member_id
+      let fb1Query = supabase.from('cmo_notifications').select('*');
+      if (isMemberUuid) {
+        fb1Query = fb1Query.eq('member_id', memberId);
+      } else {
+        fb1Query = fb1Query.eq('official_member_id', targetId);
+      }
+      const { data: fb1, error: err1 } = await fb1Query
         .order('created_at', { ascending: false })
         .limit(30);
 

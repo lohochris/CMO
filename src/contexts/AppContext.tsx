@@ -290,22 +290,36 @@ const dbToWelfareTicket = (t: any, membersList?: Member[]): WelfareTicket => {
   };
 };
 
-const welfareTicketToDb = (t: WelfareTicket): any => {
-  const payload: any = {
-    official_member_id: t.memberId,
-    member_name: t.memberName,
-    category: t.category,
-    requested_amount: t.requestedAmount,
-    reason_details: t.reasonDetails || '',
-    decline_reason: t.declineReason || '',
-    chairman_read: t.chairmanRead !== undefined ? t.chairmanRead : false,
-    status: t.status,
-    notes: t.notes || null
+export const welfareTicketToDb = (ticket: any, membersList: any[] = []) => {
+  const rawId = ticket.memberId || ticket.member_id;
+  const rawOfficialId = ticket.officialMemberId || ticket.official_member_id;
+
+  const matchedMember = membersList.find(
+    m => m.id === rawId || 
+         m.official_member_id === rawId || 
+         m.official_member_id === rawOfficialId
+  );
+
+  const resolvedMemberId = matchedMember ? matchedMember.id : rawId;
+  const resolvedOfficialId = matchedMember?.official_member_id || rawOfficialId || (membersList[0]?.official_member_id ?? 'HCC-CMO-26-001');
+  const resolvedMemberName = matchedMember?.full_name || ticket.memberName || ticket.member_name || 'CMO Member';
+
+  return {
+    ticket_id: String(ticket.ticketId || ticket.ticket_id),
+    member_id: resolvedMemberId,
+    official_member_id: resolvedOfficialId,
+    member_name: resolvedMemberName,
+    category: ticket.category || 'General Welfare',
+    requested_amount: Number(ticket.requestedAmount || ticket.requested_amount || 0),
+    reason_details: ticket.reasonDetails || ticket.reason_details || '',
+    decline_reason: ticket.declineReason || ticket.decline_reason || null,
+    notes: ticket.notes || null,
+    status: ticket.status || 'Pending',
+    chairman_read: Boolean(ticket.chairmanRead ?? ticket.chairman_read ?? false),
+    created_at: ticket.createdAt || ticket.created_at || new Date().toISOString(),
+    approved_at: ticket.approvedAt || ticket.approved_at || null,
+    settled_at: ticket.settledAt || ticket.settled_at || null,
   };
-  if (t.ticketId && t.ticketId.includes('-') && t.ticketId.length > 15) {
-    payload.ticket_id = t.ticketId;
-  }
-  return payload;
 };
 
 const dbToExpense = (e: any): Expense => ({
@@ -847,22 +861,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const targetKey = sessionKey || (savedUserStr ? JSON.parse(savedUserStr).id || JSON.parse(savedUserStr).official_member_id : null);
 
         if (targetKey) {
+          const isKeyUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetKey.trim());
           // Check cmo_executives partition directly
-          const { data: execData } = await supabase
-            .from('cmo_executives')
-            .select('*')
-            .or(`executive_id.eq.${targetKey},id.eq.${targetKey}`)
-            .maybeSingle();
+          let execQuery = supabase.from('cmo_executives').select('*');
+          if (isKeyUuid) {
+            execQuery = execQuery.or(`executive_id.eq.${targetKey},id.eq.${targetKey}`);
+          } else {
+            execQuery = execQuery.or(`executive_id.eq.${targetKey},official_member_id.eq.${targetKey}`);
+          }
+          const { data: execData } = await execQuery.maybeSingle();
 
           if (execData) {
             setCurrentUser(dbToExecutive(execData));
           } else {
             // Check public.members partition directly for general registry
-            const { data: memberData } = await supabase
-              .from('members')
-              .select('*')
-              .or(`official_member_id.eq.${targetKey},id.eq.${targetKey}`)
-              .maybeSingle();
+            let memberQuery = supabase.from('members').select('*');
+            if (isKeyUuid) {
+              memberQuery = memberQuery.or(`official_member_id.eq.${targetKey},id.eq.${targetKey}`);
+            } else {
+              memberQuery = memberQuery.eq('official_member_id', targetKey);
+            }
+            const { data: memberData } = await memberQuery.maybeSingle();
 
             if (memberData) {
               setCurrentUser(dbToMember(memberData));
@@ -1150,13 +1169,101 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, []);
 
+  const isValidUuid = (val: any): boolean => {
+    if (typeof val !== 'string') return false;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+  };
+
+  const resolveMemberUuidAndOfficialId = async (
+    rawMemberId: string,
+    rawOfficialId?: string,
+    currentMembers: any[] = []
+  ): Promise<{ uuid: string | null; officialId: string }> => {
+    // Case A: rawMemberId is already a valid UUID
+    if (isValidUuid(rawMemberId)) {
+      const matched = currentMembers.find(m => m.id === rawMemberId);
+      return {
+        uuid: rawMemberId,
+        officialId: rawOfficialId || matched?.official_member_id || ''
+      };
+    }
+
+    // Case B: Look up by official_member_id in loaded state
+    const searchId = rawOfficialId || rawMemberId;
+    const localMatch = currentMembers.find(
+      m => m.official_member_id === searchId || m.official_member_id === rawMemberId
+    );
+
+    if (localMatch && isValidUuid(localMatch.id)) {
+      return { uuid: localMatch.id, officialId: localMatch.official_member_id };
+    }
+
+    // Case C: Direct lookup from Supabase members table
+    try {
+      const { data: dbMember } = await supabase
+        .from('members')
+        .select('id, official_member_id')
+        .or(`official_member_id.eq.${searchId},official_member_id.eq.${rawMemberId}`)
+        .maybeSingle();
+
+      if (dbMember && isValidUuid(dbMember.id)) {
+        return { uuid: dbMember.id, officialId: dbMember.official_member_id };
+      }
+    } catch (err) {
+      console.warn('[WelfareSync] Member lookup query failed:', err);
+    }
+
+    return { uuid: null, officialId: searchId };
+  };
+
+  const syncWelfareTicketToSupabase = async (ticket: any) => {
+    try {
+      const rawId = ticket.memberId || ticket.member_id;
+      const rawOfficial = ticket.officialMemberId || ticket.official_member_id;
+
+      const { uuid, officialId } = await resolveMemberUuidAndOfficialId(rawId, rawOfficial, membersRef.current || members);
+
+      // If UUID cannot be resolved, DO NOT fire the network request to prevent 22P02 loops
+      if (!uuid) {
+        console.warn(`[WelfareSync] Skipped sync for ticket ${ticket.ticketId || ticket.ticket_id}: Could not resolve UUID for "${rawId}".`);
+        return;
+      }
+
+      const payload = {
+        ticket_id: String(ticket.ticketId || ticket.ticket_id),
+        member_id: uuid,
+        official_member_id: officialId,
+        member_name: ticket.memberName || ticket.member_name || 'CMO Member',
+        category: ticket.category || 'General Welfare',
+        requested_amount: Number(ticket.requestedAmount || ticket.requested_amount || 0),
+        reason_details: ticket.reasonDetails || ticket.reason_details || '',
+        decline_reason: ticket.declineReason || ticket.decline_reason || null,
+        notes: ticket.notes || null,
+        status: ticket.status || 'Pending',
+        chairman_read: Boolean(ticket.chairmanRead ?? ticket.chairman_read ?? false),
+        created_at: ticket.createdAt || ticket.created_at || new Date().toISOString(),
+        approved_at: ticket.approvedAt || ticket.approved_at || null,
+        settled_at: ticket.settledAt || ticket.settled_at || null,
+      };
+
+      const { error } = await supabase
+        .from('welfare_tickets')
+        .upsert(payload, { onConflict: 'ticket_id' });
+
+      if (error) {
+        console.error('Failed to sync welfare ticket to Supabase:', error);
+      }
+    } catch (err) {
+      console.error('Exception syncing welfare ticket:', err);
+    }
+  };
+
   const setWelfareTickets = useCallback(async (newTickets: WelfareTicket[] | ((prev: WelfareTicket[]) => WelfareTicket[])) => {
     const next = typeof newTickets === 'function' ? newTickets(welfareTicketsRef.current) : newTickets;
     setWelfareTicketsState(next);
 
     for (const t of next) {
-      const { error: syncErr } = await supabase.from('welfare_tickets').upsert(welfareTicketToDb(t));
-      if (syncErr) console.error('Failed to sync welfare ticket to Supabase:', syncErr);
+      await syncWelfareTicketToSupabase(t);
     }
   }, []);
 

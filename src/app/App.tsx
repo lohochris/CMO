@@ -397,7 +397,7 @@ function AppContent() {
         return <LiturgistDashboard />;
       }
 
-      if (currentPage === 'familyChairman') {
+      if (currentPage === 'familyChairman' || (currentPage.toLowerCase().includes('family') && currentPage.toLowerCase().includes('chairman'))) {
         if (!['family_chairman', 'family_head', 'chairman', 'cmo_chairman', 'super_admin', 'executive'].includes(userRole)) {
           setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold clearance for Family Head Portal.`);
           setTimeout(() => setCurrentPage('dashboard'), 10);
@@ -406,7 +406,7 @@ function AppContent() {
         return <FamilyHeadDashboard />;
       }
 
-      if (currentPage === 'familySecretary') {
+      if (currentPage === 'familySecretary' || (currentPage.toLowerCase().includes('family') && currentPage.toLowerCase().includes('secretary'))) {
         if (!['family_secretary', 'family_sec', 'gen_sec', 'secretary', 'super_admin', 'executive'].includes(userRole)) {
           setError(`Access Denied: You (${currentUser.full_name || 'Member'}) do not hold clearance for Family Secretary Portal.`);
           setTimeout(() => setCurrentPage('dashboard'), 10);
@@ -475,8 +475,8 @@ function AppContent() {
       return <SportsHub />;
     }
     if (currentPage === 'familyHub') return <FamilyHub />;
-    if ((currentPage as string) === 'familyChairman' || currentPage === 'familyWisdomChairman' || currentPage === 'familyHonourChairman' || currentPage === 'familyIntegrityChairman' || currentPage === 'familyTalentChairman') return <FamilyHeadDashboard />;
-    if ((currentPage as string) === 'familySecretary' || currentPage === 'familyWisdomSecretary' || currentPage === 'familyHonourSecretary' || currentPage === 'familyIntegritySecretary' || currentPage === 'familyTalentSecretary') return <FamilySecDashboard />;
+    if (currentPage.toLowerCase().includes('family') && currentPage.toLowerCase().includes('chairman')) return <FamilyHeadDashboard />;
+    if (currentPage.toLowerCase().includes('family') && currentPage.toLowerCase().includes('secretary')) return <FamilySecDashboard />;
 
     if (currentPage === 'publicGallery') return <PublicGallery />;
 

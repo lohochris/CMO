@@ -94,13 +94,31 @@ export const FamilyHub = () => {
       const { family, mode } = selectedFamilyForAuth;
       const cleanId = inputCredential.toUpperCase().trim();
 
-      const ADMIN_ALIAS_REGISTRY: Record<string, { role: string; name: string }> = {
-        'FAMILY-HEAD-2026': { role: 'family_head', name: `${family} Family Head` },
-        'FAMILY-HEAD':      { role: 'family_head', name: `${family} Family Head` },
-        'FAMILY-SEC-2026':  { role: 'family_secretary', name: `${family} Family Secretary` },
-        'FAMILY-SEC':       { role: 'family_secretary', name: `${family} Family Secretary` },
-        'CMO-CHAIRMAN-2026': { role: 'cmo_chairman', name: 'STANLEY UKAH' },
-        'SECRETARY-2026':    { role: 'gen_sec', name: 'PETER ALLEH' }
+      const ADMIN_ALIAS_REGISTRY: Record<string, { role: string; name: string; family: Family }> = {
+        // Generic aliases
+        'FAMILY-HEAD':      { role: 'family_head', name: `${family} Family Head`, family },
+        'FAMILY-HEAD-2026': { role: 'family_head', name: `${family} Family Head`, family },
+        'FAMILY-SEC':       { role: 'family_secretary', name: `${family} Family Secretary`, family },
+        'FAMILY-SEC-2026':  { role: 'family_secretary', name: `${family} Family Secretary`, family },
+
+        // Wisdom Family
+        'HCC-CMO-WIS-FH':   { role: 'family_head', name: 'Wisdom Family Head', family: 'Wisdom' },
+        'HCC-CMO-WIS-FS':   { role: 'family_secretary', name: 'Wisdom Family Secretary', family: 'Wisdom' },
+
+        // Talent Family
+        'HCC-CMO-TAL-FH':   { role: 'family_head', name: 'Talent Family Head', family: 'Talent' },
+        'HCC-CMO-TAL-FS':   { role: 'family_secretary', name: 'Talent Family Secretary', family: 'Talent' },
+
+        // Honour Family
+        'HCC-CMO-HON-FH':   { role: 'family_head', name: 'Honour Family Head', family: 'Honour' },
+        'HCC-CMO-HON-FS':   { role: 'family_secretary', name: 'Honour Family Secretary', family: 'Honour' },
+
+        // Integrity Family
+        'HCC-CMO-INT-FH':   { role: 'family_head', name: 'Integrity Family Head', family: 'Integrity' },
+        'HCC-CMO-INT-FS':   { role: 'family_secretary', name: 'Integrity Family Secretary', family: 'Integrity' },
+
+        'CMO-CHAIRMAN-2026': { role: 'cmo_chairman', name: 'STANLEY UKAH', family },
+        'SECRETARY-2026':    { role: 'gen_sec', name: 'PETER ALLEH', family }
       };
 
       let fetchedMember: { id: string; official_member_id?: string; full_name?: string; role?: string; family?: string } | null = null;
@@ -120,11 +138,13 @@ export const FamilyHub = () => {
           family: memberData.cmo_family || undefined
         };
       } else if (cleanId in ADMIN_ALIAS_REGISTRY) {
+        const aliasObj = ADMIN_ALIAS_REGISTRY[cleanId];
         fetchedMember = {
           id: cleanId,
           official_member_id: cleanId,
-          full_name: ADMIN_ALIAS_REGISTRY[cleanId].name,
-          role: ADMIN_ALIAS_REGISTRY[cleanId].role
+          full_name: aliasObj.name,
+          role: aliasObj.role,
+          family: aliasObj.family
         };
       }
 
@@ -143,22 +163,23 @@ export const FamilyHub = () => {
       }
 
       const targetRole = mode === 'chairman' ? 'family_chairman' : 'family_secretary';
-      const targetPage = familyDashboardPages[family][mode];
+      const activeFamily = (fetchedMember.family as Family) || family;
+      const targetPage = familyDashboardPages[activeFamily]?.[mode] || (mode === 'chairman' ? 'familyChairman' : 'familySecretary');
 
       setCurrentUser({
         id: fetchedMember.id,
         official_member_id: fetchedMember.official_member_id || cleanId,
-        name: fetchedMember.full_name || `${family} Family ${mode === 'chairman' ? 'Chairman' : 'Secretary'}`,
-        full_name: fetchedMember.full_name || `${family} Family ${mode === 'chairman' ? 'Chairman' : 'Secretary'}`,
+        name: fetchedMember.full_name || `${activeFamily} Family ${mode === 'chairman' ? 'Chairman' : 'Secretary'}`,
+        full_name: fetchedMember.full_name || `${activeFamily} Family ${mode === 'chairman' ? 'Chairman' : 'Secretary'}`,
         status: 'Active (Cleared)',
         balance: 0,
         role: targetRole as any,
-        family: family,
-        cmo_family: family,
+        family: activeFamily,
+        cmo_family: activeFamily,
         profilePic: null
       });
 
-      setSuccess(`✓ Access granted to ${family} Family ${mode === 'chairman' ? 'Chairman' : 'Secretary'} Portal`);
+      setSuccess(`✓ Access granted to ${activeFamily} Family ${mode === 'chairman' ? 'Chairman' : 'Secretary'} Portal`);
       setSelectedFamilyForAuth(null);
       setCurrentPage(targetPage as any);
     } catch (err: any) {

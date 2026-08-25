@@ -61,10 +61,14 @@ export function MemberAttendanceAndNotificationWidget({ currentUser }: MemberAtt
     setLoadingHistory(true);
     try {
       const targetId = currentUser.official_member_id || currentUser.id;
-      const { data, error } = await supabase
-        .from('cmo_attendance_and_excuses')
-        .select('*')
-        .or(`member_id.eq.${currentUser.id},official_member_id.eq.${targetId}`)
+      const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test((currentUser.id || '').trim());
+      let query = supabase.from('cmo_attendance_and_excuses').select('*');
+      if (isUserUuid) {
+        query = query.or(`member_id.eq.${currentUser.id},official_member_id.eq.${targetId}`);
+      } else {
+        query = query.eq('official_member_id', targetId);
+      }
+      const { data, error } = await query
         .order('meeting_date', { ascending: false })
         .limit(20);
 
